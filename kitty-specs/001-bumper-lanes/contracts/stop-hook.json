@@ -5,23 +5,36 @@
 
   "stdin": {
     "type": "object",
-    "description": "Input received from Claude Code on Stop event",
+    "description": "Input received from Claude Code on Stop event (EMPIRICALLY VERIFIED 2025-11-02)",
     "properties": {
-      "hook_name": {
-        "type": "string",
-        "enum": ["Stop", "SubagentStop"],
-        "description": "Hook event type - Stop for main agent, SubagentStop for subagents"
-      },
       "session_id": {
         "type": "string",
-        "description": "Session identifier"
+        "format": "uuid",
+        "description": "Unique session identifier (conversation UUID)"
       },
-      "working_directory": {
+      "transcript_path": {
         "type": "string",
-        "description": "Current working directory path"
+        "description": "Path to JSONL transcript file"
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Current working directory (project root) - hook is executed in this directory"
+      },
+      "permission_mode": {
+        "type": "string",
+        "description": "Current permission mode (e.g., 'bypassPermissions', 'default')"
+      },
+      "hook_event_name": {
+        "type": "string",
+        "const": "Stop",
+        "description": "Hook event type"
+      },
+      "stop_hook_active": {
+        "type": "boolean",
+        "description": "True if Stop hook already active (prevents infinite loops)"
       }
     },
-    "required": ["hook_name", "working_directory"]
+    "required": ["session_id", "transcript_path", "cwd", "permission_mode", "hook_event_name", "stop_hook_active"]
   },
 
   "stdout": {

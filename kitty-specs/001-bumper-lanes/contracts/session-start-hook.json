@@ -5,34 +5,33 @@
 
   "stdin": {
     "type": "object",
-    "description": "Input received from Claude Code on SessionStart event",
+    "description": "Input received from Claude Code on SessionStart event (EMPIRICALLY VERIFIED 2025-11-02)",
     "properties": {
-      "hook_name": {
+      "session_id": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Unique session identifier (conversation UUID)"
+      },
+      "transcript_path": {
+        "type": "string",
+        "description": "Path to JSONL transcript file"
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Current working directory (project root) - hook is executed in this directory"
+      },
+      "hook_event_name": {
         "type": "string",
         "const": "SessionStart",
         "description": "Hook event type"
       },
-      "session_id": {
+      "source": {
         "type": "string",
-        "description": "Unique session identifier (if provided by Claude Code)"
-      },
-      "working_directory": {
-        "type": "string",
-        "description": "Current working directory path"
-      },
-      "environment": {
-        "type": "object",
-        "description": "Environment variables available to hook",
-        "properties": {
-          "CLAUDE_ENV_FILE": {
-            "type": "string",
-            "description": "Path to file for persisting environment variables across commands"
-          }
-        },
-        "required": ["CLAUDE_ENV_FILE"]
+        "enum": ["startup", "resume", "clear", "compact"],
+        "description": "Session trigger source"
       }
     },
-    "required": ["hook_name", "working_directory", "environment"]
+    "required": ["session_id", "transcript_path", "cwd", "hook_event_name", "source"]
   },
 
   "stdout": {
