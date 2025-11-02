@@ -1,0 +1,13 @@
+{
+  "name": "claude-bumper-lanes",
+  "version": "1.0.0",
+  "description": "Enforces git diff thresholds to promote disciplined code review during AI agent sessions",
+  "author": {
+    "name": "Kyle Snow Schwartz",
+    "email": "kyle@kylesnowschwartz.com"
+  },
+  "homepage": "https://github.com/kylesnowschwartz/claude-bumper-lanes",
+  "repository": "https://github.com/kylesnowschwartz/claude-bumper-lanes",
+  "license": "MIT",
+  "keywords": ["git", "diff", "threshold", "code-review", "safety"]
+}

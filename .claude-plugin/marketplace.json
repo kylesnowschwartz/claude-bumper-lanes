@@ -1,0 +1,17 @@
+{
+  "name": "claude-bumper-lanes",
+  "owner": {
+    "name": "Kyle Snow Schwartz",
+    "email": "kyle@kylesnowschwartz.com"
+  },
+  "description": "Local marketplace for Bumper Lanes plugin development",
+  "version": "1.0.0",
+  "plugins": [
+    {
+      "name": "claude-bumper-lanes",
+      "version": "1.0.0",
+      "source": "./bumper-lanes-plugin",
+      "description": "Git diff threshold enforcement for disciplined vibe coding"
+    }
+  ]
+}
