@@ -46,7 +46,7 @@ write_session_state "$session_id" "$new_baseline"
 
 # Build confirmation message
 # Format timestamps for display
-old_timestamp=$(date -r $(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s) "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$created_at")
+old_timestamp=$(date -r "$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s)" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$created_at")
 new_timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
 # Extract stats for message

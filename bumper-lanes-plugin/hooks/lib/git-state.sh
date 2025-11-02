@@ -10,7 +10,7 @@ set -euo pipefail
 capture_tree() {
   local tmp_index
   tmp_index=$(mktemp)
-  trap "rm -f $tmp_index" EXIT
+  trap 'rm -f $tmp_index' EXIT
 
   export GIT_INDEX_FILE="$tmp_index"
 
