@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hooks Registration Contract",
+  "description": "Contract for hooks/hooks.json - maps hook events to executable scripts",
+
+  "file_location": "hooks/hooks.json",
+
+  "schema": {
+    "type": "object",
+    "properties": {
+      "hooks": {
+        "type": "object",
+        "description": "Map of hook events to handler configurations",
+        "properties": {
+          "SessionStart": {
+            "type": "array",
+            "description": "Handlers for session initialization",
+            "items": {"$ref": "#/definitions/hookHandler"}
+          },
+          "Stop": {
+            "type": "array",
+            "description": "Handlers for main agent stop event",
+            "items": {"$ref": "#/definitions/hookHandler"}
+          },
+          "SubagentStop": {
+            "type": "array",
+            "description": "Handlers for subagent stop event",
+            "items": {"$ref": "#/definitions/hookHandler"}
+          },
+          "UserPromptSubmit": {
+            "type": "array",
+            "description": "Handlers for user prompt submission",
+            "items": {"$ref": "#/definitions/hookHandler"}
+          },
+          "SessionEnd": {
+            "type": "array",
+            "description": "Handlers for session termination",
+            "items": {"$ref": "#/definitions/hookHandler"}
+          }
+        }
+      }
+    },
+    "definitions": {
+      "hookHandler": {
+        "type": "object",
+        "properties": {
+          "matcher": {
+            "type": "string",
+            "description": "Tool name matcher (exact, regex, or * for all). Not used for SessionStart/SessionEnd.",
+            "example": "*"
+          },
+          "hooks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["command"],
+                  "description": "Hook handler type"
+                },
+                "command": {
+                  "type": "string",
+                  "description": "Absolute or ${CLAUDE_PLUGIN_ROOT}-relative path to executable script",
+                  "example": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.sh"
+                }
+              },
+              "required": ["type", "command"]
+            }
+          }
+        },
+        "required": ["hooks"]
+      }
+    }
+  },
+
+  "example_registration": {
+    "hooks": {
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.sh"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stop.sh"
+            }
+          ]
+        }
+      ],
+      "SubagentStop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stop.sh"
+            }
+          ]
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "matcher": "*",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/user-prompt-submit.sh"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end.sh"
+            }
+          ]
+        }
+      ]
+    }
+  },
+
+  "notes": [
+    "SessionStart and SessionEnd hooks don't use matcher field (no tool involved)",
+    "Stop and SubagentStop hooks don't typically need matcher (event is session-level)",
+    "UserPromptSubmit matcher can filter by tool name, but '*' matches all prompts",
+    "Scripts receive JSON input on stdin and output JSON response on stdout",
+    "Scripts must be executable (chmod +x)",
+    "Use ${CLAUDE_PLUGIN_ROOT} for portable path resolution across installations",
+    "Hooks execute in parallel if multiple handlers registered for same event"
+  ],
+
+  "script_execution_environment": {
+    "environment_variables": {
+      "CLAUDE_PLUGIN_ROOT": "Absolute path to plugin directory",
+      "CLAUDE_ENV_FILE": "Path to file for persisting env vars (SessionStart only)"
+    },
+    "stdin": "JSON object with event-specific fields (see hook-specific contracts)",
+    "stdout": "JSON response (see hook-specific contracts) or empty for no-op",
+    "stderr": "Error messages (logged by Claude Code)",
+    "exit_code": {
+      "0": "Success (continue normal flow)",
+      "2": "Blocking error (prevents tool execution or stop)",
+      "other": "Non-blocking error (logged but flow continues)"
+    }
+  }
+}
