@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Git worktrees tracking
+.worktrees/
+
+# Spec Kitty temporary files
+.kittify/.dashboard
