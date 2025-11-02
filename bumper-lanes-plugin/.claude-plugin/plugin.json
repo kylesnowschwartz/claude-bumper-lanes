@@ -1,5 +1,5 @@
 {
-  "name": "bumper-lanes",
+  "name": "claude-bumper-lanes",
   "version": "1.0.0",
   "description": "Enforces git diff thresholds to promote disciplined code review during AI agent sessions",
   "author": {

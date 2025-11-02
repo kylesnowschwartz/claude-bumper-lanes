@@ -6,10 +6,10 @@ subtasks:
   - "T008"
 title: "Shared Hook Utilities"
 phase: "Phase 0 - Foundational"
-lane: "planned"
+lane: "doing"
 assignee: ""
-agent: ""
-shell_pid: ""
+agent: "claude"
+shell_pid: "21511"
 history:
   - timestamp: "2025-11-02T20:56:00Z"
     lane: "planned"
@@ -349,3 +349,4 @@ echo "Total lines: $total"  # Should output: 430
 
 - 2025-11-02T20:56:00Z – system – lane=planned – Prompt created via /spec-kitty.tasks.
 - 2025-11-02T21:31:00Z – claude – lane=planned – Rewritten after user corrections (deleted config-loader.sh, sessionId-based state).
+- 2025-11-02T09:07:56Z – claude – shell_pid=21511 – lane=doing – Started WP02: Shared Hook Utilities

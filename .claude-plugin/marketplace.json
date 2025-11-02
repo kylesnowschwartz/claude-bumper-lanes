@@ -1,5 +1,5 @@
 {
-  "name": "local-dev",
+  "name": "claude-bumper-lanes",
   "owner": {
     "name": "Kyle Snow Schwartz",
     "email": "kyle@kylesnowschwartz.com"
@@ -8,7 +8,7 @@
   "version": "1.0.0",
   "plugins": [
     {
-      "name": "bumper-lanes",
+      "name": "claude-bumper-lanes",
       "version": "1.0.0",
       "source": "./bumper-lanes-plugin",
       "description": "Git diff threshold enforcement for disciplined vibe coding"
