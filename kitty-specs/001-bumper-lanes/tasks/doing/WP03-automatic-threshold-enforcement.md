@@ -5,10 +5,10 @@ subtasks:
   - "T010"
 title: "Automatic Threshold Enforcement"
 phase: "Phase 1 - Core MVP"
-lane: "planned"
+lane: "doing"
 assignee: ""
-agent: ""
-shell_pid: ""
+agent: "claude"
+shell_pid: "37042"
 history:
   - timestamp: "2025-11-02T20:56:00Z"
     lane: "planned"
@@ -294,3 +294,4 @@ echo '{"hook_name":"Stop","working_directory":"'$(pwd)'","sessionId":"test-123"}
 
 - 2025-11-02T20:56:00Z – system – lane=planned – Prompt created via /spec-kitty.tasks.
 - 2025-11-02T21:31:00Z – claude – lane=planned – Rewritten after user corrections (sessionId extraction, deleted session-end.sh, no SubagentStop).
+- 2025-11-02T09:27:47Z – claude – shell_pid=37042 – lane=doing – Started WP03: Automatic Threshold Enforcement
