@@ -1,7 +1,0 @@
-{
-  "feature_number": "001",
-  "slug": "001-bumper-lanes",
-  "friendly_name": "Bumper Lanes",
-  "source_description": "claude-bumper-lanes is a claude-code plugin. It distributes a series of hooks that, on agent stop, checks the git diff stats. If it exceeds a certain threshold, it stops the user from proceeding to the next step, until they've indicated they've removed the git changes with explicit consent. This will 'reset' the git diff stat checker. (tracking diff stats between points in time without making commits will be a technical challenge)",
-  "created_at": "2025-11-01T10:57:38Z"
-}
