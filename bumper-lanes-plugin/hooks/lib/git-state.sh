@@ -8,11 +8,13 @@ set -euo pipefail
 # Returns: 40-character tree SHA on stdout
 # Uses temporary index to avoid modifying actual staging area
 capture_tree() {
-  local tmp_index
-  tmp_index=$(mktemp)
-  trap 'rm -f $tmp_index' EXIT
+  local tmp_index=$(mktemp)
+  trap "rm -f $tmp_index" EXIT
 
   export GIT_INDEX_FILE="$tmp_index"
+
+  # Initialize temp index with HEAD tree
+  git read-tree HEAD 2>/dev/null || true
 
   # Add tracked file changes
   git add -u . 2>/dev/null || true

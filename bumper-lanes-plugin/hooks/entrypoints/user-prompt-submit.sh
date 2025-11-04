@@ -12,8 +12,8 @@ input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // ""')
 session_id=$(echo "$input" | jq -r '.session_id')
 
-# Check if user typed /bumper-reset
-if [[ "$prompt" == *"/bumper-reset"* ]]; then
+# Check if user typed /claude-bumper-lanes:bumper-reset
+if [[ "$prompt" == *"/claude-bumper-lanes:bumper-reset"* ]]; then
   # Execute the reset baseline script with session_id
   reset_output=$("$SCRIPT_DIR/reset-baseline.sh" "$session_id" 2>&1)
   exit_code=$?
