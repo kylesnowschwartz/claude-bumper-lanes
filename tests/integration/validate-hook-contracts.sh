@@ -5,79 +5,67 @@ set -euo pipefail
 # Purpose: Empirically verify Claude Code hook input schemas match our implementation
 # Safety: Uses /tmp directory, can be run repeatedly
 
-TEST_DIR="/tmp/claude-hook-contract-test-$$"
-RESULTS_FILE="$TEST_DIR/validation-results.json"
+# Source test utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/test-output.sh"
+source "$SCRIPT_DIR/../lib/test-assertions.sh"
+source "$SCRIPT_DIR/../lib/test-env.sh"
+source "$SCRIPT_DIR/../lib/hook-test-utils.sh"
 
-echo "🧪 Claude Code Hook Contract Validation Test"
-echo "=============================================="
-echo ""
+# Global test directory
+TEST_DIR=""
+RESULTS_FILE=""
 
 # Setup test environment
 setup_test_env() {
-  echo "📁 Creating test environment..."
-  mkdir -p "$TEST_DIR"
+  test_section "Claude Code Hook Contract Validation Test"
 
-  # Create capture hooks
-  cat >"$TEST_DIR/capture-session-start.sh" <<'HOOK_EOF'
-#!/usr/bin/env bash
-input=$(cat)
-timestamp=$(date +"%Y%m%d_%H%M%S")
-echo "$input" > "$TEST_DIR/session-start-${timestamp}.json"
-env > "$TEST_DIR/session-start-${timestamp}.env"
-exit 0
-HOOK_EOF
+  # Create temp test directory
+  TEST_DIR=$(create_temp_test_dir "claude-hook-contract-test")
+  RESULTS_FILE="$TEST_DIR/validation-results.json"
 
-  cat >"$TEST_DIR/capture-stop.sh" <<'HOOK_EOF'
-#!/usr/bin/env bash
-input=$(cat)
-timestamp=$(date +"%Y%m%d_%H%M%S")
-echo "$input" > "$TEST_DIR/stop-${timestamp}.json"
-env > "$TEST_DIR/stop-${timestamp}.env"
-echo "null"
-exit 0
-HOOK_EOF
+  # Create capture hooks with environment tracking
+  local session_start_hook
+  session_start_hook=$(create_capture_hook_with_env "$TEST_DIR" "SessionStart" "session-start")
 
-  # Replace $TEST_DIR placeholders with actual value
-  sed -i '' "s|\$TEST_DIR|$TEST_DIR|g" "$TEST_DIR/capture-session-start.sh"
-  sed -i '' "s|\$TEST_DIR|$TEST_DIR|g" "$TEST_DIR/capture-stop.sh"
+  local stop_hook
+  stop_hook=$(create_stop_capture_hook "$TEST_DIR" "stop")
 
-  chmod +x "$TEST_DIR"/*.sh
-
-  # Create test settings
-  cat >"$TEST_DIR/test-settings.json" <<EOF
+  # Create hook settings
+  local hook_config
+  hook_config=$(cat <<EOF
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$TEST_DIR/capture-session-start.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$TEST_DIR/capture-stop.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$session_start_hook"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$stop_hook"
+        }
+      ]
+    }
+  ]
 }
 EOF
+)
 
-  echo "✅ Test environment created at: $TEST_DIR"
+  create_hook_settings "$TEST_DIR" "$hook_config" >/dev/null
 }
 
 # Run test session
 run_test_session() {
-  echo ""
-  echo "🚀 Running test session..."
+  test_section "Running test session"
+
   cd "$TEST_DIR"
 
   claude -p "Test hook schemas" \
@@ -86,137 +74,46 @@ run_test_session() {
     --dangerously-skip-permissions \
     >/dev/null 2>&1 || true
 
-  echo "✅ Test session complete"
+  test_info "Test session complete"
 }
 
-# Validate SessionStart schema
+# Validate SessionStart hook
 validate_session_start() {
-  echo ""
-  echo "🔍 Validating SessionStart hook schema..."
+  local json_file
+  json_file=$(find_latest_file "$TEST_DIR" "session-start-*.json")
 
-  local json_file=$(ls -t "$TEST_DIR"/session-start-*.json 2>/dev/null | head -1)
   if [[ -z "$json_file" ]]; then
-    echo "❌ FAIL: No SessionStart capture found"
+    test_fail "No SessionStart capture found"
     return 1
   fi
 
-  local errors=0
-
-  # Check required fields
-  for field in session_id transcript_path cwd hook_event_name source; do
-    if ! jq -e "has(\"$field\")" "$json_file" >/dev/null 2>&1; then
-      echo "   ❌ Missing required field: .$field"
-      ((errors++))
-    else
-      echo "   ✅ Field present: .$field"
-    fi
-  done
-
-  # Check field values
-  local hook_event=$(jq -r '.hook_event_name' "$json_file")
-  if [[ "$hook_event" != "SessionStart" ]]; then
-    echo "   ❌ hook_event_name should be 'SessionStart', got: $hook_event"
-    ((errors++))
-  fi
-
-  # Check session_id is UUID format
-  local session_id=$(jq -r '.session_id' "$json_file")
-  if ! echo "$session_id" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
-    echo "   ❌ session_id not valid UUID format: $session_id"
-    ((errors++))
-  fi
-
-  if [[ $errors -eq 0 ]]; then
-    echo ""
-    echo "✅ SessionStart schema validation PASSED"
-    return 0
-  else
-    echo ""
-    echo "❌ SessionStart schema validation FAILED ($errors errors)"
-    return 1
-  fi
+  validate_session_start_capture "$json_file"
 }
 
-# Validate Stop schema
+# Validate Stop hook
 validate_stop() {
-  echo ""
-  echo "🔍 Validating Stop hook schema..."
+  local json_file
+  json_file=$(find_latest_file "$TEST_DIR" "stop-*.json")
 
-  local json_file=$(ls -t "$TEST_DIR"/stop-*.json 2>/dev/null | head -1)
   if [[ -z "$json_file" ]]; then
-    echo "❌ FAIL: No Stop capture found"
+    test_fail "No Stop capture found"
     return 1
   fi
 
-  local errors=0
-
-  # Check required fields
-  for field in session_id transcript_path cwd permission_mode hook_event_name stop_hook_active; do
-    if ! jq -e "has(\"$field\")" "$json_file" >/dev/null 2>&1; then
-      echo "   ❌ Missing required field: .$field"
-      ((errors++))
-    else
-      echo "   ✅ Field present: .$field"
-    fi
-  done
-
-  # Check field values
-  local hook_event=$(jq -r '.hook_event_name' "$json_file")
-  if [[ "$hook_event" != "Stop" ]]; then
-    echo "   ❌ hook_event_name should be 'Stop', got: $hook_event"
-    ((errors++))
-  fi
-
-  # Check stop_hook_active is boolean
-  local stop_active=$(jq -r '.stop_hook_active' "$json_file")
-  if [[ "$stop_active" != "true" && "$stop_active" != "false" ]]; then
-    echo "   ❌ stop_hook_active should be boolean, got: $stop_active"
-    ((errors++))
-  fi
-
-  if [[ $errors -eq 0 ]]; then
-    echo ""
-    echo "✅ Stop schema validation PASSED"
-    return 0
-  else
-    echo ""
-    echo "❌ Stop schema validation FAILED ($errors errors)"
-    return 1
-  fi
+  validate_stop_capture "$json_file"
 }
 
-# Check environment variables
+# Validate environment variables
 validate_env_vars() {
-  echo ""
-  echo "🔍 Validating environment variables..."
+  local env_file
+  env_file=$(find_latest_file "$TEST_DIR" "session-start-*.env")
 
-  local env_file=$(ls -t "$TEST_DIR"/session-start-*.env 2>/dev/null | head -1)
   if [[ -z "$env_file" ]]; then
-    echo "❌ FAIL: No environment capture found"
+    test_fail "No environment capture found"
     return 1
   fi
 
-  local errors=0
-
-  # Check for expected Claude environment variables
-  for var in CLAUDECODE CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE; do
-    if ! grep -q "^${var}=" "$env_file"; then
-      echo "   ❌ Missing environment variable: $var"
-      ((errors++))
-    else
-      echo "   ✅ Variable present: $var"
-    fi
-  done
-
-  if [[ $errors -eq 0 ]]; then
-    echo ""
-    echo "✅ Environment validation PASSED"
-    return 0
-  else
-    echo ""
-    echo "❌ Environment validation FAILED ($errors errors)"
-    return 1
-  fi
+  check_env_vars "$env_file" "CLAUDECODE CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE"
 }
 
 # Generate validation report
@@ -225,9 +122,7 @@ generate_report() {
   local stop_result=$2
   local env_result=$3
 
-  echo ""
-  echo "📊 Validation Report"
-  echo "===================="
+  test_section "Validation Report"
 
   # Write JSON report
   cat >"$RESULTS_FILE" <<EOF
@@ -240,8 +135,8 @@ generate_report() {
     "environment_vars": $([ $env_result -eq 0 ] && echo true || echo false)
   },
   "captured_schemas": {
-    "session_start": $(cat $(ls -t "$TEST_DIR"/session-start-*.json 2>/dev/null | head -1) 2>/dev/null || echo "null"),
-    "stop": $(cat $(ls -t "$TEST_DIR"/stop-*.json 2>/dev/null | head -1) 2>/dev/null || echo "null")
+    "session_start": $(cat $(find_latest_file "$TEST_DIR" "session-start-*.json") 2>/dev/null || echo "null"),
+    "stop": $(cat $(find_latest_file "$TEST_DIR" "stop-*.json") 2>/dev/null || echo "null")
   }
 }
 EOF
@@ -249,21 +144,22 @@ EOF
   echo ""
   cat "$RESULTS_FILE" | jq '.results'
 
-  local all_passed=$(jq -r '.results | to_entries | map(.value) | all' "$RESULTS_FILE")
+  local all_passed
+  all_passed=$(jq -r '.results | to_entries | map(.value) | all' "$RESULTS_FILE")
 
   echo ""
   if [[ "$all_passed" == "true" ]]; then
-    echo "✅ ALL VALIDATIONS PASSED"
+    test_pass "ALL VALIDATIONS PASSED"
     echo ""
-    echo "📄 Full report: $RESULTS_FILE"
-    echo "🧹 Cleanup: rm -rf $TEST_DIR"
+    test_info "Full report: $RESULTS_FILE"
+    test_info "Cleanup: rm -rf $TEST_DIR"
     return 0
   else
-    echo "❌ SOME VALIDATIONS FAILED"
+    test_fail "SOME VALIDATIONS FAILED"
     echo ""
-    echo "📄 Full report: $RESULTS_FILE"
-    echo "🔍 Captured data: $TEST_DIR/*.json"
-    echo "🧹 Cleanup: rm -rf $TEST_DIR"
+    test_info "Full report: $RESULTS_FILE"
+    test_info "Captured data: $TEST_DIR/*.json"
+    test_info "Cleanup: rm -rf $TEST_DIR"
     return 1
   fi
 }
