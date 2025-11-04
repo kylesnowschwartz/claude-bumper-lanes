@@ -130,19 +130,19 @@ generate_report() {
   "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "test_directory": "$TEST_DIR",
   "results": {
-    "session_start_schema": $([ $session_start_result -eq 0 ] && echo true || echo false),
-    "stop_schema": $([ $stop_result -eq 0 ] && echo true || echo false),
-    "environment_vars": $([ $env_result -eq 0 ] && echo true || echo false)
+    "session_start_schema": $([ "$session_start_result" -eq 0 ] && echo true || echo false),
+    "stop_schema": $([ "$stop_result" -eq 0 ] && echo true || echo false),
+    "environment_vars": $([ "$env_result" -eq 0 ] && echo true || echo false)
   },
   "captured_schemas": {
-    "session_start": $(cat $(find_latest_file "$TEST_DIR" "session-start-*.json") 2>/dev/null || echo "null"),
-    "stop": $(cat $(find_latest_file "$TEST_DIR" "stop-*.json") 2>/dev/null || echo "null")
+    "session_start": $(cat "$(find_latest_file "$TEST_DIR" "session-start-*.json")" 2>/dev/null || echo "null"),
+    "stop": $(cat "$(find_latest_file "$TEST_DIR" "stop-*.json")" 2>/dev/null || echo "null")
   }
 }
 EOF
 
   echo ""
-  cat "$RESULTS_FILE" | jq '.results'
+  jq '.results' "$RESULTS_FILE"
 
   local all_passed
   all_passed=$(jq -r '.results | to_entries | map(.value) | all' "$RESULTS_FILE")
