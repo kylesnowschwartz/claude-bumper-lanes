@@ -1,0 +1,265 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart TB
+    %% Actors
+    User([👤 User])
+    Claude[[🤖 Claude Agent]]
+
+    %% Hooks
+    PreToolUseHook{{🔒 PreToolUse Hook}}
+    StopHook{{🛑 Stop Hook}}
+    UserPromptHook{{📝 UserPromptSubmit Hook}}
+
+    %% State & Operations
+    SessionState[(📊 Session State<br/>baseline_tree<br/>threshold_limit)]
+    GitState[(🗂️ Git Working Tree)]
+    ResetScript[[♻️ reset-baseline.sh]]
+
+    %% Decision Points
+    StopThresholdCheck{Diff > Threshold?}
+    ToolThresholdCheck{Diff > Threshold?}
+    ResetCommand{Is prompt<br/>/bumper-reset?}
+    ToolType{Is Write or Edit?}
+
+    %% Subgraph: Normal Work Cycle
+    subgraph "Normal Work Cycle"
+        direction TB
+        A[User gives Claude a task] --> B[Claude attempts Write/Edit tool]
+        B --> PreToolUseHook
+    end
+
+    %% Subgraph: PreToolUse Enforcement (Proactive)
+    subgraph "PreToolUse Enforcement - Proactive Block"
+        direction TB
+        PreToolUseHook --> ToolType
+        ToolType -->|Other tools| C[Allow tool immediately]
+        ToolType -->|Write or Edit| ToolThresholdCheck
+
+        ToolThresholdCheck -->|Check diff| SessionState
+        ToolThresholdCheck -->|Compare| GitState
+
+        ToolThresholdCheck -->|Under threshold| D[Allow tool<br/>exit 0, output null]
+        ToolThresholdCheck -->|Over threshold| E[DENY tool<br/>exit 0, permissionDecision: deny<br/>Show reason to Claude]
+
+        D --> F[Claude writes code]
+        E --> G[Claude cannot write<br/>Must stop and inform user]
+
+        F --> H[Claude finishes task]
+        G --> H
+    end
+
+    %% Subgraph: Stop Hook Enforcement (Reactive)
+    subgraph "Stop Hook Enforcement - Reactive Block"
+        direction TB
+        H --> I[Claude tries to stop]
+        I --> StopHook
+        StopHook -->|Check diff| SessionState
+        StopHook -->|Compare| GitState
+        StopHook --> StopThresholdCheck
+
+        StopThresholdCheck -->|Under threshold| J[exit 0: Allow stop<br/>User can continue normally]
+        StopThresholdCheck -->|Over threshold| K[exit 2: BLOCK stop<br/>STDERR to Claude]
+
+        K --> L[⚠️ Claude sees message:<br/>STOP HERE - Do not continue<br/>Tell user to review & /bumper-reset]
+    end
+
+    %% Subgraph: Manual Reset Flow
+    subgraph "Manual Reset Flow"
+        direction TB
+        L --> M[Claude tells user to review]
+        M --> N[User reviews: git diff / git status]
+        N --> O[User types /bumper-reset]
+        O --> UserPromptHook
+        UserPromptHook --> ResetCommand
+
+        ResetCommand -->|Yes| P[Execute reset-baseline.sh]
+        ResetCommand -->|No| Q[Normal prompt processing]
+
+        P --> ResetScript
+        ResetScript -->|Capture current tree| GitState
+        ResetScript -->|Update baseline| SessionState
+        ResetScript --> R[exit 0: Inject success message<br/>New baseline set<br/>Budget restored]
+
+        R --> S[Claude receives confirmation<br/>User can give more work or end session]
+    end
+
+    %% Styling
+    classDef userClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef claudeClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef hookClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef stateClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef decisionClass fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef blockClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef successClass fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef allowClass fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+
+    class User userClass
+    class Claude claudeClass
+    class PreToolUseHook,StopHook,UserPromptHook hookClass
+    class SessionState,GitState stateClass
+    class StopThresholdCheck,ToolThresholdCheck,ResetCommand,ToolType decisionClass
+    class E,K,L blockClass
+    class J,R,S successClass
+    class C,D allowClass
+
+%% ============================================================
+%% ARCHITECTURAL EXPLANATION
+%% ============================================================
+%%
+%% ## Bumper Lanes: Threshold Enforcement Architecture
+%%
+%% ### Purpose
+%% Prevent unbounded code changes by enforcing incremental review gates
+%% at configurable diff thresholds (e.g., 200 lines changed).
+%%
+%% ### Key Components
+%%
+%% 1. **PreToolUse Hook (pre-tool-use.sh)** - PROACTIVE ENFORCEMENT
+%%    - Fires BEFORE Write or Edit tools execute
+%%    - Matcher: "Edit|Write" (NOT Bash - allows read-only commands)
+%%    - Compares current working tree against baseline snapshot
+%%    - Calculates total lines changed (additions + deletions)
+%%    - **Exit 0 + null** if under threshold → allow tool
+%%    - **Exit 0 + deny** if over threshold → BLOCK tool, show reason to Claude
+%%    - Claude cannot write files when over threshold
+%%    - This is the PRIMARY enforcement mechanism
+%%
+%% 2. **Stop Hook (stop.sh)** - REACTIVE ENFORCEMENT
+%%    - Fires when Claude completes a turn and attempts to stop
+%%    - Compares current working tree against baseline snapshot
+%%    - Calculates total lines changed (additions + deletions)
+%%    - **Exit 0** if under threshold → stop allowed
+%%    - **Exit 2** if over threshold → BLOCK stop, STDERR to Claude
+%%    - Claude sees: "STOP HERE - Do not continue working"
+%%    - Instructs Claude to tell user to review and run /bumper-reset
+%%    - This is the NOTIFICATION mechanism
+%%
+%% 3. **UserPromptSubmit Hook (user-prompt-submit.sh)** - RESET MECHANISM
+%%    - Intercepts user prompts looking for /bumper-reset command
+%%    - Delegates to reset-baseline.sh script when detected
+%%    - Injects reset confirmation as additional context to Claude
+%%
+%% 4. **Reset Baseline Script (reset-baseline.sh)**
+%%    - Captures current git working tree as new baseline snapshot
+%%    - Updates session state with new baseline SHA
+%%    - Restores full threshold budget
+%%    - Reports accepted changes to user and Claude
+%%
+%% 5. **Session State (state-manager.sh)**
+%%    - Persists baseline_tree SHA and threshold_limit per session
+%%    - Stored in ~/.cache/claude-code/bumper-lanes/{session_id}.json
+%%    - Created at session start, cleaned at session end
+%%
+%% 6. **Git State (git-state.sh)**
+%%    - Uses `git write-tree` to capture working tree snapshots
+%%    - Stages all changes temporarily for snapshot (git add -A)
+%%    - Computes diffs between tree SHAs (git diff-tree)
+%%    - Parses numstat output for precise line counts
+%%
+%% ### Defense-in-Depth Strategy
+%%
+%% **Layer 1: PreToolUse Hook (Proactive)**
+%% - Blocks Write/Edit tools BEFORE they execute
+%% - Prevents file modifications when over threshold
+%% - Claude sees denial and cannot continue writing code
+%%
+%% **Layer 2: Stop Hook (Reactive)**
+%% - Blocks Claude from stopping when over threshold
+%% - Forces Claude to inform user about review requirement
+%% - Prevents user from giving new work without reset
+%%
+%% **Layer 3: UserPromptSubmit Hook (Reset)**
+%% - Enables /bumper-reset command to restore budget
+%% - Manual approval gate after review
+%%
+%% ### Flow Sequence
+%%
+%% #### Normal Operation (Under Threshold)
+%% 1. User gives Claude a task
+%% 2. Claude attempts Write tool
+%% 3. PreToolUse hook: diff < threshold → allow
+%% 4. Claude writes code
+%% 5. Claude tries to stop
+%% 6. Stop hook: diff < threshold → allow
+%% 7. User can continue or end session
+%%
+%% #### Threshold Exceeded - PreToolUse Blocks First
+%% 1. User gives Claude a task
+%% 2. Claude attempts Write tool (cumulative > threshold)
+%% 3. PreToolUse hook: diff > threshold → DENY tool
+%% 4. Claude sees: "Cannot modify files, threshold exceeded"
+%% 5. Claude cannot write, tries to stop
+%% 6. Stop hook: diff > threshold → BLOCK stop
+%% 7. Claude sees: "STOP HERE - tell user to review"
+%% 8. Claude informs user to review and run /bumper-reset
+%%
+%% #### Manual Reset
+%% 1. User reviews `git diff` or `git status`
+%% 2. User types `/bumper-reset` (may commit first)
+%% 3. UserPromptSubmit hook intercepts command
+%% 4. reset-baseline.sh executes:
+%%    - Captures current tree as new baseline
+%%    - Updates session state
+%%    - Reports accepted changes
+%% 5. Exit 0 + inject confirmation to Claude
+%% 6. Claude receives "fresh budget" message
+%% 7. User can give more work or end session
+%%
+%% ### Exit Code Semantics
+%%
+%% **PreToolUse Hook:**
+%% - **Exit 0 + null JSON**: Allow tool (under threshold)
+%% - **Exit 0 + deny JSON**: Block tool (over threshold), reason to Claude
+%% - Fail open: Errors → allow tool
+%%
+%% **Stop Hook:**
+%% - **Exit 0**: Allow stop (under threshold)
+%% - **Exit 2**: BLOCK stop, STDERR to Claude (over threshold)
+%% - Exit 2 prevents Claude from finishing turn cleanly
+%% - Claude must tell user to review and reset
+%%
+%% **UserPromptSubmit Hook:**
+%% - **Exit 0**: Inject reset confirmation to Claude
+%%
+%% ### Why Not Block Bash?
+%%
+%% Bash tool is NOT blocked because:
+%% - Used for read-only operations: git status, npm test, ls
+%% - Blocking Bash prevents Claude from running tests and checks
+%% - Write/Edit are the primary file modification tools
+%% - Bash CAN modify files, but blocking all Bash is too restrictive
+%%
+%% ### Critical Behavior Notes
+%%
+%% 1. **Exit 2 on Stop = Block stoppage**
+%%    - Claude cannot complete turn cleanly
+%%    - STDERR shown to Claude (not just user)
+%%    - Claude must communicate to user
+%%
+%% 2. **PreToolUse does PRIMARY blocking**
+%%    - Prevents file writes at the tool level
+%%    - Stop hook is secondary notification layer
+%%
+%% 3. **Message to Claude says "STOP HERE"**
+%%    - Clear instruction: do not continue working
+%%    - Wait for user review and reset
+%%    - Do not write more code
+%%
+%% ### Validation References
+%% - PreToolUse hook: bumper-lanes-plugin/hooks/entrypoints/pre-tool-use.sh:27-97
+%% - Stop hook: bumper-lanes-plugin/hooks/entrypoints/stop.sh:87 (exit 2)
+%% - Stop message: bumper-lanes-plugin/hooks/entrypoints/stop.sh:67-81
+%% - UserPromptSubmit hook: bumper-lanes-plugin/hooks/entrypoints/user-prompt-submit.sh:16-47
+%% - Reset script: bumper-lanes-plugin/hooks/entrypoints/reset-baseline.sh:44-73
+%% - State manager: bumper-lanes-plugin/hooks/lib/state-manager.sh
+%% - Git operations: bumper-lanes-plugin/hooks/lib/git-state.sh
+%% - Hooks config: bumper-lanes-plugin/hooks/hooks.json:34-44 (PreToolUse matcher)
+%% - Exit code reference: claude-code-hook-exit-codes.md:56-63
+%%
+%% ### Design Principles
+%% - **Defense in depth**: Multiple enforcement layers (PreToolUse + Stop)
+%% - **Fail open**: If hooks error, allow operation to continue
+%% - **Incremental review**: Force review gates at predictable intervals
+%% - **Stateful enforcement**: Session state persists across turns
+%% - **Manual approval**: User must explicitly reset after review
+%% - **Transparent feedback**: Both user and Claude see threshold status
+%% - **Clear instructions**: Claude knows to stop working and guide user
