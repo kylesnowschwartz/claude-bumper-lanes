@@ -1,0 +1,5 @@
+CLAUDECODE=1
+CLAUDE_PROJECT_DIR=/tmp/test-workspace
+CLAUDE_ENV_FILE=/tmp/test-env.json
+PATH=/usr/local/bin:/usr/bin:/bin
+HOME=/Users/testuser

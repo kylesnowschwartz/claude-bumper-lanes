@@ -27,3 +27,6 @@ jobs:
 
       - name: Run library load test
         run: ./tests/unit/test-lib-simple.sh
+
+      - name: Run hook contract validation
+        run: ./tests/integration/validate-hook-contracts.sh
