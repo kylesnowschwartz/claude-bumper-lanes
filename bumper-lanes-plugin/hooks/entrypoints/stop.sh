@@ -13,8 +13,15 @@ source "$SCRIPT_DIR/../lib/threshold.sh"
 # Read hook input from stdin
 input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id')
+stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active // false')
 
 # Hook is already executed in project directory (cwd field in JSON)
+
+# If already blocked once, allow stop this time to prevent infinite loop
+if [[ "$stop_hook_active" == "true" ]]; then
+  echo "null"
+  exit 0
+fi
 
 # Load session state
 if ! session_state=$(read_session_state "$session_id" 2>/dev/null); then
@@ -59,12 +66,21 @@ threshold_pct=$(awk "BEGIN {printf \"%.1f\", ($total_lines / $threshold_limit) *
 # Build reason message
 reason="⚠ Diff threshold exceeded: $total_lines/$threshold_limit lines changed (${threshold_pct}%).
 
-Changes:
+Changes since baseline:
   $files_changed files changed, $lines_added insertions(+), $lines_deleted deletions(-)
 
-Review your changes and run /bumper-reset to continue."
+STOP HERE - Do not continue working. The user must review changes first.
 
-# Output block decision
+Tell the user:
+1. Review the changes using 'git diff' or 'git status'
+2. Run the /bumper-reset command when satisfied with the changes
+3. This will accept the current changes as the new baseline
+4. A fresh diff budget of $threshold_limit lines will be restored
+5. After reset, the user can give you more work or end the session
+
+This workflow ensures incremental code review at predictable checkpoints."
+
+# Output block decision to STDERR
 jq -n \
   --arg decision "block" \
   --arg reason "$reason" \
@@ -75,6 +91,6 @@ jq -n \
     decision: $decision,
     reason: $reason,
     diff_stats: ($diff_stats + {threshold_limit: $threshold_limit, threshold_percentage: $threshold_percentage})
-  }'
+  }' >&2
 
-exit 0
+exit 2
