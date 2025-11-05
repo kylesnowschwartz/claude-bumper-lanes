@@ -28,10 +28,10 @@ run_test() {
 
   if [[ $result -eq 0 ]]; then
     echo "[PASS] $test_name"
-    ((PASS_COUNT++))
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     echo "[FAIL] $test_name"
-    ((FAIL_COUNT++))
+    FAIL_COUNT=$((FAIL_COUNT + 1))
   fi
 }
 
@@ -68,7 +68,7 @@ test_find_latest_file() {
 test_assert_field_exists() {
   local test_file
   test_file=$(mktemp)
-  echo '{"name": "test", "value": 123}' > "$test_file"
+  echo '{"name": "test", "value": 123}' >"$test_file"
 
   init_assertions
   assert_field_exists "$test_file" "name" >/dev/null 2>&1
@@ -83,7 +83,7 @@ test_assert_field_exists() {
 test_assert_field_equals() {
   local test_file
   test_file=$(mktemp)
-  echo '{"status": "active"}' > "$test_file"
+  echo '{"status": "active"}' >"$test_file"
 
   init_assertions
   assert_field_equals "$test_file" "status" "active" >/dev/null 2>&1
@@ -98,7 +98,7 @@ test_assert_field_equals() {
 test_assert_field_matches() {
   local test_file
   test_file=$(mktemp)
-  echo '{"id": "abc-123-def"}' > "$test_file"
+  echo '{"id": "abc-123-def"}' >"$test_file"
 
   init_assertions
   assert_field_matches "$test_file" "id" "^[a-z0-9-]+$" >/dev/null 2>&1
@@ -113,7 +113,7 @@ test_assert_field_matches() {
 test_assert_field_type() {
   local test_file
   test_file=$(mktemp)
-  echo '{"enabled": true}' > "$test_file"
+  echo '{"enabled": true}' >"$test_file"
 
   init_assertions
   assert_field_type "$test_file" "enabled" "boolean" >/dev/null 2>&1
