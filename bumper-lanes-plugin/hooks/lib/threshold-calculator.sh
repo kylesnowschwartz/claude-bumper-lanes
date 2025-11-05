@@ -2,22 +2,40 @@
 set -euo pipefail
 
 # threshold-calculator.sh - Weighted threshold calculation for code review (v2)
-# Purpose: Calculate review burden using additions-only, edit weighting, and file scatter penalties
 #
-# This is the PRIMARY threshold system. For simple line-count parsing, see threshold.sh (legacy).
+# WHY weighted scoring instead of simple line count:
+# - Review burden ≠ lines changed (editing existing code is harder than writing new)
+# - Context-switching across files exhausts cognitive capacity non-linearly
+# - Deletions reduce complexity, not add it
 #
-# Research foundation:
-# - Cisco (2006): 200-400 LOC optimal for 70-90% defect detection
-# - Google (2018): 90% of changes touch <10 files, median 24 lines
-# - GitLab: Official recommendation ~200 lines per merge request
+# Research basis:
+# - Cisco (2006): 200-400 LOC optimal for 70-90% defect detection, drops dramatically >200
+# - Google (2018): 90% of changes touch <10 files (locality is the norm)
+# - GitLab: Official guideline ~200 lines per MR for effective review
+#
+# Formula: weighted_score = (new_additions × 1.0) + (edit_additions × 1.3) + scatter_penalty
+#
+# WHY 1.3× multiplier for edits:
+# - Editing requires understanding existing behavior + integration points
+# - More failure modes than greenfield code
+# - Conservative middle ground (research suggests 1.2-1.5× range)
+#
+# WHY scatter penalties:
+# - Google data: 90% of changes are localized (<10 files)
+# - Cross-file changes signal architectural coupling
+# - Context-switching cost grows non-linearly with file count
+#
+# WHY count additions only:
+# - Deletions reduce complexity (code removed = less to maintain)
+# - Cisco/Google studies focus on additions as primary review metric
 
-# Scoring configuration (based on Cisco/Google/GitLab research)
-readonly NEW_FILE_WEIGHT=10        # 1.0× (baseline, scaled by 10 for integer math)
-readonly EDIT_FILE_WEIGHT=13       # 1.3× (30% penalty for integration complexity)
-readonly SCATTER_LOW_THRESHOLD=6   # Files where medium penalty starts
-readonly SCATTER_HIGH_THRESHOLD=11 # Files where high penalty starts
-readonly SCATTER_PENALTY_LOW=10    # Points per file (6-10 files)
-readonly SCATTER_PENALTY_HIGH=30   # Points per file (11+ files)
+# Scoring configuration
+readonly NEW_FILE_WEIGHT=10        # 1.0× baseline (scaled ×10 for integer arithmetic)
+readonly EDIT_FILE_WEIGHT=13       # 1.3× penalty (edits harder to review than new code)
+readonly SCATTER_LOW_THRESHOLD=6   # Medium penalty starts (typical module = 5 files)
+readonly SCATTER_HIGH_THRESHOLD=11 # High penalty starts (Google 90th percentile = 10 files)
+readonly SCATTER_PENALTY_LOW=10    # Points/file for 6-10 files
+readonly SCATTER_PENALTY_HIGH=30   # Points/file for 11+ files (exponential discouragement)
 
 # calculate_weighted_threshold() - Computes weighted score from git diff data
 # Args:
@@ -79,17 +97,20 @@ calculate_weighted_threshold() {
   done <<<"$diff_data"
 
   # Calculate scatter penalty based on file count
+  # WHY these thresholds:
+  # - 1-5 files: Typical single module (code+test+types+docs+config) = no penalty
+  # - 6-10 files: Approaching Google's 90th percentile = moderate penalty
+  # - 11+ files: Beyond normal locality = exponential discouragement
   local scatter_penalty=0
   if [[ $files_touched -ge $SCATTER_HIGH_THRESHOLD ]]; then
     scatter_penalty=$((files_touched * SCATTER_PENALTY_HIGH))
   elif [[ $files_touched -ge $SCATTER_LOW_THRESHOLD ]]; then
     scatter_penalty=$((files_touched * SCATTER_PENALTY_LOW))
   fi
-  # 1-5 files: no penalty (0 points)
 
   # Calculate weighted score
-  # new_file_additions × 1.0 + edited_file_additions × 1.3 + scatter_penalty
-  # Use integer arithmetic: multiply by 10, apply weights, divide by 10
+  # WHY integer math: Bash doesn't support floating point, so scale by 10:
+  #   1.3× becomes (× 13 ÷ 10), preserving decimal precision
   local new_contribution=$((new_file_additions * NEW_FILE_WEIGHT))
   local edit_contribution=$((edited_file_additions * EDIT_FILE_WEIGHT))
   local total_points=$((new_contribution + edit_contribution))

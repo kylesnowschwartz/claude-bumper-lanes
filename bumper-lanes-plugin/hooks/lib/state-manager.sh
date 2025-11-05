@@ -28,8 +28,10 @@ write_session_state() {
     stop_triggered=$(jq -r '.stop_triggered // false' "$state_file" 2>/dev/null || echo "false")
   fi
 
-  # generous threshold limit of 4000 was selected in order to allow for
-  # live testing without onerous limits to start
+  # WHY 400 points:
+  # - Alpha testing value (generous to avoid hitting limits constantly)
+  # - Production default should be 200 (GitLab-aligned, Cisco-validated)
+  # - User can override by editing this file and running /bumper-reset
   cat >"$state_file" <<EOF
 {
   "session_id": "$session_id",
