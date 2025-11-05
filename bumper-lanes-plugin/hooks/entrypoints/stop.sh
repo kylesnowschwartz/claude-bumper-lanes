@@ -33,6 +33,8 @@ fi
 
 baseline_tree=$(echo "$session_state" | jq -r '.baseline_tree')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
+previous_tree=$(echo "$session_state" | jq -r '.previous_tree // .baseline_tree')
+accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
 
 # Capture current working tree
 current_tree=$(capture_tree)
@@ -42,18 +44,21 @@ if [[ -z "$current_tree" ]]; then
   exit 0 # Fail open
 fi
 
-# Compute weighted threshold using new calculator
-threshold_data=$(calculate_weighted_threshold "$baseline_tree" "$current_tree")
-weighted_score=$(echo "$threshold_data" | jq -r '.weighted_score')
+# Compute incremental threshold (previous → current + accumulated)
+threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
+weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
 
 if [[ $weighted_score -le $threshold_limit ]]; then
-  # Under threshold - allow stop
+  # Under threshold - allow stop and update incremental state
+  update_incremental_state "$session_id" "$current_tree" "$weighted_score"
   echo "null"
   exit 0
 fi
 
 # Over threshold - set stop_triggered flag to activate PreToolUse blocking
 set_stop_triggered "$session_id" true
+# Also update incremental state
+update_incremental_state "$session_id" "$current_tree" "$weighted_score"
 
 # Format breakdown for user message
 breakdown=$(format_threshold_breakdown "$threshold_data" "$threshold_limit")

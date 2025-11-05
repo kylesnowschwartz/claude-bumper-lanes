@@ -46,30 +46,37 @@ fi
 baseline_tree=$(echo "$session_state" | jq -r '.baseline_tree')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
 stop_triggered=$(echo "$session_state" | jq -r '.stop_triggered // false')
+previous_tree=$(echo "$session_state" | jq -r '.previous_tree // .baseline_tree')
+accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
 
-# Check if Stop hook has been triggered
-# PreToolUse only blocks AFTER Stop hook has fired once
-if [[ "$stop_triggered" != "true" ]]; then
-  # Stop hasn't triggered yet - allow tool to proceed
-  echo "null"
-  exit 0
-fi
-
-# Stop has triggered - now enforce blocking on Write/Edit tools
-# Capture current working tree
+# Capture current working tree (need this for both paths)
 if ! current_tree=$(capture_tree 2>/dev/null); then
   # Failed to capture tree - fail open
   echo "null"
   exit 0
 fi
 
-# Compute weighted threshold using new calculator
-threshold_data=$(calculate_weighted_threshold "$baseline_tree" "$current_tree")
-weighted_score=$(echo "$threshold_data" | jq -r '.weighted_score')
+# Check if Stop hook has been triggered
+# PreToolUse only blocks AFTER Stop hook has fired once
+if [[ "$stop_triggered" != "true" ]]; then
+  # Stop hasn't triggered yet - allow tool to proceed
+  # BUT update incremental state for next check
+  threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
+  new_accumulated_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
+  update_incremental_state "$session_id" "$current_tree" "$new_accumulated_score"
+  echo "null"
+  exit 0
+fi
+
+# Stop has triggered - now enforce blocking on Write/Edit tools
+# Use incremental calculation
+threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
+weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
 
 # Check threshold
 if [[ $weighted_score -le $threshold_limit ]]; then
-  # Under threshold - allow tool
+  # Under threshold - allow tool and update state
+  update_incremental_state "$session_id" "$current_tree" "$weighted_score"
   echo "null"
   exit 0
 fi

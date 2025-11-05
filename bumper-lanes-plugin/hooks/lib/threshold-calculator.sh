@@ -134,6 +134,40 @@ calculate_weighted_threshold() {
   return 0
 }
 
+# calculate_incremental_threshold() - Calculate delta between consecutive tree states
+# Args:
+#   $1 - previous_tree (40-char SHA from last tool execution)
+#   $2 - current_tree (40-char SHA of current working tree)
+#   $3 - accumulated_score (running total from previous operations)
+# Returns: JSON with new delta + updated accumulated score
+# WHY: Fixes delete+recreate bypass bug by tracking each transition incrementally
+calculate_incremental_threshold() {
+  local previous_tree=$1
+  local current_tree=$2
+  local accumulated_score=$3
+
+  # Calculate delta between previous and current (not baseline and current)
+  local delta_data
+  delta_data=$(calculate_weighted_threshold "$previous_tree" "$current_tree")
+
+  local delta_score
+  delta_score=$(echo "$delta_data" | jq -r '.weighted_score')
+
+  # Add delta to accumulated score
+  local new_accumulated_score=$((accumulated_score + delta_score))
+
+  # Return combined data with new accumulated total
+  echo "$delta_data" | jq \
+    --argjson accumulated_score "$new_accumulated_score" \
+    --argjson delta_score "$delta_score" \
+    '. + {
+      accumulated_score: $accumulated_score,
+      delta_score: $delta_score
+    }'
+
+  return 0
+}
+
 # format_threshold_breakdown() - Pretty-print threshold breakdown for user messages
 # Args:
 #   $1 - threshold_data (JSON output from calculate_weighted_threshold)

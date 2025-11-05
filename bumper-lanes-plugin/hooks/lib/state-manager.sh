@@ -24,8 +24,14 @@ write_session_state() {
 
   # Preserve stop_triggered flag if it exists, otherwise default to false
   local stop_triggered="false"
+  # Preserve accumulated_score and previous_tree for incremental tracking
+  local accumulated_score="0"
+  local previous_tree="$baseline_tree"
+
   if [[ -f "$state_file" ]]; then
     stop_triggered=$(jq -r '.stop_triggered // false' "$state_file" 2>/dev/null || echo "false")
+    accumulated_score=$(jq -r '.accumulated_score // 0' "$state_file" 2>/dev/null || echo "0")
+    previous_tree=$(jq -r '.previous_tree // .baseline_tree' "$state_file" 2>/dev/null || echo "$baseline_tree")
   fi
 
   # WHY 400 points:
@@ -36,6 +42,8 @@ write_session_state() {
 {
   "session_id": "$session_id",
   "baseline_tree": "$baseline_tree",
+  "previous_tree": "$previous_tree",
+  "accumulated_score": $accumulated_score,
   "created_at": "$timestamp",
   "threshold_limit": 400,
   "repo_path": "$repo_path",
@@ -85,6 +93,37 @@ set_stop_triggered() {
   local temp_file
   temp_file=$(mktemp)
   jq --argjson stop_triggered "$stop_triggered" '.stop_triggered = $stop_triggered' "$state_file" >"$temp_file"
+  mv "$temp_file" "$state_file"
+
+  return 0
+}
+
+# update_incremental_state() - Update previous_tree and accumulated_score for incremental tracking
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - new_previous_tree (40-char git tree SHA to store as previous)
+#   $3 - new_accumulated_score (integer points accumulated this session)
+# Updates: .git/bumper-checkpoints/session-{sessionId} with new tracking values
+update_incremental_state() {
+  local session_id=$1
+  local new_previous_tree=$2
+  local new_accumulated_score=$3
+  local checkpoint_dir=".git/bumper-checkpoints"
+  local state_file="$checkpoint_dir/session-$session_id"
+
+  if [[ ! -f "$state_file" ]]; then
+    echo "ERROR: No session state found for session $session_id" >&2
+    return 1
+  fi
+
+  # Use jq to update both fields atomically
+  local temp_file
+  temp_file=$(mktemp)
+  jq \
+    --arg previous_tree "$new_previous_tree" \
+    --argjson accumulated_score "$new_accumulated_score" \
+    '.previous_tree = $previous_tree | .accumulated_score = $accumulated_score' \
+    "$state_file" >"$temp_file"
   mv "$temp_file" "$state_file"
 
   return 0
