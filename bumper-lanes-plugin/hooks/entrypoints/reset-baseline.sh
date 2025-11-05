@@ -40,9 +40,10 @@ diff_output=$(compute_diff "$old_baseline" "$current_tree")
 diff_stats=$(parse_diff_stats "$diff_output")
 total_lines=$(echo "$diff_stats" | jq -r '.total_lines_changed')
 
-# Update session state with new baseline
+# Update session state with new baseline and clear stop_triggered flag
 new_baseline="$current_tree"
 write_session_state "$session_id" "$new_baseline"
+set_stop_triggered "$session_id" false
 
 # Build confirmation message
 # Format timestamps for display

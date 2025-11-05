@@ -44,7 +44,17 @@ fi
 # Extract state
 baseline_tree=$(echo "$session_state" | jq -r '.baseline_tree')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
+stop_triggered=$(echo "$session_state" | jq -r '.stop_triggered // false')
 
+# Check if Stop hook has been triggered
+# PreToolUse only blocks AFTER Stop hook has fired once
+if [[ "$stop_triggered" != "true" ]]; then
+  # Stop hasn't triggered yet - allow tool to proceed
+  echo "null"
+  exit 0
+fi
+
+# Stop has triggered - now enforce blocking on Write/Edit tools
 # Capture current working tree
 if ! current_tree=$(capture_tree 2>/dev/null); then
   # Failed to capture tree - fail open

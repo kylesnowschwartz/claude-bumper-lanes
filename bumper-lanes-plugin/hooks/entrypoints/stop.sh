@@ -53,6 +53,9 @@ if [[ $total_lines -le $threshold_limit ]]; then
   exit 0
 fi
 
+# Over threshold - set stop_triggered flag to activate PreToolUse blocking
+set_stop_triggered "$session_id" true
+
 # Build block response
 # Parse diff stats for detailed reporting
 diff_stats=$(parse_diff_stats "$diff_output")
