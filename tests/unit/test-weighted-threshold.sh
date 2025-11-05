@@ -281,7 +281,7 @@ test_mixed_changes() {
   return 0
 }
 
-# Test 6: Format breakdown message
+# Test 6: Format breakdown message (simplified)
 test_format_breakdown() {
   # Create mock threshold data
   local threshold_data='{
@@ -295,21 +295,10 @@ test_format_breakdown() {
   local output
   output=$(format_threshold_breakdown "$threshold_data" 200)
 
-  # Check output contains key information
-  echo "$output" | grep -q "165/200" || {
-    echo "Missing score ratio"
-    return 1
-  }
-  echo "$output" | grep -q "New code: 80 lines" || {
-    echo "Missing new code"
-    return 1
-  }
-  echo "$output" | grep -q "Edited code: 50 lines" || {
-    echo "Missing edited code"
-    return 1
-  }
-  echo "$output" | grep -q "3 files" || {
-    echo "Missing file count"
+  # Check for simplified output - just score and percentage
+  echo "$output" | grep -q "^Threshold: 165/200 points (82%)$" || {
+    echo "Expected: 'Threshold: 165/200 points (82%)'"
+    echo "Got: $output"
     return 1
   }
 
