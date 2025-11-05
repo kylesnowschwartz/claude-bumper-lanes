@@ -8,7 +8,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/git-state.sh"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
-source "$SCRIPT_DIR/../lib/threshold.sh"
 source "$SCRIPT_DIR/../lib/threshold-calculator.sh"
 
 # Read hook input from stdin
@@ -83,7 +82,10 @@ fi
 
 # Over threshold - deny tool call
 # Format breakdown for user message
-breakdown=$(format_threshold_breakdown "$threshold_data" "$threshold_limit")
+# Note: threshold_data contains both weighted_score (delta) and accumulated_score (total)
+# For user display, we need to show the accumulated total, not just this turn's delta
+threshold_data_for_display=$(echo "$threshold_data" | jq '.weighted_score = .accumulated_score')
+breakdown=$(format_threshold_breakdown "$threshold_data_for_display" "$threshold_limit")
 
 # Build denial reason
 reason="🚫 Bumper lanes: Diff threshold exceeded

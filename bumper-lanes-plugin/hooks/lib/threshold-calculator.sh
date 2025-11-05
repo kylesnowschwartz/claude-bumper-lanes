@@ -168,44 +168,28 @@ calculate_incremental_threshold() {
   return 0
 }
 
-# format_threshold_breakdown() - Pretty-print threshold breakdown for user messages
+# format_threshold_breakdown() - Pretty-print threshold score for user messages
 # Args:
 #   $1 - threshold_data (JSON output from calculate_weighted_threshold)
 #   $2 - threshold_limit (max allowed score)
-# Returns: Human-readable breakdown string on stdout
+# Returns: Human-readable score report string on stdout
+#
+# Note: With incremental tracking, threshold_data contains per-turn delta values
+# (new_file_additions, edited_file_additions) that are meaningless when displaying
+# accumulated totals. Only the weighted_score and percentage matter for user feedback.
 format_threshold_breakdown() {
   local threshold_data=$1
   local threshold_limit=$2
 
   local weighted_score
   weighted_score=$(echo "$threshold_data" | jq -r '.weighted_score')
-  local new_file_additions
-  new_file_additions=$(echo "$threshold_data" | jq -r '.new_file_additions')
-  local edited_file_additions
-  edited_file_additions=$(echo "$threshold_data" | jq -r '.edited_file_additions')
-  local files_touched
-  files_touched=$(echo "$threshold_data" | jq -r '.files_touched')
-  local scatter_penalty
-  scatter_penalty=$(echo "$threshold_data" | jq -r '.scatter_penalty')
 
   # Calculate percentage
   local threshold_pct
   threshold_pct=$(awk "BEGIN {printf \"%.0f\", ($weighted_score / $threshold_limit) * 100}")
 
-  # Build breakdown message
-  local new_pts=$new_file_additions
-  local edit_pts=$((edited_file_additions * EDIT_FILE_WEIGHT / 10))
-
-  cat <<EOF
-Threshold: $weighted_score/$threshold_limit points ($threshold_pct%)
-  • New code: $new_file_additions lines (×1.0 = $new_pts pts)
-  • Edited code: $edited_file_additions lines (×1.3 = $edit_pts pts)
-  • File scatter: $files_touched files (+$scatter_penalty pts penalty)
-EOF
-
-  if [[ $files_touched -ge $SCATTER_LOW_THRESHOLD ]]; then
-    echo "  → Changes span multiple modules—consider splitting into focused PRs"
-  fi
+  # Simple score report - percentage tells users what they need to know
+  echo "Threshold: $weighted_score/$threshold_limit points ($threshold_pct%)"
 
   return 0
 }

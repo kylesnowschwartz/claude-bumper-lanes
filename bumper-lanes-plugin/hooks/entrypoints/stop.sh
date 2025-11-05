@@ -8,7 +8,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/git-state.sh"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
-source "$SCRIPT_DIR/../lib/threshold.sh"
 source "$SCRIPT_DIR/../lib/threshold-calculator.sh"
 
 # Read hook input from stdin
@@ -61,7 +60,10 @@ set_stop_triggered "$session_id" true
 update_incremental_state "$session_id" "$current_tree" "$weighted_score"
 
 # Format breakdown for user message
-breakdown=$(format_threshold_breakdown "$threshold_data" "$threshold_limit")
+# Note: threshold_data contains both weighted_score (delta) and accumulated_score (total)
+# For user display, we need to show the accumulated total, not just this turn's delta
+threshold_data_for_display=$(echo "$threshold_data" | jq '.weighted_score = .accumulated_score')
+breakdown=$(format_threshold_breakdown "$threshold_data_for_display" "$threshold_limit")
 
 # Build reason message
 reason="⚠️  Bumper lanes: Diff threshold exceeded
@@ -77,9 +79,7 @@ Tell the user:
 4. A fresh diff budget of $threshold_limit points will be restored
 5. After reset, the user can give you more work or end the session
 
-This workflow ensures incremental code review at predictable checkpoints.
-
-Research note: GitLab recommends ~200 lines per merge request for optimal review effectiveness (70-90% defect detection)."
+This workflow ensures incremental code review at predictable checkpoints."
 
 threshold_pct=$(awk "BEGIN {printf \"%.0f\", ($weighted_score / $threshold_limit) * 100}")
 
@@ -87,14 +87,16 @@ threshold_pct=$(awk "BEGIN {printf \"%.0f\", ($weighted_score / $threshold_limit
 jq -n \
   --arg decision "block" \
   --arg reason "$reason" \
-  --argjson continue false \
+  --argjson continue true \
   --arg stopReason "Bumper-Lanes: ⚠️ Diff threshold exceeded ($weighted_score/$threshold_limit points, ${threshold_pct}%)" \
+  --arg systemMessage "/bumper-reset after code review." \
   --argjson threshold_data "$threshold_data" \
   --argjson threshold_limit "$threshold_limit" \
   --argjson threshold_percentage "$threshold_pct" \
   '{
     continue: $continue,
     stopReason: $stopReason,
+    systemMessage: $systemMessage,
     suppressOutput: false,
     decision: $decision,
     reason: $reason,
