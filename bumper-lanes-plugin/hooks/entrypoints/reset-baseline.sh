@@ -8,7 +8,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/git-state.sh"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
-source "$SCRIPT_DIR/../lib/threshold.sh"
 
 # Read command-line argument (sessionId passed from command)
 session_id=${1:-}
@@ -37,8 +36,24 @@ if [[ -z "$current_tree" ]]; then
 fi
 
 diff_output=$(compute_diff "$old_baseline" "$current_tree")
-diff_stats=$(parse_diff_stats "$diff_output")
-total_lines=$(echo "$diff_stats" | jq -r '.total_lines_changed')
+
+# Parse diff stats inline (git diff-tree --shortstat format)
+# Format: "N files changed, X insertions(+), Y deletions(-)"
+files_changed=0
+lines_added=0
+lines_deleted=0
+
+if [[ "$diff_output" =~ ([0-9]+)\ file ]]; then
+  files_changed=${BASH_REMATCH[1]}
+fi
+if [[ "$diff_output" =~ ([0-9]+)\ insertion ]]; then
+  lines_added=${BASH_REMATCH[1]}
+fi
+if [[ "$diff_output" =~ ([0-9]+)\ deletion ]]; then
+  lines_deleted=${BASH_REMATCH[1]}
+fi
+
+total_lines=$((lines_added + lines_deleted))
 
 # Update session state with new baseline and clear incremental tracking
 new_baseline="$current_tree"
@@ -51,11 +66,6 @@ update_incremental_state "$session_id" "$new_baseline" 0
 # Format timestamps for display
 old_timestamp=$(date -r "$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$created_at" +%s)" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$created_at")
 new_timestamp=$(date "+%Y-%m-%d %H:%M:%S")
-
-# Extract stats for message
-files_changed=$(echo "$diff_stats" | jq -r '.files_changed')
-lines_added=$(echo "$diff_stats" | jq -r '.lines_added')
-lines_deleted=$(echo "$diff_stats" | jq -r '.lines_deleted')
 
 # Truncate SHAs for display
 old_baseline_short="${old_baseline:0:7}"
