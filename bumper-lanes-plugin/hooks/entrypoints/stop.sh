@@ -80,17 +80,22 @@ Tell the user:
 
 This workflow ensures incremental code review at predictable checkpoints."
 
-# Output block decision to STDERR
+# Output block decision to STDOUT (JSON API pattern with exit code 0)
 jq -n \
   --arg decision "block" \
   --arg reason "$reason" \
+  --argjson continue false \
+  --arg stopReason "Bumper-Lanes: ⚠ Diff threshold exceeded ($total_lines/$threshold_limit lines changed)" \
   --argjson diff_stats "$diff_stats" \
   --argjson threshold_limit "$threshold_limit" \
   --argjson threshold_percentage "$threshold_pct" \
   '{
+    continue: $continue,
+    stopReason: $stopReason,
+    suppressOutput: false,
     decision: $decision,
     reason: $reason,
     diff_stats: ($diff_stats + {threshold_limit: $threshold_limit, threshold_percentage: $threshold_percentage})
-  }' >&2
+  }'
 
-exit 2
+exit 0
