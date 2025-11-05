@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/git-state.sh"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
 source "$SCRIPT_DIR/../lib/threshold.sh"
+source "$SCRIPT_DIR/../lib/threshold-calculator.sh"
 
 # Read hook input from stdin
 input=$(cat)
@@ -24,14 +25,14 @@ fi
 
 # Check if tool is a modification tool (early return optimization)
 case "$tool_name" in
-  Write|Edit)
-    # This is a file modification tool - proceed with threshold check
-    ;;
-  *)
-    # Not a file modification tool - allow it immediately
-    echo "null"
-    exit 0
-    ;;
+Write | Edit)
+  # This is a file modification tool - proceed with threshold check
+  ;;
+*)
+  # Not a file modification tool - allow it immediately
+  echo "null"
+  exit 0
+  ;;
 esac
 
 # Load session state
@@ -62,35 +63,31 @@ if ! current_tree=$(capture_tree 2>/dev/null); then
   exit 0
 fi
 
-# Compute diff statistics
-diff_output=$(compute_diff "$baseline_tree" "$current_tree")
-total_lines=$(calculate_threshold "$diff_output")
+# Compute weighted threshold using new calculator
+threshold_data=$(calculate_weighted_threshold "$baseline_tree" "$current_tree")
+weighted_score=$(echo "$threshold_data" | jq -r '.weighted_score')
 
 # Check threshold
-if [[ $total_lines -le $threshold_limit ]]; then
+if [[ $weighted_score -le $threshold_limit ]]; then
   # Under threshold - allow tool
   echo "null"
   exit 0
 fi
 
 # Over threshold - deny tool call
-# Parse diff stats for detailed message
-diff_stats=$(parse_diff_stats "$diff_output")
-files_changed=$(echo "$diff_stats" | jq -r '.files_changed')
-lines_added=$(echo "$diff_stats" | jq -r '.lines_added')
-lines_deleted=$(echo "$diff_stats" | jq -r '.lines_deleted')
-
-threshold_pct=$(awk "BEGIN {printf \"%.1f\", ($total_lines / $threshold_limit) * 100}")
+# Format breakdown for user message
+breakdown=$(format_threshold_breakdown "$threshold_data" "$threshold_limit")
 
 # Build denial reason
-reason="⚠ Diff threshold exceeded: $total_lines/$threshold_limit lines changed (${threshold_pct}%).
+reason="🚫 Bumper lanes: Diff threshold exceeded
+
+$breakdown
 
 Cannot modify files while over threshold.
 
-Current changes:
-  $files_changed files, $lines_added insertions(+), $lines_deleted deletions(-)
+Review your changes and run /bumper-reset to continue.
 
-Review your changes and run /bumper-reset to continue."
+Tip: GitLab recommends ~200 lines per merge request for optimal review."
 
 # Output denial decision using modern JSON format
 jq -n \

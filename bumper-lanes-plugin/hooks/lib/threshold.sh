@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# threshold.sh - Threshold calculation and diff statistics parsing
-# Purpose: Calculate threshold from git diff output using simple line-count metric
+# threshold.sh - Simple line-count threshold calculation (LEGACY)
+# Purpose: Parse pre-formatted git diff output for basic line counting
+#
+# NOTE: For weighted threshold calculation (v2 scoring system), see threshold-calculator.sh
+# This file remains for:
+# - Parsing git diff-tree --shortstat output (text → JSON)
+# - Backward compatibility with any external scripts
+# - Simple line-count fallback if weighted calculation fails
 
 # calculate_threshold() - Parses git diff-tree output and returns total lines changed
 # Args:

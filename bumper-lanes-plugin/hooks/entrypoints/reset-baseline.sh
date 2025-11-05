@@ -68,7 +68,7 @@ New baseline: $new_baseline_short (captured $new_timestamp)
 
 Changes accepted: $files_changed files, $lines_added insertions(+), $lines_deleted deletions(-) [$total_lines lines total]
 
-You now have a fresh diff budget of $threshold_limit lines. Pick up where we left off?
+You now have a fresh diff budget of $threshold_limit points. Pick up where we left off?
 EOF
 
 exit 0

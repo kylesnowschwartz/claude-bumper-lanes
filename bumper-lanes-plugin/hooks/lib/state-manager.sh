@@ -28,12 +28,14 @@ write_session_state() {
     stop_triggered=$(jq -r '.stop_triggered // false' "$state_file" 2>/dev/null || echo "false")
   fi
 
+  # generous threshold limit of 4000 was selected in order to allow for
+  # live testing without onerous limits to start
   cat >"$state_file" <<EOF
 {
   "session_id": "$session_id",
   "baseline_tree": "$baseline_tree",
   "created_at": "$timestamp",
-  "threshold_limit": 300,
+  "threshold_limit": 400,
   "repo_path": "$repo_path",
   "stop_triggered": $stop_triggered
 }
@@ -80,7 +82,7 @@ set_stop_triggered() {
   # Use jq to update the stop_triggered field
   local temp_file
   temp_file=$(mktemp)
-  jq --argjson stop_triggered "$stop_triggered" '.stop_triggered = $stop_triggered' "$state_file" > "$temp_file"
+  jq --argjson stop_triggered "$stop_triggered" '.stop_triggered = $stop_triggered' "$state_file" >"$temp_file"
   mv "$temp_file" "$state_file"
 
   return 0

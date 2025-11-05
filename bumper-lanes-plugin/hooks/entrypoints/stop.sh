@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/git-state.sh"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
 source "$SCRIPT_DIR/../lib/threshold.sh"
+source "$SCRIPT_DIR/../lib/threshold-calculator.sh"
 
 # Read hook input from stdin
 input=$(cat)
@@ -41,13 +42,11 @@ if [[ -z "$current_tree" ]]; then
   exit 0 # Fail open
 fi
 
-# Compute diff statistics
-diff_output=$(compute_diff "$baseline_tree" "$current_tree")
+# Compute weighted threshold using new calculator
+threshold_data=$(calculate_weighted_threshold "$baseline_tree" "$current_tree")
+weighted_score=$(echo "$threshold_data" | jq -r '.weighted_score')
 
-# Calculate threshold and check limit
-total_lines=$(calculate_threshold "$diff_output")
-
-if [[ $total_lines -le $threshold_limit ]]; then
+if [[ $weighted_score -le $threshold_limit ]]; then
   # Under threshold - allow stop
   echo "null"
   exit 0
@@ -56,21 +55,13 @@ fi
 # Over threshold - set stop_triggered flag to activate PreToolUse blocking
 set_stop_triggered "$session_id" true
 
-# Build block response
-# Parse diff stats for detailed reporting
-diff_stats=$(parse_diff_stats "$diff_output")
-
-files_changed=$(echo "$diff_stats" | jq -r '.files_changed')
-lines_added=$(echo "$diff_stats" | jq -r '.lines_added')
-lines_deleted=$(echo "$diff_stats" | jq -r '.lines_deleted')
-
-threshold_pct=$(awk "BEGIN {printf \"%.1f\", ($total_lines / $threshold_limit) * 100}")
+# Format breakdown for user message
+breakdown=$(format_threshold_breakdown "$threshold_data" "$threshold_limit")
 
 # Build reason message
-reason="⚠ Diff threshold exceeded: $total_lines/$threshold_limit lines changed (${threshold_pct}%).
+reason="⚠️  Bumper lanes: Diff threshold exceeded
 
-Changes since baseline:
-  $files_changed files changed, $lines_added insertions(+), $lines_deleted deletions(-)
+$breakdown
 
 STOP HERE - Do not continue working. The user must review changes first.
 
@@ -78,18 +69,22 @@ Tell the user:
 1. Review the changes using 'git diff' or 'git status'
 2. Run the /bumper-reset command when satisfied with the changes
 3. This will accept the current changes as the new baseline
-4. A fresh diff budget of $threshold_limit lines will be restored
+4. A fresh diff budget of $threshold_limit points will be restored
 5. After reset, the user can give you more work or end the session
 
-This workflow ensures incremental code review at predictable checkpoints."
+This workflow ensures incremental code review at predictable checkpoints.
+
+Research note: GitLab recommends ~200 lines per merge request for optimal review effectiveness (70-90% defect detection)."
+
+threshold_pct=$(awk "BEGIN {printf \"%.0f\", ($weighted_score / $threshold_limit) * 100}")
 
 # Output block decision to STDOUT (JSON API pattern with exit code 0)
 jq -n \
   --arg decision "block" \
   --arg reason "$reason" \
   --argjson continue false \
-  --arg stopReason "Bumper-Lanes: ⚠ Diff threshold exceeded ($total_lines/$threshold_limit lines changed)" \
-  --argjson diff_stats "$diff_stats" \
+  --arg stopReason "Bumper-Lanes: ⚠️ Diff threshold exceeded ($weighted_score/$threshold_limit points, ${threshold_pct}%)" \
+  --argjson threshold_data "$threshold_data" \
   --argjson threshold_limit "$threshold_limit" \
   --argjson threshold_percentage "$threshold_pct" \
   '{
@@ -98,7 +93,7 @@ jq -n \
     suppressOutput: false,
     decision: $decision,
     reason: $reason,
-    diff_stats: ($diff_stats + {threshold_limit: $threshold_limit, threshold_percentage: $threshold_percentage})
+    threshold_data: ($threshold_data + {threshold_limit: $threshold_limit, threshold_percentage: $threshold_percentage})
   }'
 
 exit 0
