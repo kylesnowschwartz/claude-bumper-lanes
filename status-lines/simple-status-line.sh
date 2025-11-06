@@ -83,13 +83,23 @@ get_bumper_lanes_status() {
   # No session file = bumper lanes not active
   [[ ! -f "$checkpoint_file" ]] && return
 
-  # Read stop_triggered flag
+  # Read stop_triggered flag, accumulated_score, and threshold_limit
   local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
+  local accumulated_score=$(jq -r '.accumulated_score // 0' "$checkpoint_file" 2>/dev/null)
+  local threshold_limit=$(jq -r '.threshold_limit // 400' "$checkpoint_file" 2>/dev/null)
 
+  # Calculate percentage (avoid division by zero)
+  local percentage=0
+  if [[ "$threshold_limit" -gt 0 ]]; then
+    percentage=$(awk "BEGIN {printf \"%.0f\", ($accumulated_score / $threshold_limit) * 100}")
+  fi
+
+  # Return format: "state score/limit percentage"
+  # e.g., "active 145 400 36" or "tripped 425 400 106"
   if [[ "$stop_triggered" == "true" ]]; then
-    echo "tripped"
+    echo "tripped $accumulated_score $threshold_limit $percentage"
   else
-    echo "active"
+    echo "active $accumulated_score $threshold_limit $percentage"
   fi
 }
 
@@ -122,10 +132,16 @@ fi
 
 # Add bumper lanes status if active
 if [[ -n "$BUMPER_STATUS" ]]; then
-  if [[ "$BUMPER_STATUS" == "active" ]]; then
-    output+=" | $(color_bumper_active "bumper-lanes active")"
-  elif [[ "$BUMPER_STATUS" == "tripped" ]]; then
-    output+=" | $(color_bumper_tripped "bumper-lanes tripped")"
+  # Parse the status string: "state score limit percentage"
+  read -r state score limit percentage <<<"$BUMPER_STATUS"
+
+  # Format: "bumper-lanes state (score/limit · percentage%)"
+  status_text="bumper-lanes $state ($score/$limit · $percentage%)"
+
+  if [[ "$state" == "active" ]]; then
+    output+=" | $(color_bumper_active "$status_text")"
+  elif [[ "$state" == "tripped" ]]; then
+    output+=" | $(color_bumper_tripped "$status_text")"
   fi
 fi
 

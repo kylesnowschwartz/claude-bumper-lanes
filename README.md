@@ -54,28 +54,50 @@ Default threshold: **400 points** (weighted score, not simple line count)
 
 ## Status Line Widget
 
-Add bumper lanes status to your custom status line by copying these functions:
+Add bumper lanes status with real-time score tracking to your custom status line:
 
 ```bash
 get_bumper_lanes_status() {
   local session_id=$(echo "$input" | jq -r '.session_id')
   local checkpoint_file=".git/bumper-checkpoints/session-$session_id"
   [[ ! -f "$checkpoint_file" ]] && return
+
+  # Extract score data
   local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
-  [[ "$stop_triggered" == "true" ]] && echo "tripped" || echo "active"
+  local accumulated_score=$(jq -r '.accumulated_score // 0' "$checkpoint_file" 2>/dev/null)
+  local threshold_limit=$(jq -r '.threshold_limit // 400' "$checkpoint_file" 2>/dev/null)
+
+  # Calculate percentage
+  local percentage=0
+  [[ "$threshold_limit" -gt 0 ]] && \
+    percentage=$(awk "BEGIN {printf \"%.0f\", ($accumulated_score / $threshold_limit) * 100}")
+
+  # Return: "state score limit percentage"
+  [[ "$stop_triggered" == "true" ]] && \
+    echo "tripped $accumulated_score $threshold_limit $percentage" || \
+    echo "active $accumulated_score $threshold_limit $percentage"
 }
 
 BUMPER_STATUS=$(get_bumper_lanes_status)
 if [[ -n "$BUMPER_STATUS" ]]; then
-  if [[ "$BUMPER_STATUS" == "active" ]]; then
-    output+=" | $(printf "\e[32mbumper-lanes active\e[0m")"
+  read -r state score limit percentage <<<"$BUMPER_STATUS"
+  status_text="bumper-lanes $state ($score/$limit · $percentage%)"
+
+  if [[ "$state" == "active" ]]; then
+    output+=" | $(printf "\e[32m%s\e[0m" "$status_text")"
   else
-    output+=" | $(printf "\e[31mbumper-lanes tripped\e[0m")"
+    output+=" | $(printf "\e[31m%s\e[0m" "$status_text")"
   fi
 fi
 ```
 
-Requires `jq` and that your script reads status line JSON into `$input`. See `status-lines/simple-status-line.sh` for full example.
+**Display format**: `bumper-lanes active (145/400 · 36%)` or `bumper-lanes tripped (425/400 · 106%)`
+
+- **Green** when active (under threshold)
+- **Red** when tripped (exceeded threshold)
+- Shows both absolute points and percentage in real-time
+
+Requires `jq` and `awk`. Your script must read status line JSON into `$input`. See `status-lines/simple-status-line.sh` for full example.
 
 ## How It Works
 
