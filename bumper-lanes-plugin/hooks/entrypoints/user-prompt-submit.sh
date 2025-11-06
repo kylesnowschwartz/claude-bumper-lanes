@@ -39,9 +39,6 @@ if [[ "$prompt" == *"/claude-bumper-lanes:bumper-reset"* ]]; then
         }
       }'
   fi
-else
-  # Not a /bumper-reset command - output null (no changes)
-  echo "null"
 fi
 
 exit 0

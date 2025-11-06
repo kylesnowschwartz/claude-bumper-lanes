@@ -18,7 +18,6 @@ hook_event_name=$(echo "$input" | jq -r '.hook_event_name')
 
 # Validate hook event (defensive check)
 if [[ "$hook_event_name" != "PreToolUse" ]]; then
-  echo "null"
   exit 0
 fi
 
@@ -29,7 +28,6 @@ Write | Edit)
   ;;
 *)
   # Not a file modification tool - allow it immediately
-  echo "null"
   exit 0
   ;;
 esac
@@ -37,7 +35,6 @@ esac
 # Load session state
 if ! session_state=$(read_session_state "$session_id" 2>/dev/null); then
   # No session state - fail open (allow tool)
-  echo "null"
   exit 0
 fi
 
@@ -51,7 +48,6 @@ accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
 # Capture current working tree (need this for both paths)
 if ! current_tree=$(capture_tree 2>/dev/null); then
   # Failed to capture tree - fail open
-  echo "null"
   exit 0
 fi
 
@@ -63,7 +59,6 @@ if [[ "$stop_triggered" != "true" ]]; then
   threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
   new_accumulated_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
   update_incremental_state "$session_id" "$current_tree" "$new_accumulated_score"
-  echo "null"
   exit 0
 fi
 
@@ -76,7 +71,6 @@ weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
 if [[ $weighted_score -le $threshold_limit ]]; then
   # Under threshold - allow tool and update state
   update_incremental_state "$session_id" "$current_tree" "$weighted_score"
-  echo "null"
   exit 0
 fi
 
