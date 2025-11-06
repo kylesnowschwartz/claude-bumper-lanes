@@ -17,6 +17,7 @@ load '../test_helper/json-assertions'
 # Fixture paths
 FIXTURES_DIR="$BATS_TEST_DIRNAME/../fixtures"
 SESSION_START_FIXTURE="$FIXTURES_DIR/session-start.json"
+SESSION_END_FIXTURE="$FIXTURES_DIR/session-end.json"
 STOP_FIXTURE="$FIXTURES_DIR/stop.json"
 ENV_FIXTURE="$FIXTURES_DIR/test-env.txt"
 
@@ -81,7 +82,44 @@ ENV_FIXTURE="$FIXTURES_DIR/test-env.txt"
   assert_json_field_type "$STOP_FIXTURE" ".cwd" "string"
 }
 
-# Test 3: Validate captured environment variables format
+# Test 3: Validate SessionEnd hook JSON schema
+# bats test_tags=session-end,schema
+@test "should validate SessionEnd hook JSON schema" {
+  # Verify fixture exists
+  assert_file_exist "$SESSION_END_FIXTURE"
+
+  # Validate JSON is well-formed
+  run jq empty "$SESSION_END_FIXTURE"
+  assert_success
+
+  # Check required fields exist
+  assert_json_fields_exist "$SESSION_END_FIXTURE" \
+    ".session_id" \
+    ".transcript_path" \
+    ".cwd" \
+    ".hook_event_name" \
+    ".reason"
+
+  # Validate hook_event_name value
+  assert_json_field_equals "$SESSION_END_FIXTURE" ".hook_event_name" "SessionEnd"
+
+  # Validate session_id is UUID format
+  assert_json_field_matches "$SESSION_END_FIXTURE" ".session_id" \
+    "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+  # Validate reason is one of expected values
+  run jq -r '.reason' "$SESSION_END_FIXTURE"
+  assert_success
+  assert_output --regexp "^(clear|logout|prompt_input_exit|other)$"
+
+  # Validate field types
+  assert_json_field_type "$SESSION_END_FIXTURE" ".session_id" "string"
+  assert_json_field_type "$SESSION_END_FIXTURE" ".transcript_path" "string"
+  assert_json_field_type "$SESSION_END_FIXTURE" ".cwd" "string"
+  assert_json_field_type "$SESSION_END_FIXTURE" ".reason" "string"
+}
+
+# Test 4: Validate captured environment variables format
 # bats test_tags=environment,capture
 @test "should validate captured environment variables format" {
   # Verify fixture exists
