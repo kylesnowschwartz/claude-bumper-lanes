@@ -26,11 +26,12 @@ Defense-in-depth hook system with three enforcement layers:
 
 ## Key Implementation Details
 
-- Default threshold: 200 lines changed (additions + deletions)
-- Session state persisted in `~/.cache/claude-code/bumper-lanes/{session_id}.json`
+- Default threshold: 400 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
+- Session state persisted in `.git/bumper-checkpoints/session-{session_id}`
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PreToolUse matcher: `Edit|Write` (Bash tool not blocked - allows read-only commands)
 - Stop hook exit code 2 blocks Claude from finishing cleanly
+- Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
 ## Project Structure
 
