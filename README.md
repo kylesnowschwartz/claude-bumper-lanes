@@ -1,4 +1,13 @@
-# Claude Bumper Lanes
+```
+    ____                                     __
+   / __ )__  ______ ___  ____  ___  _____   / /   ____ _____  ___  _____
+  / __  / / / / __ `__ \/ __ \/ _ \/ ___/  / /   / __ `/ __ \/ _ \/ ___/
+ / /_/ / /_/ / / / / / / /_/ /  __/ /     / /___/ /_/ / / / /  __(__  )
+/_____/\__,_/_/ /_/ /_/ .___/\___/_/     /_____/\__,_/_/ /_/\___/____/
+                     /_/
+```
+
+Vibe coding too much? Losing discipline and track of your changes? Add bumper lanes to your Claude Code sessions, and stay out of the gutters!
 
 Enforce incremental code review gates in Claude Code by blocking unbounded changes.
 
@@ -14,7 +23,7 @@ Prevents Claude from making changes beyond a configurable line-diff threshold (d
 
 ```bash
 claude plugin marketplace add kylesnowschwartz/claude-bumper-lanes
-claude plugin install kylesnowschwartz/claude-bumper-lanes
+claude plugin install claude-bumper-lanes
 ```
 
 ## Usage
