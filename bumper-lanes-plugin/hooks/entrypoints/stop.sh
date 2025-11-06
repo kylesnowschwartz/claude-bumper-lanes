@@ -19,14 +19,19 @@ stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active // false')
 
 # If already blocked once, allow stop this time to prevent infinite loop
 if [[ "$stop_hook_active" == "true" ]]; then
-  echo "null"
   exit 0
 fi
 
 # Load session state
 if ! session_state=$(read_session_state "$session_id" 2>/dev/null); then
   # No baseline - allow stop (fail open)
-  echo "null"
+  exit 0
+fi
+
+# Exit early if bumper lanes already tripped - allow review collaboration
+stop_triggered=$(echo "$session_state" | jq -r '.stop_triggered // false')
+if [[ "$stop_triggered" == "true" ]]; then
+  # PreToolUse is actively blocking Write/Edit - no need to block stop
   exit 0
 fi
 
@@ -39,7 +44,6 @@ accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
 current_tree=$(capture_tree)
 if [[ -z "$current_tree" ]]; then
   echo "ERROR: Failed to capture current tree" >&2
-  echo "null"
   exit 0 # Fail open
 fi
 
@@ -50,7 +54,6 @@ weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
 if [[ $weighted_score -le $threshold_limit ]]; then
   # Under threshold - allow stop and update incremental state
   update_incremental_state "$session_id" "$current_tree" "$weighted_score"
-  echo "null"
   exit 0
 fi
 
