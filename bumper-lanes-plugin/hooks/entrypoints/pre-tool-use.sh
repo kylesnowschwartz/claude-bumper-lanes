@@ -88,7 +88,9 @@ threshold_data_for_display=$(echo "$threshold_data" | jq '.weighted_score = .acc
 breakdown=$(format_threshold_breakdown "$threshold_data_for_display" "$threshold_limit")
 
 # Build denial reason
-reason="🚫 Bumper lanes: Diff threshold exceeded
+reason="
+
+🚫 Bumper lanes: Diff threshold exceeded
 
 $breakdown
 
@@ -96,7 +98,7 @@ Cannot modify files while over threshold.
 
 Review your changes and run /bumper-reset to continue.
 
-Tip: GitLab recommends ~200 lines per merge request for optimal review."
+"
 
 # Output denial decision using modern JSON format
 jq -n \

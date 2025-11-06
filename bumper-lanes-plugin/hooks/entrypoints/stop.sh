@@ -66,20 +66,17 @@ threshold_data_for_display=$(echo "$threshold_data" | jq '.weighted_score = .acc
 breakdown=$(format_threshold_breakdown "$threshold_data_for_display" "$threshold_limit")
 
 # Build reason message
-reason="⚠️  Bumper lanes: Diff threshold exceeded
+reason="
+
+⚠️  Bumper lanes: Diff threshold exceeded
 
 $breakdown
 
-STOP HERE - Do not continue working. The user must review changes first.
+Ask the User: Would you like to conduct a structured, manual review?
 
-Tell the user:
-1. Review the changes using 'git diff' or 'git status'
-2. Run the /bumper-reset command when satisfied with the changes
-3. This will accept the current changes as the new baseline
-4. A fresh diff budget of $threshold_limit points will be restored
-5. After reset, the user can give you more work or end the session
+This workflow ensures incremental code review at predictable checkpoints.
 
-This workflow ensures incremental code review at predictable checkpoints."
+"
 
 threshold_pct=$(awk "BEGIN {printf \"%.0f\", ($weighted_score / $threshold_limit) * 100}")
 
@@ -88,16 +85,14 @@ jq -n \
   --arg decision "block" \
   --arg reason "$reason" \
   --argjson continue true \
-  --arg stopReason "Bumper-Lanes: ⚠️ Diff threshold exceeded ($weighted_score/$threshold_limit points, ${threshold_pct}%)" \
   --arg systemMessage "/bumper-reset after code review." \
   --argjson threshold_data "$threshold_data" \
   --argjson threshold_limit "$threshold_limit" \
   --argjson threshold_percentage "$threshold_pct" \
   '{
     continue: $continue,
-    stopReason: $stopReason,
     systemMessage: $systemMessage,
-    suppressOutput: false,
+    suppressOutput: true,
     decision: $decision,
     reason: $reason,
     threshold_data: ($threshold_data + {threshold_limit: $threshold_limit, threshold_percentage: $threshold_percentage})
