@@ -12,21 +12,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout code with submodules
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Make scripts executable
+      - name: Make test helpers executable
         run: |
-          chmod +x tests/lib/*.sh
-          chmod +x tests/unit/*.sh
+          chmod +x tests/bats/bin/bats
+          chmod +x tests/manual/*.sh
 
-      - name: Run library load test
-        run: ./tests/unit/test-lib-simple.sh
+      - name: Run unit tests
+        run: tests/bats/bin/bats tests/unit/*.bats
 
-      - name: Run hook contract validation
-        run: ./tests/integration/validate-hook-contracts.sh
+      - name: Run integration tests
+        run: tests/bats/bin/bats tests/integration/*.bats
