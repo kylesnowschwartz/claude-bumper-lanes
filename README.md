@@ -24,6 +24,9 @@ Prevents Claude from making changes beyond a configurable line-diff threshold (d
 ```bash
 claude plugin marketplace add kylesnowschwartz/claude-bumper-lanes
 claude plugin install claude-bumper-lanes
+
+# Update
+claude plugin marketplace update claude-bumper-lanes
 ```
 
 ## Usage
@@ -39,6 +42,31 @@ Work normally with Claude. When the threshold is exceeded:
 ## Configuration
 
 Default threshold: **200 lines changed** (additions + deletions)
+
+## Status Line Widget
+
+Add bumper lanes status to your custom status line by copying these functions:
+
+```bash
+get_bumper_lanes_status() {
+  local session_id=$(echo "$input" | jq -r '.session_id')
+  local checkpoint_file=".git/bumper-checkpoints/session-$session_id"
+  [[ ! -f "$checkpoint_file" ]] && return
+  local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
+  [[ "$stop_triggered" == "true" ]] && echo "tripped" || echo "active"
+}
+
+BUMPER_STATUS=$(get_bumper_lanes_status)
+if [[ -n "$BUMPER_STATUS" ]]; then
+  if [[ "$BUMPER_STATUS" == "active" ]]; then
+    output+=" | $(printf "\e[32mbumper-lanes active\e[0m")"
+  else
+    output+=" | $(printf "\e[31mbumper-lanes tripped\e[0m")"
+  fi
+fi
+```
+
+Requires `jq` and that your script reads status line JSON into `$input`. See `status-lines/simple-status-line.sh` for full example.
 
 ## How It Works
 
