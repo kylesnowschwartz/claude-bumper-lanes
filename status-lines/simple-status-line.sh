@@ -7,6 +7,7 @@ get_model_name() { echo "$input" | jq -r '.model.display_name'; }
 get_current_dir() { echo "$input" | jq -r '.workspace.current_dir'; }
 get_cost() { echo "$input" | jq -r '.cost.total_cost_usd'; }
 get_transcript_path() { echo "$input" | jq -r '.transcript_path // ""'; }
+get_session_id() { echo "$input" | jq -r '.session_id'; }
 
 # Color helper functions
 color_model() { printf "\e[95m%s\e[0m" "$1"; }          # magenta
@@ -17,6 +18,7 @@ color_waiting() { printf "\e[36m%s\e[0m" "$1"; }        # cyan
 color_cost() { printf "\e[35m%s\e[0m" "$1"; }           # magenta
 color_bumper_active() { printf "\e[32m%s\e[0m" "$1"; }  # green
 color_bumper_tripped() { printf "\e[31m%s\e[0m" "$1"; } # red
+color_session_id() { printf "\e[90m%s\e[0m" "$1"; }     # dim gray
 
 # Git helper functions
 get_git_branch() {
@@ -99,6 +101,7 @@ BRANCH=$(get_git_branch)
 CHANGES=$(get_git_changes)
 COST=$(get_cost)
 BUMPER_STATUS=$(get_bumper_lanes_status)
+SESSION_ID=$(get_session_id)
 
 # Build output string with color helpers
 output="[$(color_model "$MODEL")] 📁 ${DIR##*/}"
@@ -124,6 +127,13 @@ if [[ -n "$BUMPER_STATUS" ]]; then
   elif [[ "$BUMPER_STATUS" == "tripped" ]]; then
     output+=" | $(color_bumper_tripped "bumper-lanes tripped")"
   fi
+fi
+
+# Add session ID (always show, dimmed)
+if [[ -n "$SESSION_ID" && "$SESSION_ID" != "null" ]]; then
+  # Show first 8 chars of session ID for brevity
+  short_id="${SESSION_ID:0:8}"
+  output+=" | $(color_session_id "$short_id")"
 fi
 
 # Output with proper color interpretation using printf
