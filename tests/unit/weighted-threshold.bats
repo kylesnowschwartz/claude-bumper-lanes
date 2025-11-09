@@ -148,3 +148,30 @@ EOF
   assert_success
   assert_output "Threshold: 165/200 points (82%)"
 }
+
+# Test 7: New files in subdirectories should use 1.0× weight (regression test for -r flag bug)
+# bats test_tags=regression,subdirectory,new-files
+@test "should apply 1.0x weight to new files in subdirectories" {
+  # Create nested directory structure with new files
+  mkdir -p src/components
+  mkdir -p test/nested/deep
+
+  # Add new files in subdirectories (100 + 50 + 30 = 180 lines)
+  add_file_to_repo "src/components/Button.tsx" 100
+  add_file_to_repo "test/nested/TestFile.txt" 50
+  add_file_to_repo "test/nested/deep/DeepFile.md" 30
+
+  # Stage and capture tree
+  git add .
+  CURRENT_TREE=$(git write-tree)
+
+  # Calculate threshold
+  local threshold_data
+  threshold_data=$(calculate_full_threshold "$BASELINE_TREE" "$CURRENT_TREE")
+
+  # Expected: 180 × 1.0 = 180 points (no 1.3× multiplier for new files)
+  assert_json_field_equals "$threshold_data" ".weighted_score" "180"
+  assert_json_field_equals "$threshold_data" ".new_file_additions" "180"
+  assert_json_field_equals "$threshold_data" ".edited_file_additions" "0"
+  assert_json_field_equals "$threshold_data" ".files_touched" "3"
+}

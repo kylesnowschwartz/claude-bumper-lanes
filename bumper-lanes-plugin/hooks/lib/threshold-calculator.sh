@@ -65,7 +65,7 @@ calculate_weighted_threshold() {
 
   # Get file status to distinguish new vs edited files
   local file_status
-  file_status=$(git diff-tree --name-status --diff-filter=AM "$baseline_tree" "$current_tree" 2>/dev/null || true)
+  file_status=$(git diff-tree -r --name-status --diff-filter=AM "$baseline_tree" "$current_tree" 2>/dev/null || true)
 
   local new_file_additions=0
   local edited_file_additions=0
