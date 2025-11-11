@@ -1,19 +1,15 @@
-```
-    ____                                     __
-   / __ )__  ______ ___  ____  ___  _____   / /   ____ _____  ___  _____
-  / __  / / / / __ `__ \/ __ \/ _ \/ ___/  / /   / __ `/ __ \/ _ \/ ___/
- / /_/ / /_/ / / / / / / /_/ /  __/ /     / /___/ /_/ / / / /  __(__  )
-/_____/\__,_/_/ /_/ /_/ .___/\___/_/     /_____/\__,_/_/ /_/\___/____/
-                     /_/
-```
+![Bumper Lanes](bumper-lanes.png)
 
 Vibe coding too much? Losing discipline and track of your changes? Add bumper lanes to your Claude Code sessions, and stay out of the gutters!
 
-Enforce incremental code review gates in Claude Code by blocking unbounded changes.
-
 ## What It Does
 
-Prevents Claude from making changes beyond a configurable weighted diff threshold (default: 400 points). When the threshold is exceeded:
+Put simply, Bumper-Lanes keeps track of how much code Claude has written or edited, and prevents further edits when a
+threshold of changes has been recahed. 400 points corresponds roughly to 300-500 lines of code changed, depending on the
+mix of new files vs edits.
+
+Bumper-Lanes generates its weighted diff threshold with working tree snapshots  via `git write-tree`, and the diff calculation is performed
+via `git diff-tree`. When the threshold is exceeded:
 
 1. **PreToolUse hook** blocks `Write` and `Edit` tools before they execute
 2. **Stop hook** prevents Claude from finishing until you review
@@ -48,48 +44,10 @@ Work normally with Claude. When the threshold is exceeded:
 4. Reset baseline: `/claude-bumper-lanes:bumper-reset`
 5. Continue working with restored budget
 
-## Configuration
+## Status Line
 
-Default threshold: **400 points** (weighted score, not simple line count)
-
-## Status Line Widget
-
-Add bumper lanes status with real-time score tracking to your custom status line:
-
-```bash
-get_bumper_lanes_status() {
-  local session_id=$(echo "$input" | jq -r '.session_id')
-  local checkpoint_file=".git/bumper-checkpoints/session-$session_id"
-  [[ ! -f "$checkpoint_file" ]] && return
-
-  # Extract score data
-  local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
-  local accumulated_score=$(jq -r '.accumulated_score // 0' "$checkpoint_file" 2>/dev/null)
-  local threshold_limit=$(jq -r '.threshold_limit // 400' "$checkpoint_file" 2>/dev/null)
-
-  # Calculate percentage
-  local percentage=0
-  [[ "$threshold_limit" -gt 0 ]] && \
-    percentage=$(awk "BEGIN {printf \"%.0f\", ($accumulated_score / $threshold_limit) * 100}")
-
-  # Return: "state score limit percentage"
-  [[ "$stop_triggered" == "true" ]] && \
-    echo "tripped $accumulated_score $threshold_limit $percentage" || \
-    echo "active $accumulated_score $threshold_limit $percentage"
-}
-
-BUMPER_STATUS=$(get_bumper_lanes_status)
-if [[ -n "$BUMPER_STATUS" ]]; then
-  read -r state score limit percentage <<<"$BUMPER_STATUS"
-  status_text="bumper-lanes $state ($score/$limit · $percentage%)"
-
-  if [[ "$state" == "active" ]]; then
-    output+=" | $(printf "\e[32m%s\e[0m" "$status_text")"
-  else
-    output+=" | $(printf "\e[31m%s\e[0m" "$status_text")"
-  fi
-fi
-```
+Bumper-Lanes can't add a status line for your, but it provides an example status line you can use to modify your own or
+use directly.
 
 **Display format**: `bumper-lanes active (145/400 · 36%)` or `bumper-lanes tripped (425/400 · 106%)`
 
