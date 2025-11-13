@@ -147,21 +147,6 @@ EOF
     # Branch matches again, but we need to track that switch happened
     assert_equal "$BASELINE_BRANCH" "$CURRENT_BRANCH"
 }
-
-# Test proposed fix: reset baseline after branch switch
-@test "Baseline should reset when returning to different tree" {
-    skip "Proposed fix not yet implemented"
-
-    # Proposed behavior:
-    # 1. SessionStart captures: baseline_tree + baseline_branch
-    # 2. PreToolUse before git checkout: save current_branch
-    # 3. Stop hook: check if current_branch != baseline_branch
-    # 4. If branch changed:
-    #    a. Check if baseline_tree reachable from HEAD
-    #    b. If not: auto-reset baseline to current tree
-    #    c. If yes: warn user baseline may be stale
-}
-
 # Test: Verify tree comparison logic (baseline check)
 @test "Tree comparison correctly identifies identical trees" {
     cd "$TEST_REPO"

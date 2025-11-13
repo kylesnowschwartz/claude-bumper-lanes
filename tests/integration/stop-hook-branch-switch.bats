@@ -104,69 +104,8 @@ JSON
     assert [ "$ACCUMULATED_SCORE" -lt 100 ]
 }
 
-# TEST SPECIFICATION FOR FIX
-# When Stop hook runs, it should:
-# 1. Check if baseline_tree commit is an ancestor of current HEAD
-# 2. If NOT an ancestor:
-#    - Reset baseline_tree to current HEAD tree
-#    - Reset accumulated_score to 0
-#    - Log warning to user about auto-reset
-# 3. If IS ancestor but branch switched:
-#    - Warn user baseline may include pre-session commits
-#    - Suggest /bumper-reset if unexpected
-
-# Test: Stop hook detects baseline staleness and warns user
-@test "Stop hook: warns when baseline is stale after branch switch" {
-    skip "Feature not implemented: baseline staleness detection"
-
-    cd "$TEST_REPO"
-
-    # Session starts on feature-branch
-    SESSION_ID="test-session-$$"
-    BASELINE_TREE=$(git write-tree)
-    BASELINE_BRANCH="feature-branch"
-
-    mkdir -p .git/bumper-checkpoints
-    cat > ".git/bumper-checkpoints/session-$SESSION_ID" <<EOF
-{
-  "session_id": "$SESSION_ID",
-  "baseline_tree": "$BASELINE_TREE",
-  "baseline_branch": "$BASELINE_BRANCH",
-  "previous_tree": "$BASELINE_TREE",
-  "accumulated_score": 0,
-  "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-  "threshold_limit": 400,
-  "repo_path": "$TEST_REPO",
-  "stop_triggered": false
-}
-EOF
-
-    # Switch branches
-    git checkout --quiet main
-    git checkout --quiet feature-branch
-
-    # Run Stop hook
-    STOP_INPUT=$(cat <<JSON
-{
-  "session_id": "$SESSION_ID",
-  "cwd": "$TEST_REPO",
-  "stop_hook_active": false
-}
-JSON
-)
-
-    run bash "$HOOK_DIR/entrypoints/stop.sh" <<< "$STOP_INPUT"
-
-    # Should succeed but output warning
-    assert_success
-    assert_output --partial "WARNING: Baseline may be stale"
-    assert_output --partial "branch switch detected"
-}
-
 # Test: Stop hook auto-resets baseline when unreachable from HEAD
 @test "Stop hook: auto-resets baseline when not reachable from current HEAD" {
-    skip "Feature not implemented: auto-reset on unreachable baseline"
-
     cd "$TEST_REPO"
 
     # Session starts on feature-branch
@@ -220,8 +159,6 @@ JSON
 
 # Test: Session state tracks branch name for staleness detection
 @test "SessionStart: captures baseline_branch in session state" {
-    skip "Feature not implemented: baseline_branch tracking"
-
     cd "$TEST_REPO"
     git checkout --quiet feature-branch
 
