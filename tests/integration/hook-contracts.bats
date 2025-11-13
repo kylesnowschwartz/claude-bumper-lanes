@@ -19,6 +19,7 @@ FIXTURES_DIR="$BATS_TEST_DIRNAME/../fixtures"
 SESSION_START_FIXTURE="$FIXTURES_DIR/session-start.json"
 SESSION_END_FIXTURE="$FIXTURES_DIR/session-end.json"
 STOP_FIXTURE="$FIXTURES_DIR/stop.json"
+POST_TOOL_USE_FIXTURE="$FIXTURES_DIR/post-tool-use-bash-commit.json"
 ENV_FIXTURE="$FIXTURES_DIR/test-env.txt"
 
 # Test 1: Validate SessionStart hook JSON schema
@@ -119,7 +120,53 @@ ENV_FIXTURE="$FIXTURES_DIR/test-env.txt"
   assert_json_field_type "$SESSION_END_FIXTURE" ".reason" "string"
 }
 
-# Test 4: Validate captured environment variables format
+# Test 4: Validate PostToolUse hook JSON schema
+# bats test_tags=post-tool-use,schema
+@test "should validate PostToolUse hook JSON schema" {
+  # Verify fixture exists
+  assert_file_exist "$POST_TOOL_USE_FIXTURE"
+
+  # Validate JSON is well-formed
+  run jq empty "$POST_TOOL_USE_FIXTURE"
+  assert_success
+
+  # Check required fields exist
+  assert_json_fields_exist "$POST_TOOL_USE_FIXTURE" \
+    ".session_id" \
+    ".transcript_path" \
+    ".cwd" \
+    ".hook_event_name" \
+    ".tool_name" \
+    ".tool_input" \
+    ".tool_response"
+
+  # Validate hook_event_name value
+  assert_json_field_equals "$POST_TOOL_USE_FIXTURE" ".hook_event_name" "PostToolUse"
+
+  # Validate tool_name value
+  assert_json_field_equals "$POST_TOOL_USE_FIXTURE" ".tool_name" "Bash"
+
+  # Validate session_id is UUID format
+  assert_json_field_matches "$POST_TOOL_USE_FIXTURE" ".session_id" \
+    "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+  # Validate tool_input.command exists and contains git commit
+  assert_json_field_exists "$POST_TOOL_USE_FIXTURE" ".tool_input.command"
+  assert_json_field_matches "$POST_TOOL_USE_FIXTURE" ".tool_input.command" "git commit"
+
+  # Validate tool_response structure
+  assert_json_field_exists "$POST_TOOL_USE_FIXTURE" ".tool_response.exit_code"
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".tool_response.exit_code" "number"
+
+  # Validate field types
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".session_id" "string"
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".transcript_path" "string"
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".cwd" "string"
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".tool_input" "object"
+  assert_json_field_type "$POST_TOOL_USE_FIXTURE" ".tool_response" "object"
+}
+
+# Test 5: Validate captured environment variables format
 # bats test_tags=environment,capture
 @test "should validate captured environment variables format" {
   # Verify fixture exists

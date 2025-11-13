@@ -128,3 +128,33 @@ update_incremental_state() {
 
   return 0
 }
+
+# reset_baseline_after_commit() - Reset baseline to current tree after git commit
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - new_baseline_tree (40-char git tree SHA of current state)
+# Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
+# Purpose: Auto-reset after successful git commit during enforced session
+reset_baseline_after_commit() {
+  local session_id=$1
+  local new_baseline_tree=$2
+  local checkpoint_dir=".git/bumper-checkpoints"
+  local state_file="$checkpoint_dir/session-$session_id"
+
+  if [[ ! -f "$state_file" ]]; then
+    echo "ERROR: No session state found for session $session_id" >&2
+    return 1
+  fi
+
+  # Use jq to update all fields atomically
+  local temp_file
+  temp_file=$(mktemp)
+  jq \
+    --arg baseline_tree "$new_baseline_tree" \
+    --arg previous_tree "$new_baseline_tree" \
+    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
+    "$state_file" >"$temp_file"
+  mv "$temp_file" "$state_file"
+
+  return 0
+}
