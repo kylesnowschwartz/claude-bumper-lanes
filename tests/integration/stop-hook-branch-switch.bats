@@ -59,11 +59,12 @@ teardown() {
     git checkout --quiet main
     MAIN_TREE=$(git write-tree)
 
-    # Session state has baseline from MAIN but we're working on FEATURE
+    # Session state has baseline from MAIN (simulating session start on main)
     cat > ".git/bumper-checkpoints/session-$SESSION_ID" <<EOF
 {
   "session_id": "$SESSION_ID",
   "baseline_tree": "$MAIN_TREE",
+  "baseline_branch": "main",
   "previous_tree": "$MAIN_TREE",
   "accumulated_score": 0,
   "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",

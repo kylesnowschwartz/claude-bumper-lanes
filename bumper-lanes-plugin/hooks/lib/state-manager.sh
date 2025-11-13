@@ -8,10 +8,12 @@ set -euo pipefail
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - baseline_tree (40-char git tree SHA)
+#   $3 - baseline_branch (optional branch name for staleness detection)
 # Creates: .git/bumper-checkpoints/session-{sessionId} with JSON state
 write_session_state() {
   local session_id=$1
   local baseline_tree=$2
+  local baseline_branch=${3:-""}
   local repo_path
   repo_path=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
   local checkpoint_dir=".git/bumper-checkpoints"
@@ -32,6 +34,10 @@ write_session_state() {
     stop_triggered=$(jq -r '.stop_triggered // false' "$state_file" 2>/dev/null || echo "false")
     accumulated_score=$(jq -r '.accumulated_score // 0' "$state_file" 2>/dev/null || echo "0")
     previous_tree=$(jq -r '.previous_tree // .baseline_tree' "$state_file" 2>/dev/null || echo "$baseline_tree")
+    # Preserve baseline_branch if not provided
+    if [[ -z "$baseline_branch" ]]; then
+      baseline_branch=$(jq -r '.baseline_branch // ""' "$state_file" 2>/dev/null || echo "")
+    fi
   fi
 
   # WHY 400 points:
@@ -42,6 +48,7 @@ write_session_state() {
 {
   "session_id": "$session_id",
   "baseline_tree": "$baseline_tree",
+  "baseline_branch": "$baseline_branch",
   "previous_tree": "$previous_tree",
   "accumulated_score": $accumulated_score,
   "created_at": "$timestamp",
@@ -136,6 +143,36 @@ update_incremental_state() {
 # Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
 # Purpose: Auto-reset after successful git commit during enforced session
 reset_baseline_after_commit() {
+  local session_id=$1
+  local new_baseline_tree=$2
+  local checkpoint_dir=".git/bumper-checkpoints"
+  local state_file="$checkpoint_dir/session-$session_id"
+
+  if [[ ! -f "$state_file" ]]; then
+    echo "ERROR: No session state found for session $session_id" >&2
+    return 1
+  fi
+
+  # Use jq to update all fields atomically
+  local temp_file
+  temp_file=$(mktemp)
+  jq \
+    --arg baseline_tree "$new_baseline_tree" \
+    --arg previous_tree "$new_baseline_tree" \
+    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
+    "$state_file" >"$temp_file"
+  mv "$temp_file" "$state_file"
+
+  return 0
+}
+
+# reset_baseline_stale() - Reset baseline when detected as stale (branch switch)
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - new_baseline_tree (40-char git tree SHA of current state)
+# Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
+# Purpose: Auto-reset when baseline tree is not reachable from current HEAD
+reset_baseline_stale() {
   local session_id=$1
   local new_baseline_tree=$2
   local checkpoint_dir=".git/bumper-checkpoints"

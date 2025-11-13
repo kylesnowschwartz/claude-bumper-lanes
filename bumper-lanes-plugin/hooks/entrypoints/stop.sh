@@ -36,6 +36,7 @@ if [[ "$stop_triggered" == "true" ]]; then
 fi
 
 baseline_tree=$(echo "$session_state" | jq -r '.baseline_tree')
+baseline_branch=$(echo "$session_state" | jq -r '.baseline_branch // ""')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
 previous_tree=$(echo "$session_state" | jq -r '.previous_tree // .baseline_tree')
 accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
@@ -45,6 +46,26 @@ current_tree=$(capture_tree)
 if [[ -z "$current_tree" ]]; then
   echo "ERROR: Failed to capture current tree" >&2
   exit 0 # Fail open
+fi
+
+# Detect branch switch - auto-reset baseline to keep diffs meaningful
+current_branch=$(get_current_branch)
+
+if [[ -n "$baseline_branch" ]] && [[ -n "$current_branch" ]] && [[ "$baseline_branch" != "$current_branch" ]]; then
+  # Branch switched - reset baseline (score to 0, stop_triggered to false)
+  reset_baseline_stale "$session_id" "$current_tree"
+
+  # Allow stop via JSON API (continue: true)
+  jq -n \
+    --arg systemMessage "⚠️  Bumper lanes: Baseline reset (branch: $baseline_branch → $current_branch)" \
+    '{
+      continue: true,
+      systemMessage: $systemMessage,
+      suppressOutput: false
+    }'
+
+  # Exit after JSON response (avoid threshold check)
+  exit 0
 fi
 
 # Compute incremental threshold (previous → current + accumulated)

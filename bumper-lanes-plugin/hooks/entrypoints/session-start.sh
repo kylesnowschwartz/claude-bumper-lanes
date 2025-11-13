@@ -28,8 +28,11 @@ if [[ -z "$baseline_tree" ]]; then
   exit 0 # Fail open
 fi
 
-# Write session state
-write_session_state "$session_id" "$baseline_tree"
+# Capture current branch name for staleness detection
+baseline_branch=$(get_current_branch)
+
+# Write session state (with branch tracking)
+write_session_state "$session_id" "$baseline_tree" "$baseline_branch"
 
 # Allow session start
 exit 0

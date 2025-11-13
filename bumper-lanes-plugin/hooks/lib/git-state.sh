@@ -65,3 +65,9 @@ compute_diff() {
   echo "$diff_output"
   return 0
 }
+
+# get_current_branch() - Gets current branch name
+# Returns: branch name on stdout, or empty if detached HEAD
+get_current_branch() {
+  git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""
+}
