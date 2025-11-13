@@ -14,7 +14,7 @@ setup() {
     mkdir -p "$TEST_REPO"
     cd "$TEST_REPO"
 
-    git init --quiet
+    git init --quiet --initial-branch=main
     git config user.email "test@example.com"
     git config user.name "Test User"
 

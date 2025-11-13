@@ -80,14 +80,18 @@ read_session_state() {
   return 0
 }
 
-# set_stop_triggered() - Set stop_triggered flag in session state
+# _atomic_update_state() - Internal helper for atomic JSON state updates
 # Args:
 #   $1 - session_id (conversation UUID)
-#   $2 - stop_triggered value (true|false)
-# Updates: .git/bumper-checkpoints/session-{sessionId} with new flag value
-set_stop_triggered() {
+#   $2 - jq filter expression (e.g., '.stop_triggered = $stop_triggered')
+#   $3+ - jq arguments (e.g., '--argjson stop_triggered true')
+# Returns: 0 on success, 1 if state file doesn't exist
+# WHY: Eliminates duplicated temp file + validation pattern across 4 functions
+_atomic_update_state() {
   local session_id=$1
-  local stop_triggered=$2
+  shift
+  local jq_filter=$1
+  shift
   local checkpoint_dir=".git/bumper-checkpoints"
   local state_file="$checkpoint_dir/session-$session_id"
 
@@ -96,13 +100,26 @@ set_stop_triggered() {
     return 1
   fi
 
-  # Use jq to update the stop_triggered field
   local temp_file
   temp_file=$(mktemp)
-  jq --argjson stop_triggered "$stop_triggered" '.stop_triggered = $stop_triggered' "$state_file" >"$temp_file"
+  jq "$@" "$jq_filter" "$state_file" >"$temp_file"
   mv "$temp_file" "$state_file"
 
   return 0
+}
+
+# set_stop_triggered() - Set stop_triggered flag in session state
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - stop_triggered value (true|false)
+# Updates: .git/bumper-checkpoints/session-{sessionId} with new flag value
+set_stop_triggered() {
+  local session_id=$1
+  local stop_triggered=$2
+
+  _atomic_update_state "$session_id" \
+    '.stop_triggered = $stop_triggered' \
+    --argjson stop_triggered "$stop_triggered"
 }
 
 # update_incremental_state() - Update previous_tree and accumulated_score for incremental tracking
@@ -115,83 +132,43 @@ update_incremental_state() {
   local session_id=$1
   local new_previous_tree=$2
   local new_accumulated_score=$3
-  local checkpoint_dir=".git/bumper-checkpoints"
-  local state_file="$checkpoint_dir/session-$session_id"
 
-  if [[ ! -f "$state_file" ]]; then
-    echo "ERROR: No session state found for session $session_id" >&2
-    return 1
-  fi
-
-  # Use jq to update both fields atomically
-  local temp_file
-  temp_file=$(mktemp)
-  jq \
-    --arg previous_tree "$new_previous_tree" \
-    --argjson accumulated_score "$new_accumulated_score" \
+  _atomic_update_state "$session_id" \
     '.previous_tree = $previous_tree | .accumulated_score = $accumulated_score' \
-    "$state_file" >"$temp_file"
-  mv "$temp_file" "$state_file"
+    --arg previous_tree "$new_previous_tree" \
+    --argjson accumulated_score "$new_accumulated_score"
+}
 
-  return 0
+# _reset_baseline_internal() - Internal implementation for baseline reset
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - new_baseline_tree (40-char git tree SHA of current state)
+# Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
+# WHY: Both after-commit and stale-detection resets do identical operations
+_reset_baseline_internal() {
+  local session_id=$1
+  local new_baseline_tree=$2
+
+  _atomic_update_state "$session_id" \
+    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
+    --arg baseline_tree "$new_baseline_tree" \
+    --arg previous_tree "$new_baseline_tree"
 }
 
 # reset_baseline_after_commit() - Reset baseline to current tree after git commit
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - new_baseline_tree (40-char git tree SHA of current state)
-# Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
 # Purpose: Auto-reset after successful git commit during enforced session
 reset_baseline_after_commit() {
-  local session_id=$1
-  local new_baseline_tree=$2
-  local checkpoint_dir=".git/bumper-checkpoints"
-  local state_file="$checkpoint_dir/session-$session_id"
-
-  if [[ ! -f "$state_file" ]]; then
-    echo "ERROR: No session state found for session $session_id" >&2
-    return 1
-  fi
-
-  # Use jq to update all fields atomically
-  local temp_file
-  temp_file=$(mktemp)
-  jq \
-    --arg baseline_tree "$new_baseline_tree" \
-    --arg previous_tree "$new_baseline_tree" \
-    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
-    "$state_file" >"$temp_file"
-  mv "$temp_file" "$state_file"
-
-  return 0
+  _reset_baseline_internal "$@"
 }
 
 # reset_baseline_stale() - Reset baseline when detected as stale (branch switch)
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - new_baseline_tree (40-char git tree SHA of current state)
-# Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
 # Purpose: Auto-reset when baseline tree is not reachable from current HEAD
 reset_baseline_stale() {
-  local session_id=$1
-  local new_baseline_tree=$2
-  local checkpoint_dir=".git/bumper-checkpoints"
-  local state_file="$checkpoint_dir/session-$session_id"
-
-  if [[ ! -f "$state_file" ]]; then
-    echo "ERROR: No session state found for session $session_id" >&2
-    return 1
-  fi
-
-  # Use jq to update all fields atomically
-  local temp_file
-  temp_file=$(mktemp)
-  jq \
-    --arg baseline_tree "$new_baseline_tree" \
-    --arg previous_tree "$new_baseline_tree" \
-    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
-    "$state_file" >"$temp_file"
-  mv "$temp_file" "$state_file"
-
-  return 0
+  _reset_baseline_internal "$@"
 }
