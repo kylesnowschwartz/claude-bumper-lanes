@@ -417,7 +417,8 @@ EOF
 
   assert_success
 
-  # Check for feedback message in output
-  assert_output --partial "Bumper lanes reset"
-  assert_output --partial "Baseline updated"
+  # Check for JSON feedback with systemMessage
+  assert_output --partial "systemMessage"
+  assert_output --partial "Baseline reset"
+  assert_output --partial "Threshold budget restored"
 }

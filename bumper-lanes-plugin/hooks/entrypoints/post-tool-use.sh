@@ -60,13 +60,12 @@ if ! reset_baseline_after_commit "$session_id" "$current_tree" 2>/dev/null; then
   exit 0
 fi
 
-# Output success feedback to user and Claude
-echo ""
-echo "✓ Bumper lanes reset after commit"
-echo ""
-echo "Baseline updated to tree: ${current_tree:0:7}"
-echo "Accumulated score reset to 0"
-echo "Threshold budget restored: 400 points"
-echo ""
+# Output structured feedback for Claude Code
+# PostToolUse hooks return JSON with systemMessage to inform the agent
+jq -n \
+  --arg tree "${current_tree:0:7}" \
+  '{
+    systemMessage: "Bumper lanes: Baseline reset to \($tree) after commit. Threshold budget restored to 400 points."
+  }'
 
 exit 0
