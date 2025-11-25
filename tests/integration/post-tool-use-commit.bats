@@ -186,6 +186,8 @@ create_post_tool_use_input() {
     "git commit --message='message'"
     "git commit -am 'message'"
     "git commit --all --message 'message'"
+    "git -C /some/path commit -m 'message'"
+    "git -C \"/path/with spaces\" commit -m 'message'"
   )
 
   for cmd in "${commit_commands[@]}"; do

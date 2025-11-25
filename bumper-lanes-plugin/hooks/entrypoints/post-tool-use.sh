@@ -35,8 +35,8 @@ fi
 # - git commit -am "message"
 # - git commit --amend
 # - git commit with heredoc: git commit -m "$(cat <<'EOF' ...)"
-if ! echo "$command" | grep -qE 'git\s+commit'; then
-  # Not a git commit command - exit early
+# - git -C /path commit -m "message" (with -C flag for directory)
+if ! echo "$command" | grep -qE 'git\b.*\bcommit'; then
   exit 0
 fi
 
