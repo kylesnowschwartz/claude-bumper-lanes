@@ -29,14 +29,10 @@ if [[ "$tool_name" != "Bash" ]]; then
 fi
 
 # Detect git commit commands (various formats)
-# Matches:
-# - git commit -m "message"
-# - git commit --message "message"
-# - git commit -am "message"
-# - git commit --amend
-# - git commit with heredoc: git commit -m "$(cat <<'EOF' ...)"
-# - git -C /path commit -m "message" (with -C flag for directory)
-if ! echo "$command" | grep -qE 'git\b.*\bcommit'; then
+# Pattern: git, optional flags (like -C /path), then commit subcommand
+# Matches: git commit, git -C /path commit, git --git-dir=/x commit
+# Rejects: prose like "use git to commit" (non-flag words between git and commit)
+if ! echo "$command" | grep -qE 'git\s+(-{1,2}[A-Za-z-]+([ =]("[^"]*"|\S+))?\s+)*commit\b'; then
   exit 0
 fi
 

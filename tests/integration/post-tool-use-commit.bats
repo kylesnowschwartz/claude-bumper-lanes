@@ -152,6 +152,10 @@ create_post_tool_use_input() {
     "git branch"
     "git checkout -b feature"
     "git add file.txt"
+    # Prose containing git and commit words (but not "git commit" command) should NOT match
+    "echo 'Ready to stage and commit?'"
+    "echo 'use git to commit changes'"
+    "echo 'commit your git changes'"
   )
 
   for cmd in "${commands[@]}"; do
