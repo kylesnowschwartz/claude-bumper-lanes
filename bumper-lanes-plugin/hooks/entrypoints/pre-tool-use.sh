@@ -51,6 +51,22 @@ if ! current_tree=$(capture_tree 2>/dev/null); then
   exit 0
 fi
 
+# Helper: Output fuel gauge JSON if approaching threshold
+output_fuel_gauge() {
+  local score="$1"
+  local limit="$2"
+
+  local message
+  message=$(get_fuel_gauge_message "$score" "$limit")
+
+  if [[ -n "$message" ]]; then
+    jq -n --arg msg "$message" '{
+      hookSpecificOutput: { permissionDecision: "allow" },
+      systemMessage: $msg
+    }'
+  fi
+}
+
 # Check if Stop hook has been triggered
 # PreToolUse only blocks AFTER Stop hook has fired once
 if [[ "$stop_triggered" != "true" ]]; then
@@ -59,6 +75,9 @@ if [[ "$stop_triggered" != "true" ]]; then
   threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
   new_accumulated_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
   update_incremental_state "$session_id" "$current_tree" "$new_accumulated_score"
+
+  # Output fuel gauge if approaching threshold
+  output_fuel_gauge "$new_accumulated_score" "$threshold_limit"
   exit 0
 fi
 
@@ -71,6 +90,9 @@ weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
 if [[ $weighted_score -le $threshold_limit ]]; then
   # Under threshold - allow tool and update state
   update_incremental_state "$session_id" "$current_tree" "$weighted_score"
+
+  # Output fuel gauge if approaching threshold
+  output_fuel_gauge "$weighted_score" "$threshold_limit"
   exit 0
 fi
 

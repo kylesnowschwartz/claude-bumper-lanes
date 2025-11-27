@@ -193,3 +193,25 @@ format_threshold_breakdown() {
 
   return 0
 }
+
+# get_fuel_gauge_message() - Return warning message if approaching threshold
+# Args:
+#   $1 - current_score (accumulated weighted score)
+#   $2 - threshold_limit (max allowed score)
+# Returns: Warning message on stdout if >=75%, empty string otherwise
+#
+# Usage: Called from PreToolUse to provide non-blocking feedback as agent approaches limit
+# Design: Messages guide collaborative checkpointing, not rushed completion
+get_fuel_gauge_message() {
+  local score=$1
+  local limit=$2
+
+  local pct=$((score * 100 / limit))
+
+  if [[ $pct -ge 90 ]]; then
+    echo "⚠ Bumper lanes: $score/$limit pts ($pct%) — if more work needed, tell the user now so they can review and /bumper-reset"
+  elif [[ $pct -ge 75 ]]; then
+    echo "⚡ Bumper lanes: $score/$limit pts ($pct%) — consider checkpointing: commit functional-working state and summarize progress"
+  fi
+  # Below 75%: return empty string (no warning)
+}
