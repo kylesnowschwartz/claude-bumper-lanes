@@ -52,8 +52,8 @@ fi
 current_branch=$(get_current_branch)
 
 if [[ -n "$baseline_branch" ]] && [[ -n "$current_branch" ]] && [[ "$baseline_branch" != "$current_branch" ]]; then
-  # Branch switched - reset baseline (score to 0, stop_triggered to false)
-  reset_baseline_stale "$session_id" "$current_tree"
+  # Branch switched - reset baseline (score to 0, stop_triggered to false, update branch)
+  reset_baseline_stale "$session_id" "$current_tree" "$current_branch"
 
   # Allow stop via JSON API (continue: true)
   jq -n \

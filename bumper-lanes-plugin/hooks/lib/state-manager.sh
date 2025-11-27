@@ -143,16 +143,30 @@ update_incremental_state() {
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - new_baseline_tree (40-char git tree SHA of current state)
+#   $3 - new_baseline_branch (optional: branch name to update)
 # Updates: Resets baseline_tree, previous_tree, accumulated_score to 0, stop_triggered to false
+#          If branch provided, also updates baseline_branch
 # WHY: Both after-commit and stale-detection resets do identical operations
 _reset_baseline_internal() {
   local session_id=$1
   local new_baseline_tree=$2
+  local new_baseline_branch=${3:-""}
 
-  _atomic_update_state "$session_id" \
-    '.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false' \
-    --arg baseline_tree "$new_baseline_tree" \
-    --arg previous_tree "$new_baseline_tree"
+  local jq_filter='.baseline_tree = $baseline_tree | .previous_tree = $previous_tree | .accumulated_score = 0 | .stop_triggered = false'
+
+  if [[ -n "$new_baseline_branch" ]]; then
+    jq_filter="$jq_filter | .baseline_branch = \$baseline_branch"
+    _atomic_update_state "$session_id" \
+      "$jq_filter" \
+      --arg baseline_tree "$new_baseline_tree" \
+      --arg previous_tree "$new_baseline_tree" \
+      --arg baseline_branch "$new_baseline_branch"
+  else
+    _atomic_update_state "$session_id" \
+      "$jq_filter" \
+      --arg baseline_tree "$new_baseline_tree" \
+      --arg previous_tree "$new_baseline_tree"
+  fi
 }
 
 # reset_baseline_after_commit() - Reset baseline to current tree after git commit
@@ -168,6 +182,7 @@ reset_baseline_after_commit() {
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - new_baseline_tree (40-char git tree SHA of current state)
+#   $3 - new_baseline_branch (optional: update baseline_branch after switch)
 # Purpose: Auto-reset when baseline tree is not reachable from current HEAD
 reset_baseline_stale() {
   _reset_baseline_internal "$@"

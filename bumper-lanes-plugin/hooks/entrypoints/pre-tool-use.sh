@@ -51,6 +51,26 @@ if ! current_tree=$(capture_tree 2>/dev/null); then
   exit 0
 fi
 
+# Check for branch switch BEFORE threshold calculation
+# This catches branch changes that Stop hook missed (e.g., switch and immediately edit)
+baseline_branch=$(echo "$session_state" | jq -r '.baseline_branch // ""')
+current_branch=$(get_current_branch)
+
+if [[ -n "$baseline_branch" ]] && [[ -n "$current_branch" ]] && [[ "$baseline_branch" != "$current_branch" ]]; then
+  # Branch switched - reset baseline and allow this tool (fresh start)
+  reset_baseline_stale "$session_id" "$current_tree" "$current_branch"
+
+  # Output notification and allow tool
+  jq -n \
+    --arg baseline_branch "$baseline_branch" \
+    --arg current_branch "$current_branch" \
+    '{
+      hookSpecificOutput: { permissionDecision: "allow" },
+      systemMessage: "↪ Bumper lanes: Branch changed (\($baseline_branch) → \($current_branch)) — baseline auto-reset."
+    }'
+  exit 0
+fi
+
 # Helper: Output fuel gauge JSON if approaching threshold
 output_fuel_gauge() {
   local score="$1"
