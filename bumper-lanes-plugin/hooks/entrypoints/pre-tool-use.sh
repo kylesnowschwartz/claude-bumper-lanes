@@ -44,6 +44,7 @@ threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
 stop_triggered=$(echo "$session_state" | jq -r '.stop_triggered // false')
 previous_tree=$(echo "$session_state" | jq -r '.previous_tree // .baseline_tree')
 accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
+paused=$(echo "$session_state" | jq -r '.paused // false')
 
 # Capture current working tree (need this for both paths)
 if ! current_tree=$(capture_tree 2>/dev/null); then
@@ -86,6 +87,23 @@ output_fuel_gauge() {
     }'
   fi
 }
+
+# Check if enforcement is paused
+# When paused, we still track changes but don't enforce thresholds
+if [[ "$paused" == "true" ]]; then
+  threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
+  new_accumulated_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
+  update_incremental_state "$session_id" "$current_tree" "$new_accumulated_score"
+
+  jq -n \
+    --argjson score "$new_accumulated_score" \
+    --argjson limit "$threshold_limit" \
+    '{
+      hookSpecificOutput: { permissionDecision: "allow" },
+      systemMessage: "Bumper lanes paused (\($score)/\($limit) pts)"
+    }'
+  exit 0
+fi
 
 # Check if Stop hook has been triggered
 # PreToolUse only blocks AFTER Stop hook has fired once

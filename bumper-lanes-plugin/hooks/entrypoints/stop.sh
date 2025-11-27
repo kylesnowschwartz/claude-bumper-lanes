@@ -35,6 +35,21 @@ if [[ "$stop_triggered" == "true" ]]; then
   exit 0
 fi
 
+# Exit early if enforcement is paused - allow work to continue
+paused=$(echo "$session_state" | jq -r '.paused // false')
+if [[ "$paused" == "true" ]]; then
+  # Still need to track changes while paused
+  current_tree=$(capture_tree)
+  if [[ -n "$current_tree" ]]; then
+    previous_tree=$(echo "$session_state" | jq -r '.previous_tree // .baseline_tree')
+    accumulated_score=$(echo "$session_state" | jq -r '.accumulated_score // 0')
+    threshold_data=$(calculate_incremental_threshold "$previous_tree" "$current_tree" "$accumulated_score")
+    weighted_score=$(echo "$threshold_data" | jq -r '.accumulated_score')
+    update_incremental_state "$session_id" "$current_tree" "$weighted_score"
+  fi
+  exit 0
+fi
+
 baseline_tree=$(echo "$session_state" | jq -r '.baseline_tree')
 baseline_branch=$(echo "$session_state" | jq -r '.baseline_branch // ""')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')

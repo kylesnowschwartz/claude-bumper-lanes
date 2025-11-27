@@ -122,6 +122,21 @@ set_stop_triggered() {
     --argjson stop_triggered "$stop_triggered"
 }
 
+# set_paused() - Set paused flag in session state
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - paused value (true|false)
+# Updates: .git/bumper-checkpoints/session-{sessionId} with new flag value
+# Purpose: Temporarily suspend threshold enforcement while continuing to track changes
+set_paused() {
+  local session_id=$1
+  local paused=$2
+
+  _atomic_update_state "$session_id" \
+    '.paused = $paused' \
+    --argjson paused "$paused"
+}
+
 # update_incremental_state() - Update previous_tree and accumulated_score for incremental tracking
 # Args:
 #   $1 - session_id (conversation UUID)
