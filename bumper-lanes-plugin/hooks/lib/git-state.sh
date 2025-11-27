@@ -13,8 +13,12 @@ capture_tree() {
 
   export GIT_INDEX_FILE="$tmp_index"
 
-  # Initialize temp index with HEAD tree
-  git read-tree HEAD 2>/dev/null || true
+  # Initialize temp index with HEAD tree (or empty if no commits yet)
+  if git rev-parse HEAD &>/dev/null; then
+    git read-tree HEAD 2>/dev/null || true
+  else
+    git read-tree --empty 2>/dev/null || true
+  fi
 
   # Add tracked file changes
   git add -u . 2>/dev/null || true
