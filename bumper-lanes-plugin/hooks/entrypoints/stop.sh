@@ -57,10 +57,11 @@ if [[ -n "$baseline_branch" ]] && [[ -n "$current_branch" ]] && [[ "$baseline_br
 
   # Allow stop via JSON API (continue: true)
   jq -n \
-    --arg systemMessage "⚠️  Bumper lanes: Baseline reset (branch: $baseline_branch → $current_branch)" \
+    --arg baseline_branch "$baseline_branch" \
+    --arg current_branch "$current_branch" \
     '{
       continue: true,
-      systemMessage: $systemMessage,
+      systemMessage: "↪ Bumper lanes: Branch changed (\($baseline_branch) → \($current_branch)) — baseline auto-reset.",
       suppressOutput: false
     }'
 

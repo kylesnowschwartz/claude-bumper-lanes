@@ -58,10 +58,8 @@ fi
 
 # Output structured feedback for Claude Code
 # PostToolUse hooks return JSON with systemMessage to inform the agent
-jq -n \
-  --arg tree "${current_tree:0:7}" \
-  '{
-    systemMessage: "Bumper lanes: Baseline reset to \($tree) after commit. Threshold budget restored to 400 points."
+jq -n '{
+    systemMessage: "✓ Bumper lanes: Auto-reset after commit. Fresh budget: 400 pts."
   }'
 
 exit 0

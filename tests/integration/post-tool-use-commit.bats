@@ -423,6 +423,6 @@ EOF
 
   # Check for JSON feedback with systemMessage
   assert_output --partial "systemMessage"
-  assert_output --partial "Baseline reset"
-  assert_output --partial "Threshold budget restored"
+  assert_output --partial "Auto-reset after commit"
+  assert_output --partial "Fresh budget"
 }
