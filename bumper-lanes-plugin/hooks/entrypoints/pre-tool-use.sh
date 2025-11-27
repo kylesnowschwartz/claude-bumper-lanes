@@ -66,7 +66,7 @@ if [[ -n "$baseline_branch" ]] && [[ -n "$current_branch" ]] && [[ "$baseline_br
     --arg baseline_branch "$baseline_branch" \
     --arg current_branch "$current_branch" \
     '{
-      hookSpecificOutput: { permissionDecision: "allow" },
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
       systemMessage: "↪ Bumper lanes: Branch changed (\($baseline_branch) → \($current_branch)) — baseline auto-reset."
     }'
   exit 0
@@ -82,7 +82,7 @@ output_fuel_gauge() {
 
   if [[ -n "$message" ]]; then
     jq -n --arg msg "$message" '{
-      hookSpecificOutput: { permissionDecision: "allow" },
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
       systemMessage: $msg
     }'
   fi
@@ -99,7 +99,7 @@ if [[ "$paused" == "true" ]]; then
     --argjson score "$new_accumulated_score" \
     --argjson limit "$threshold_limit" \
     '{
-      hookSpecificOutput: { permissionDecision: "allow" },
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
       systemMessage: "Bumper lanes paused (\($score)/\($limit) pts)"
     }'
   exit 0
