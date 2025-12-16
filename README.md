@@ -11,8 +11,8 @@ mix of new files vs edits.
 Bumper-Lanes generates its weighted diff threshold with working tree snapshots  via `git write-tree`, and the diff calculation is performed
 via `git diff-tree`. When the threshold is exceeded:
 
-1. **PreToolUse hook** blocks `Write` and `Edit` tools before they execute
-2. **Stop hook** prevents Claude from finishing until you review
+1. **PostToolUse hook** shows escalating fuel gauge warnings after each Write/Edit
+2. **Stop hook** blocks Claude from finishing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after review
 
 ### Weighted Scoring
@@ -59,9 +59,10 @@ Requires `jq` and `awk`. Your script must read status line JSON into `$input`. S
 
 ## How It Works
 
-- Proactive blocking (PreToolUse hook) + reactive notification (Stop hook)
+- Fuel gauge warnings (PostToolUse) + enforcement blocking (Stop hook)
+- Escalating alerts: 50% NOTICE → 75% WARNING → 90% CRITICAL
 - Tracks cumulative diff per session using Git snapshots
-- Explicit user manual reset
+- Explicit user manual reset required to continue
 
 See [docs/bumper-lanes-threshold-flow.mmd](docs/bumper-lanes-threshold-flow.mmd) for architecture details.
 
@@ -73,8 +74,8 @@ bumper-lanes-plugin/
 │   └── bumper-reset.md       # Slash command metadata
 └── hooks/
     ├── entrypoints/              # Hook entry points
-    │   ├── pre-tool-use.sh       # Block Write/Edit tools
-    │   ├── stop.sh               # Block Claude stop
+    │   ├── post-tool-use-feedback.sh # Fuel gauge warnings
+    │   ├── stop.sh               # Block Claude when threshold exceeded
     │   ├── user-prompt-submit.sh # Intercept /bumper-reset command
     │   ├── session-start.sh      # Initialize session state
     │   └── reset-baseline.sh     # Reset diff baseline
