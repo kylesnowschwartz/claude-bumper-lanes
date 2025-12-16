@@ -101,11 +101,17 @@ calculate_weighted_threshold() {
   # - 1-5 files: Typical single module (code+test+types+docs+config) = no penalty
   # - 6-10 files: Approaching Google's 90th percentile = moderate penalty
   # - 11+ files: Beyond normal locality = exponential discouragement
+  #
+  # WHY marginal penalty (excess files only):
+  # - Penalizing ALL files when hitting a tier is punitive (11 × 30 = 330pts)
+  # - Only files beyond the free tier (5) represent excess cognitive load
+  # - Example: 11 files = 6 excess files × 30 = 180pts (not 330pts)
   local scatter_penalty=0
+  local free_tier=5 # Files 1-5 are penalty-free (typical module size)
   if [[ $files_touched -ge $SCATTER_HIGH_THRESHOLD ]]; then
-    scatter_penalty=$((files_touched * SCATTER_PENALTY_HIGH))
+    scatter_penalty=$(((files_touched - free_tier) * SCATTER_PENALTY_HIGH))
   elif [[ $files_touched -ge $SCATTER_LOW_THRESHOLD ]]; then
-    scatter_penalty=$((files_touched * SCATTER_PENALTY_LOW))
+    scatter_penalty=$(((files_touched - free_tier) * SCATTER_PENALTY_LOW))
   fi
 
   # Calculate weighted score

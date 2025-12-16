@@ -67,7 +67,7 @@ teardown() {
 
 # Test 3: File scatter penalty (6-10 files)
 # bats test_tags=scatter,penalty
-@test "should add 10pts per file for 6-10 files touched" {
+@test "should add 10pts per excess file for 6-10 files touched" {
   # Add 7 new files with 20 lines each = 140 total additions
   add_files_to_repo \
     "file1.txt" 20 "file2.txt" 20 "file3.txt" 20 "file4.txt" 20 \
@@ -77,15 +77,16 @@ teardown() {
   local threshold_data
   threshold_data=$(calculate_full_threshold "$BASELINE_TREE" "$CURRENT_TREE")
 
-  # Expected: 140 × 1.0 + (7 × 10) = 140 + 70 = 210 points
+  # Expected: 140 × 1.0 + ((7 - 5) × 10) = 140 + 20 = 160 points
+  # Only files above free tier (5) are penalized, not all files
   assert_json_field_equals "$threshold_data" ".files_touched" "7"
-  assert_json_field_equals "$threshold_data" ".scatter_penalty" "70"
-  assert_json_field_equals "$threshold_data" ".weighted_score" "210"
+  assert_json_field_equals "$threshold_data" ".scatter_penalty" "20"
+  assert_json_field_equals "$threshold_data" ".weighted_score" "160"
 }
 
 # Test 4: High scatter penalty (11+ files)
 # bats test_tags=scatter,penalty
-@test "should add 30pts per file for 11+ files touched" {
+@test "should add 30pts per excess file for 11+ files touched" {
   # Add 12 files with 10 lines each = 120 additions
   add_files_to_repo \
     "file1.txt" 10 "file2.txt" 10 "file3.txt" 10 "file4.txt" 10 \
@@ -96,9 +97,10 @@ teardown() {
   local threshold_data
   threshold_data=$(calculate_full_threshold "$BASELINE_TREE" "$CURRENT_TREE")
 
-  # Expected: 120 × 1.0 + (12 × 30) = 120 + 360 = 480 points
-  assert_json_field_equals "$threshold_data" ".scatter_penalty" "360"
-  assert_json_field_equals "$threshold_data" ".weighted_score" "480"
+  # Expected: 120 × 1.0 + ((12 - 5) × 30) = 120 + 210 = 330 points
+  # Only files above free tier (5) are penalized, not all files
+  assert_json_field_equals "$threshold_data" ".scatter_penalty" "210"
+  assert_json_field_equals "$threshold_data" ".weighted_score" "330"
 }
 
 # Test 5: Mixed new and edited files
