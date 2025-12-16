@@ -215,9 +215,9 @@ get_fuel_gauge_message() {
   local pct=$((score * 100 / limit))
 
   if [[ $pct -ge 90 ]]; then
-    echo "⚠ Bumper lanes: $score/$limit pts ($pct%) — if more work needed, tell the user now so they can review and /bumper-reset"
+    echo "⛔ SYSTEM: Review budget critical ($score/$limit pts, $pct%). STOP accepting new work. Finish current operation, then IMMEDIATELY inform user that a checkpoint is needed before continuing. Do NOT start new tasks."
   elif [[ $pct -ge 75 ]]; then
-    echo "⚡ Bumper lanes: $score/$limit pts ($pct%) — consider checkpointing: commit functional-working state and summarize progress"
+    echo "⚠ SYSTEM: Review budget at $pct% ($score/$limit pts). INSTRUCTION: Do NOT start new tasks or features. Complete ONLY current in-progress work. After this operation, summarize progress and ask user if you should continue or checkpoint."
   fi
   # Below 75%: return empty string (no warning)
 }
