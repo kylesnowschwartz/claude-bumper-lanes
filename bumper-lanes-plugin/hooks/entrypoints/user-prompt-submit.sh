@@ -6,6 +6,7 @@ set -euo pipefail
 
 # Source library functions (for potential future use)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN_DIR="$SCRIPT_DIR/../bin"
 
 # Read hook input from stdin
 input=$(cat)
@@ -27,21 +28,21 @@ output_command_result() {
 
 # Check if user typed /claude-bumper-lanes:bumper-reset
 if [[ "$prompt" == *"/claude-bumper-lanes:bumper-reset"* ]]; then
-  reset_output=$("$SCRIPT_DIR/reset-baseline.sh" "$session_id" 2>&1)
+  reset_output=$("$BIN_DIR/reset-baseline.sh" "$session_id" 2>&1)
   output_command_result "$reset_output"
   exit 0
 fi
 
 # Check if user typed /claude-bumper-lanes:bumper-pause
 if [[ "$prompt" == *"/claude-bumper-lanes:bumper-pause"* ]]; then
-  pause_output=$("$SCRIPT_DIR/pause-baseline.sh" "$session_id" 2>&1)
+  pause_output=$("$BIN_DIR/pause-baseline.sh" "$session_id" 2>&1)
   output_command_result "$pause_output"
   exit 0
 fi
 
 # Check if user typed /claude-bumper-lanes:bumper-resume
 if [[ "$prompt" == *"/claude-bumper-lanes:bumper-resume"* ]]; then
-  resume_output=$("$SCRIPT_DIR/resume-baseline.sh" "$session_id" 2>&1)
+  resume_output=$("$BIN_DIR/resume-baseline.sh" "$session_id" 2>&1)
   output_command_result "$resume_output"
   exit 0
 fi
