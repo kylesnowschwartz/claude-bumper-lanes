@@ -73,12 +73,15 @@ bumper-lanes-plugin/
 ├── commands/
 │   └── bumper-reset.md       # Slash command metadata
 └── hooks/
+    ├── bin/                      # Utility scripts
+    │   ├── pause-baseline.sh     # Pause threshold enforcement
+    │   ├── reset-baseline.sh     # Reset diff baseline
+    │   └── resume-baseline.sh    # Resume threshold enforcement
     ├── entrypoints/              # Hook entry points
     │   ├── post-tool-use-feedback.sh # Fuel gauge warnings
     │   ├── stop.sh               # Block Claude when threshold exceeded
     │   ├── user-prompt-submit.sh # Intercept /bumper-reset command
-    │   ├── session-start.sh      # Initialize session state
-    │   └── reset-baseline.sh     # Reset diff baseline
+    │   └── session-start.sh      # Initialize session state
     ├── lib/                      # Shared utilities
     │   ├── git-state.sh          # Git tree snapshots
     │   ├── state-manager.sh      # Session state persistence
