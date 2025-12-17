@@ -27,7 +27,7 @@ Defense-in-depth hook system with three layers:
 ## Key Implementation Details
 
 - Default threshold: 400 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
-- Session state persisted in `.git/bumper-checkpoints/session-{session_id}`
+- Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PostToolUse fuel gauge tiers: 50% NOTICE, 75% WARNING, 90% CRITICAL
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded

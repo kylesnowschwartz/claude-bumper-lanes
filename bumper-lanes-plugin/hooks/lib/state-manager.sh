@@ -4,19 +4,29 @@ set -euo pipefail
 # state-manager.sh - SessionId-based session state management
 # Purpose: Persist and retrieve session state for threshold tracking
 
-# write_session_state() - Writes session state JSON to .git/bumper-checkpoints/
+# get_checkpoint_dir() - Returns path to checkpoint directory
+# Handles git worktrees where .git is a file, not a directory
+# Returns: Path like ".git/bumper-checkpoints" or "/path/.git/worktrees/name/bumper-checkpoints"
+get_checkpoint_dir() {
+  local git_dir
+  git_dir=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  echo "$git_dir/bumper-checkpoints"
+}
+
+# write_session_state() - Writes session state JSON to bumper-checkpoints/
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - baseline_tree (40-char git tree SHA)
 #   $3 - baseline_branch (optional branch name for staleness detection)
-# Creates: .git/bumper-checkpoints/session-{sessionId} with JSON state
+# Creates: {git-dir}/bumper-checkpoints/session-{sessionId} with JSON state
 write_session_state() {
   local session_id=$1
   local baseline_tree=$2
   local baseline_branch=${3:-""}
   local repo_path
   repo_path=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  local checkpoint_dir=".git/bumper-checkpoints"
+  local checkpoint_dir
+  checkpoint_dir=$(get_checkpoint_dir) || return 1
 
   mkdir -p "$checkpoint_dir" 2>/dev/null || true
 
@@ -67,14 +77,15 @@ EOF
   return 0
 }
 
-# read_session_state() - Reads session state JSON from .git/bumper-checkpoints/
+# read_session_state() - Reads session state JSON from bumper-checkpoints/
 # Args:
 #   $1 - session_id (conversation UUID)
 # Returns: Session state JSON on stdout
 # Returns 1 if state file doesn't exist
 read_session_state() {
   local session_id=$1
-  local checkpoint_dir=".git/bumper-checkpoints"
+  local checkpoint_dir
+  checkpoint_dir=$(get_checkpoint_dir) || return 1
   local state_file="$checkpoint_dir/session-$session_id"
 
   if [[ ! -f "$state_file" ]]; then
@@ -98,7 +109,8 @@ _atomic_update_state() {
   shift
   local jq_filter=$1
   shift
-  local checkpoint_dir=".git/bumper-checkpoints"
+  local checkpoint_dir
+  checkpoint_dir=$(get_checkpoint_dir) || return 1
   local state_file="$checkpoint_dir/session-$session_id"
 
   if [[ ! -f "$state_file" ]]; then
@@ -118,7 +130,7 @@ _atomic_update_state() {
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - stop_triggered value (true|false)
-# Updates: .git/bumper-checkpoints/session-{sessionId} with new flag value
+# Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new flag value
 set_stop_triggered() {
   local session_id=$1
   local stop_triggered=$2
@@ -132,7 +144,7 @@ set_stop_triggered() {
 # Args:
 #   $1 - session_id (conversation UUID)
 #   $2 - paused value (true|false)
-# Updates: .git/bumper-checkpoints/session-{sessionId} with new flag value
+# Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new flag value
 # Purpose: Temporarily suspend threshold enforcement while continuing to track changes
 set_paused() {
   local session_id=$1
@@ -148,7 +160,7 @@ set_paused() {
 #   $1 - session_id (conversation UUID)
 #   $2 - new_previous_tree (40-char git tree SHA to store as previous)
 #   $3 - new_accumulated_score (integer points accumulated this session)
-# Updates: .git/bumper-checkpoints/session-{sessionId} with new tracking values
+# Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new tracking values
 update_incremental_state() {
   local session_id=$1
   local new_previous_tree=$2

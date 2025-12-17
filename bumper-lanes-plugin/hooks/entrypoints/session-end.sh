@@ -15,11 +15,9 @@ if [[ -z "$session_id" ]]; then
 fi
 
 # Check if git repo (checkpoint dir won't exist otherwise)
-if ! git rev-parse --git-dir &>/dev/null; then
-  exit 0
-fi
+git_dir=$(git rev-parse --git-dir 2>/dev/null) || exit 0
 
-checkpoint_dir=".git/bumper-checkpoints"
+checkpoint_dir="$git_dir/bumper-checkpoints"
 state_file="$checkpoint_dir/session-$session_id"
 
 # Remove this session's checkpoint file

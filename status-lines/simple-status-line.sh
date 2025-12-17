@@ -78,7 +78,9 @@ get_total_tokens() {
 
 get_bumper_lanes_status() {
   local session_id=$(echo "$input" | jq -r '.session_id')
-  local checkpoint_file=".git/bumper-checkpoints/session-$session_id"
+  local git_dir
+  git_dir=$(git rev-parse --git-dir 2>/dev/null) || return
+  local checkpoint_file="$git_dir/bumper-checkpoints/session-$session_id"
 
   # No session file = bumper lanes not active
   [[ ! -f "$checkpoint_file" ]] && return
