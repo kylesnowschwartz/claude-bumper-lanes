@@ -44,7 +44,12 @@ write_session_state() {
   # - Alpha testing value (generous to avoid hitting limits constantly)
   # - Production default should be 200 (GitLab-aligned, Cisco-validated)
   # - User can override by editing this file and running /bumper-reset
-  cat >"$state_file" <<EOF
+  #
+  # Atomic write: temp file + mv to prevent race conditions when multiple
+  # hooks run in parallel (e.g., 10 Stop hooks all firing simultaneously)
+  local temp_file
+  temp_file=$(mktemp)
+  cat >"$temp_file" <<EOF
 {
   "session_id": "$session_id",
   "baseline_tree": "$baseline_tree",
@@ -57,6 +62,7 @@ write_session_state() {
   "stop_triggered": $stop_triggered
 }
 EOF
+  mv "$temp_file" "$state_file"
 
   return 0
 }
