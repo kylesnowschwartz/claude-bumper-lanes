@@ -4,12 +4,12 @@ set -euo pipefail
 # state-manager.sh - SessionId-based session state management
 # Purpose: Persist and retrieve session state for threshold tracking
 
-# get_checkpoint_dir() - Returns path to checkpoint directory
+# get_checkpoint_dir() - Returns absolute path to checkpoint directory
 # Handles git worktrees where .git is a file, not a directory
-# Returns: Path like ".git/bumper-checkpoints" or "/path/.git/worktrees/name/bumper-checkpoints"
+# Returns: Absolute path like "/path/repo/.git/bumper-checkpoints" or "/path/.git/worktrees/name/bumper-checkpoints"
 get_checkpoint_dir() {
   local git_dir
-  git_dir=$(git rev-parse --git-dir 2>/dev/null) || return 1
+  git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 1
   echo "$git_dir/bumper-checkpoints"
 }
 

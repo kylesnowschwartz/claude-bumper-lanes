@@ -15,7 +15,7 @@ if [[ -z "$session_id" ]]; then
 fi
 
 # Check if git repo (checkpoint dir won't exist otherwise)
-git_dir=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || exit 0
 
 checkpoint_dir="$git_dir/bumper-checkpoints"
 state_file="$checkpoint_dir/session-$session_id"

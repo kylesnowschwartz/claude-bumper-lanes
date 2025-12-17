@@ -22,7 +22,7 @@ fi
 
 # Prevent parallel Stop hooks from racing (Claude Code runs 10+ hooks concurrently)
 # Use mkdir for atomic locking - POSIX-portable, works on Linux/macOS/BSD
-git_dir=$(git rev-parse --git-dir)
+git_dir=$(git rev-parse --absolute-git-dir)
 lock_dir="$git_dir/bumper-checkpoints/stop-lock-$session_id.lock"
 if ! mkdir "$lock_dir" 2>/dev/null; then
   # Another hook instance has the lock - exit silently
