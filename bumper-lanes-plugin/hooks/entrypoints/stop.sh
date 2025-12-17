@@ -15,6 +15,20 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id')
 stop_hook_active=$(echo "$input" | jq -r '.stop_hook_active // false')
 
+# Exit early if not a git repo - plugin only works in git repos
+if ! git rev-parse --git-dir &>/dev/null; then
+  exit 0
+fi
+
+# Prevent parallel Stop hooks from racing (Claude Code runs 10+ hooks concurrently)
+# Use mkdir for atomic locking - POSIX-portable, works on Linux/macOS/BSD
+lock_dir=".git/bumper-checkpoints/stop-lock-$session_id.lock"
+if ! mkdir "$lock_dir" 2>/dev/null; then
+  # Another hook instance has the lock - exit silently
+  exit 0
+fi
+trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
+
 # Hook is already executed in project directory (cwd field in JSON)
 
 # If already blocked once, allow stop this time to prevent infinite loop
