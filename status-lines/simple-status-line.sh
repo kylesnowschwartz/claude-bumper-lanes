@@ -88,8 +88,9 @@ get_bumper_lanes_status() {
   # No session file = bumper lanes not active
   [[ ! -f "$checkpoint_file" ]] && return
 
-  # Read stop_triggered flag, accumulated_score, and threshold_limit
+  # Read state flags
   local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
+  local paused=$(jq -r '.paused // false' "$checkpoint_file" 2>/dev/null)
   local accumulated_score=$(jq -r '.accumulated_score // 0' "$checkpoint_file" 2>/dev/null)
   local threshold_limit=$(jq -r '.threshold_limit // 400' "$checkpoint_file" 2>/dev/null)
 
@@ -100,8 +101,10 @@ get_bumper_lanes_status() {
   fi
 
   # Return format: "state score/limit percentage"
-  # e.g., "active 145 400 36" or "tripped 425 400 106"
-  if [[ "$stop_triggered" == "true" ]]; then
+  # States: active, tripped, paused
+  if [[ "$paused" == "true" ]]; then
+    echo "paused $accumulated_score $threshold_limit $percentage"
+  elif [[ "$stop_triggered" == "true" ]]; then
     echo "tripped $accumulated_score $threshold_limit $percentage"
   else
     echo "active $accumulated_score $threshold_limit $percentage"
@@ -140,12 +143,15 @@ if [[ -n "$BUMPER_STATUS" ]]; then
   # Parse the status string: "state score limit percentage"
   read -r state score limit percentage <<<"$BUMPER_STATUS"
 
-  # Format: "bumper-lanes state (score/limit · percentage%)"
-  status_text="bumper-lanes $state ($score/$limit · $percentage%)"
-
-  if [[ "$state" == "active" ]]; then
+  if [[ "$state" == "paused" ]]; then
+    # Paused: show action hint instead of diff stats
+    status_text="Paused: run /bumper-resume"
+    output+=" | $(color_tokens "$status_text")"
+  elif [[ "$state" == "active" ]]; then
+    status_text="bumper-lanes $state ($score/$limit · $percentage%)"
     output+=" | $(color_bumper_active "$status_text")"
   elif [[ "$state" == "tripped" ]]; then
+    status_text="bumper-lanes $state ($score/$limit · $percentage%)"
     output+=" | $(color_bumper_tripped "$status_text")"
   fi
 fi
