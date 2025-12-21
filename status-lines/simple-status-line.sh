@@ -116,10 +116,12 @@ get_diff_tree() {
   local workspace_dir=$(echo "$input" | jq -r '.workspace.current_dir // ""')
   [[ -z "$workspace_dir" ]] && return
 
-  # Find git-diff-tree relative to this script or in PATH
+  # Find git-diff-tree-go (Go version) relative to this script
   local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree"
+  local diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree-go"
 
+  # Fallback to bash version if Go binary not found
+  [[ ! -x "$diff_tree_bin" ]] && diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree"
   [[ ! -x "$diff_tree_bin" ]] && return
 
   # Run from workspace directory

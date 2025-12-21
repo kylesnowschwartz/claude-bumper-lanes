@@ -58,3 +58,38 @@ list:
 # Show Bats version
 version:
     tests/bats/bin/bats --version
+
+# ─────────────────────────────────────────────────────────────
+# Go Tools (diff-viz)
+# ─────────────────────────────────────────────────────────────
+
+# Build all Go tools
+build: build-diff-viz
+
+# Build the diff-viz tool
+build-diff-viz:
+    cd bumper-lanes-plugin/tools/diff-viz && go build -o ../../bin/git-diff-tree-go ./cmd/git-diff-tree
+    @echo "Built: bumper-lanes-plugin/bin/git-diff-tree-go"
+
+# Run diff-viz directly (builds first)
+diff-viz *ARGS:
+    @just build-diff-viz
+    ./bumper-lanes-plugin/bin/git-diff-tree-go {{ARGS}}
+
+# Clean Go build artifacts
+clean-go:
+    rm -f bumper-lanes-plugin/bin/git-diff-tree-go
+    rm -f bumper-lanes-plugin/tools/diff-viz/git-diff-tree
+    @echo "Cleaned Go binaries"
+
+# Run Go tests
+test-go:
+    cd bumper-lanes-plugin/tools/diff-viz && go test ./...
+
+# Format Go code
+fmt-go:
+    cd bumper-lanes-plugin/tools/diff-viz && go fmt ./...
+
+# Check Go code (vet + build)
+check-go:
+    cd bumper-lanes-plugin/tools/diff-viz && go vet ./... && go build ./...
