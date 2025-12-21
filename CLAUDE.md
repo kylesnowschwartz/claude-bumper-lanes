@@ -43,3 +43,26 @@ bumper-lanes-plugin/hooks/
 ```
 
 See [docs/bumper-lanes-threshold-flow.mmd](docs/bumper-lanes-threshold-flow.mmd) for detailed flow diagrams.
+
+## Diff-Vizualization of diff scoring:
+
+We're actively developing a catalogue of visualization tools to illustrate how different code changes usig git. This will help users understand how their modifications contribute to the overall score and encourage more incremental reviews.
+
+### Diff-Viz Resources
+
+@.agent-history/2025-12-22-diff-visualization-catalog.md
+@.agent-history/2025-12-22-library-reference-map.md
+
+### Adding New View Modes
+
+When adding a new diff visualization mode, update ALL of these:
+
+1. `tools/diff-viz/cmd/git-diff-tree/main.go` - mode flag and switch case
+2. `hooks/lib/state-manager.sh` - `set_view_mode()` case validation + error message
+3. `hooks/bin/set-view-mode.sh` - available modes help text
+4. `commands/bumper-view.md` - argument-hint list
+5. **Rebuild the binary**: `just build-diff-viz` (status line uses compiled binary, not `go run`)
+
+## Just Commands
+
+read the @justfile or use the just-mcp to run just commands instead of bash scripts directly.

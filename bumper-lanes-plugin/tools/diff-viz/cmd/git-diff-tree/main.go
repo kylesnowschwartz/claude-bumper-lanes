@@ -24,7 +24,7 @@ type Renderer interface {
 
 func main() {
 	// Parse flags
-	mode := flag.String("mode", "tree", "Output mode: tree, collapsed, sparkline, hier, stacked")
+	mode := flag.String("mode", "tree", "Output mode: tree, collapsed, sparkline, smart, hier, stacked")
 	noColor := flag.Bool("no-color", false, "Disable color output")
 	flag.Parse()
 
@@ -46,6 +46,8 @@ func main() {
 		renderer = render.NewCollapsedRenderer(os.Stdout, useColor)
 	case "sparkline":
 		renderer = render.NewSparklineRenderer(os.Stdout, useColor)
+	case "smart":
+		renderer = render.NewSmartSparklineRenderer(os.Stdout, useColor)
 	case "hier":
 		renderer = render.NewHierarchicalSparklineRenderer(os.Stdout, useColor)
 	case "stacked":

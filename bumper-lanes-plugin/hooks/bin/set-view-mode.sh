@@ -20,7 +20,7 @@ if [[ -z "$view_mode" ]]; then
   # No mode specified - show current mode
   current=$(get_view_mode "$session_id")
   echo "Current view mode: $current"
-  echo "Available modes: tree, collapsed, sparkline, hier, stacked"
+  echo "Available modes: tree, collapsed, sparkline, smart, hier, stacked"
   exit 0
 fi
 
