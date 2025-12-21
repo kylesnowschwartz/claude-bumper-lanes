@@ -24,7 +24,7 @@ type Renderer interface {
 
 func main() {
 	// Parse flags
-	mode := flag.String("mode", "tree", "Output mode: tree, collapsed")
+	mode := flag.String("mode", "tree", "Output mode: tree, collapsed, sparkline, hier, stacked")
 	noColor := flag.Bool("no-color", false, "Disable color output")
 	flag.Parse()
 
@@ -44,8 +44,14 @@ func main() {
 		renderer = render.NewTreeRenderer(os.Stdout, useColor)
 	case "collapsed":
 		renderer = render.NewCollapsedRenderer(os.Stdout, useColor)
+	case "sparkline":
+		renderer = render.NewSparklineRenderer(os.Stdout, useColor)
+	case "hier":
+		renderer = render.NewHierarchicalSparklineRenderer(os.Stdout, useColor)
+	case "stacked":
+		renderer = render.NewStackedSparklineRenderer(os.Stdout, useColor)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown mode: %s (use tree or collapsed)\n", *mode)
+		fmt.Fprintf(os.Stderr, "unknown mode: %s (use tree, collapsed, sparkline, hier, or stacked)\n", *mode)
 		os.Exit(1)
 	}
 

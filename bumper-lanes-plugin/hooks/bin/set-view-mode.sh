@@ -3,7 +3,7 @@ set -euo pipefail
 
 # set-view-mode.sh - Set diff visualization mode for status line
 # Usage: set-view-mode.sh <session_id> <mode>
-# Modes: tree, collapsed
+# Modes: tree, collapsed, sparkline
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/state-manager.sh"
@@ -20,7 +20,7 @@ if [[ -z "$view_mode" ]]; then
   # No mode specified - show current mode
   current=$(get_view_mode "$session_id")
   echo "Current view mode: $current"
-  echo "Available modes: tree, collapsed"
+  echo "Available modes: tree, collapsed, sparkline, hier, stacked"
   exit 0
 fi
 
