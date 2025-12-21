@@ -233,9 +233,9 @@ set_view_mode() {
 
   # Validate mode
   case "$view_mode" in
-  tree | collapsed | sparkline | smart | hier | stacked) ;;
+  tree | collapsed | smart | hier | stacked) ;;
   *)
-    echo "ERROR: Invalid view mode '$view_mode'. Use 'tree', 'collapsed', 'sparkline', 'smart', 'hier', or 'stacked'" >&2
+    echo "ERROR: Invalid view mode '$view_mode'. Use 'tree', 'collapsed', 'smart', 'hier', or 'stacked'" >&2
     return 1
     ;;
   esac

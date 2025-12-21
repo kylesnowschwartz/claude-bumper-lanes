@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	hierBarWidth = 8 // Positions in bar = depth levels
+	hierMinWidth = 3  // Minimum bar width
+	hierMaxWidth = 12 // Maximum bar width (cap very deep trees)
 
 	// Block characters for intensity levels (sparse to dense)
 	hierEmpty  = "░"
@@ -70,9 +71,13 @@ func (r *HierarchicalSparklineRenderer) Render(stats *diff.DiffStats) {
 		return dirs[i].Total > dirs[j].Total
 	})
 
-	// Find max at any single depth for scaling
+	// Find max depth and max changes at any depth for scaling
+	globalMaxDepth := 0
 	maxAtDepth := 0
 	for _, d := range dirs {
+		if d.MaxDepth > globalMaxDepth {
+			globalMaxDepth = d.MaxDepth
+		}
 		for _, v := range d.ByDepth {
 			if v > maxAtDepth {
 				maxAtDepth = v
@@ -80,17 +85,26 @@ func (r *HierarchicalSparklineRenderer) Render(stats *diff.DiffStats) {
 		}
 	}
 
+	// Calculate dynamic bar width based on actual depth range
+	barWidth := globalMaxDepth + 1
+	if barWidth < hierMinWidth {
+		barWidth = hierMinWidth
+	}
+	if barWidth > hierMaxWidth {
+		barWidth = hierMaxWidth
+	}
+
 	// Render each directory
 	var parts []string
 	for _, d := range dirs {
-		parts = append(parts, r.formatDir(d, maxAtDepth))
+		parts = append(parts, r.formatDir(d, maxAtDepth, barWidth))
 	}
 
 	fmt.Fprintln(r.w, strings.Join(parts, " "))
 }
 
 // formatDir formats a directory with depth-distribution bar.
-func (r *HierarchicalSparklineRenderer) formatDir(d HierDirStats, maxAtDepth int) string {
+func (r *HierarchicalSparklineRenderer) formatDir(d HierDirStats, maxAtDepth, barWidth int) string {
 	var sb strings.Builder
 
 	// Show the deepest path as the label
@@ -109,8 +123,8 @@ func (r *HierarchicalSparklineRenderer) formatDir(d HierDirStats, maxAtDepth int
 	sb.WriteString(r.color(ColorReset))
 	sb.WriteString(" ")
 
-	// Build bar: each position = depth level
-	for depth := 0; depth < hierBarWidth; depth++ {
+	// Build bar: each position = depth level (dynamic width)
+	for depth := 0; depth < barWidth; depth++ {
 		changes := 0
 		if depth < len(d.ByDepth) {
 			changes = d.ByDepth[depth]
@@ -169,7 +183,7 @@ func aggregateByDirWithDepth(files []diff.FileStat) []HierDirStats {
 		if _, ok := dirMap[topDir]; !ok {
 			dirMap[topDir] = &HierDirStats{
 				Name:    topDir,
-				ByDepth: make([]int, hierBarWidth),
+				ByDepth: make([]int, hierMaxWidth),
 			}
 		}
 		d := dirMap[topDir]
@@ -178,8 +192,8 @@ func aggregateByDirWithDepth(files []diff.FileStat) []HierDirStats {
 
 		// Record changes at this depth level
 		depthIndex := depth
-		if depthIndex >= hierBarWidth {
-			depthIndex = hierBarWidth - 1
+		if depthIndex >= hierMaxWidth {
+			depthIndex = hierMaxWidth - 1
 		}
 		d.ByDepth[depthIndex] += changes
 		d.Total += changes

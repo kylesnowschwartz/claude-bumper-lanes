@@ -230,40 +230,46 @@ func (r *SmartSparklineRenderer) formatTopDir(topDir string, groups []SmartGroup
 	return strings.Join(parts, " ")
 }
 
-// formatBar creates a sparkline bar with color gradient based on magnitude.
-func (r *SmartSparklineRenderer) formatBar(add, del, maxTotal int) string {
+// formatBar creates a sparkline bar with absolute scaling.
+// Uses fixed thresholds so bar size is consistent across diffs:
+//   1-25 lines: 1 block, 26-50: 2, 51-100: 3, 101-200: 4, 201-400: 5, 400+: 6
+func (r *SmartSparklineRenderer) formatBar(add, del, _ int) string {
 	total := add + del
-	if total == 0 || maxTotal == 0 {
+	if total == 0 {
 		return strings.Repeat(smartEmpty, smartBarWidth)
 	}
 
-	// Scale to bar width
-	filled := (total * smartBarWidth) / maxTotal
-	if filled == 0 && total > 0 {
+	// Absolute thresholds - full bar = significant change (400+ lines)
+	var filled int
+	switch {
+	case total >= 400:
+		filled = 6
+	case total >= 200:
+		filled = 5
+	case total >= 100:
+		filled = 4
+	case total >= 50:
+		filled = 3
+	case total >= 25:
+		filled = 2
+	default:
 		filled = 1
 	}
-	if filled > smartBarWidth {
-		filled = smartBarWidth
-	}
 
-	// Choose block character based on intensity
-	ratio := float64(total) / float64(maxTotal)
+	// Block character based on absolute magnitude
 	block := smartLight
-	blockColor := ColorAdd
-
 	switch {
-	case ratio >= 0.75:
+	case total >= 200:
 		block = smartFilled
-	case ratio >= 0.5:
+	case total >= 100:
 		block = smartMedium
-	case ratio >= 0.25:
-		block = smartLight
 	default:
 		block = smartLight
 	}
 
-	// Add deletion indicator if significant deletions
-	if del > 0 && del > add/2 {
+	// Color: red if deletions dominate, green otherwise
+	blockColor := ColorAdd
+	if del > add {
 		blockColor = ColorDel
 	}
 
