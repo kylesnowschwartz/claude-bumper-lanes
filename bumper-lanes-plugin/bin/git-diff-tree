@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+# git-diff-tree: Hierarchical diff visualization with stats
+#
+# Usage:
+#   git-diff-tree                    # Working tree vs HEAD
+#   git-diff-tree --cached           # Staged changes
+#   git-diff-tree HEAD~5 HEAD        # Compare refs
+#   git-diff-tree main feature       # Compare branches
+#
+# Options:
+#   --no-color    Disable colored output
+#   --summary     Only show totals, no tree
+#
+set -euo pipefail
+
+# Defaults
+USE_COLOR=true
+SUMMARY_ONLY=false
+DIFF_ARGS=""
+
+# Parse options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-color) USE_COLOR=false; shift ;;
+        --summary) SUMMARY_ONLY=true; shift ;;
+        *) DIFF_ARGS+=" $1"; shift ;;
+    esac
+done
+
+# Trim leading space
+DIFF_ARGS="${DIFF_ARGS# }"
+
+# Colors (conditionally enabled)
+if $USE_COLOR; then
+    C_DIR="\e[34m"    # Blue for directories
+    C_ADD="\e[32m"    # Green for additions
+    C_DEL="\e[31m"    # Red for deletions
+    C_DIM="\e[90m"    # Dim for summary
+    C_RST="\e[0m"     # Reset
+else
+    C_DIR="" C_ADD="" C_DEL="" C_DIM="" C_RST=""
+fi
+
+# Default diff args if none provided
+[[ -z "$DIFF_ARGS" ]] && DIFF_ARGS="HEAD"
+
+# Get diff data
+mapfile -t lines < <(git diff --numstat $DIFF_ARGS 2>/dev/null || true)
+
+if [[ ${#lines[@]} -eq 0 ]]; then
+    echo "No changes"
+    exit 0
+fi
+
+# Parse into arrays
+declare -A file_add file_del
+declare -a all_paths
+
+for line in "${lines[@]}"; do
+    read -r add del path <<< "$line"
+    [[ -z "$path" ]] && continue
+    all_paths+=("$path")
+    file_add["$path"]="${add//-/B}"
+    file_del["$path"]="${del//-/B}"
+done
+
+# Sort paths
+IFS=$'\n' sorted=($(sort <<< "${all_paths[*]}")); unset IFS
+total=${#sorted[@]}
+
+# Calculate totals for summary
+calc_totals() {
+    local total_add=0 total_del=0
+    for path in "${sorted[@]}"; do
+        local a="${file_add[$path]}" d="${file_del[$path]}"
+        [[ "$a" != "B" ]] && ((total_add += a)) || true
+        [[ "$d" != "B" ]] && ((total_del += d)) || true
+    done
+    echo "$total_add $total_del"
+}
+
+# Summary only mode
+if $SUMMARY_ONLY; then
+    read -r total_add total_del <<< "$(calc_totals)"
+    echo -e "${C_ADD}+${total_add}${C_RST} ${C_DEL}-${total_del}${C_RST} in ${total} files"
+    exit 0
+fi
+
+# Full tree mode
+declare -A seen_dirs
+
+# Helper: check if there's a sibling after current index at given depth
+has_sibling_after() {
+    local check_idx=$1 level=$2
+    local -n ref_parts=$3
+
+    for ((k=check_idx+1; k<total; k++)); do
+        IFS='/' read -ra cp <<< "${sorted[k]}"
+        # Must match all levels up to (level-1), then differ at level
+        local same=1
+        for ((m=0; m<level; m++)); do
+            [[ "${cp[m]:-}" != "${ref_parts[m]}" ]] && { same=0; break; }
+        done
+        if [[ $same -eq 1 && -n "${cp[level]:-}" && "${cp[level]}" != "${ref_parts[level]}" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+for ((idx=0; idx<total; idx++)); do
+    path="${sorted[idx]}"
+    IFS='/' read -ra parts <<< "$path"
+    depth=${#parts[@]}
+
+    # Print directories we haven't seen yet
+    dir_path=""
+    for ((i=0; i<depth-1; i++)); do
+        dir_path="${dir_path:+$dir_path/}${parts[i]}"
+
+        if [[ -z "${seen_dirs[$dir_path]:-}" ]]; then
+            seen_dirs["$dir_path"]=1
+
+            # Build prefix based on ancestors
+            prefix=""
+            for ((j=0; j<i; j++)); do
+                if has_sibling_after "$idx" "$j" parts; then
+                    prefix+="│   "
+                else
+                    prefix+="    "
+                fi
+            done
+
+            # Check if this directory has siblings after it
+            if has_sibling_after "$idx" "$i" parts; then
+                branch="├── "
+            else
+                branch="└── "
+            fi
+
+            echo -e "${prefix}${branch}${C_DIR}${parts[i]}/${C_RST}"
+        fi
+    done
+
+    # Build file prefix
+    prefix=""
+    for ((j=0; j<depth-1; j++)); do
+        if has_sibling_after "$idx" "$j" parts; then
+            prefix+="│   "
+        else
+            prefix+="    "
+        fi
+    done
+
+    # Check if this file is last in its directory (or at root)
+    my_dir="${path%/*}"
+    [[ "$my_dir" == "$path" ]] && my_dir=""
+
+    is_last=1
+    for ((k=idx+1; k<total; k++)); do
+        check="${sorted[k]}"
+        check_dir="${check%/*}"
+        [[ "$check_dir" == "$check" ]] && check_dir=""
+        [[ "$check_dir" == "$my_dir" ]] && { is_last=0; break; }
+    done
+
+    branch=$([[ $is_last -eq 1 ]] && echo "└── " || echo "├── ")
+    filename="${parts[-1]}"
+
+    # Format stats
+    add="${file_add[$path]}"
+    del="${file_del[$path]}"
+    stat=""
+    [[ "$add" != "0" ]] && stat+="${C_ADD}+${add}${C_RST}"
+    [[ "$del" != "0" ]] && { [[ -n "$stat" ]] && stat+=" "; stat+="${C_DEL}-${del}${C_RST}"; }
+
+    echo -e "${prefix}${branch}${filename} ${stat}"
+done
+
+# Summary line
+read -r total_add total_del <<< "$(calc_totals)"
+echo ""
+echo -e "${C_ADD}+${total_add}${C_RST} ${C_DEL}-${total_del}${C_RST} in ${total} files"

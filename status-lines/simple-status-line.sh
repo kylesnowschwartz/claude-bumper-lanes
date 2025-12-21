@@ -111,6 +111,27 @@ get_bumper_lanes_status() {
   fi
 }
 
+# Get hierarchical diff tree (if git-diff-tree is available and there are changes)
+get_diff_tree() {
+  local workspace_dir=$(echo "$input" | jq -r '.workspace.current_dir // ""')
+  [[ -z "$workspace_dir" ]] && return
+
+  # Find git-diff-tree relative to this script or in PATH
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree"
+
+  [[ ! -x "$diff_tree_bin" ]] && return
+
+  # Run from workspace directory
+  local tree_output
+  tree_output=$(cd "$workspace_dir" && "$diff_tree_bin" 2>/dev/null) || return
+
+  # Only return if there's actual content (not "No changes")
+  [[ "$tree_output" == "No changes" ]] && return
+
+  echo "$tree_output"
+}
+
 # Use the helpers
 MODEL=$(get_model_name)
 DIR=$(get_current_dir)
@@ -120,6 +141,7 @@ CHANGES=$(get_git_changes)
 COST=$(get_cost)
 BUMPER_STATUS=$(get_bumper_lanes_status)
 SESSION_ID=$(get_session_id)
+DIFF_TREE=$(get_diff_tree)
 
 # Build output string with color helpers
 output="[$(color_model "$MODEL")] 📁 ${DIR##*/}"
@@ -165,3 +187,8 @@ fi
 
 # Output with proper color interpretation using printf
 printf "\e[0m%s\e[0m\n" "$output"
+
+# If bumper lanes active and there's a diff tree, show it on subsequent lines
+if [[ -n "$BUMPER_STATUS" && -n "$DIFF_TREE" ]]; then
+  echo "$DIFF_TREE"
+fi
