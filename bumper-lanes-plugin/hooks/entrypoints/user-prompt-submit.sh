@@ -47,4 +47,16 @@ if [[ "$prompt" == *"/claude-bumper-lanes:bumper-resume"* ]]; then
   exit 0
 fi
 
+# Check if user typed /claude-bumper-lanes:bumper-view
+if [[ "$prompt" == *"/claude-bumper-lanes:bumper-view"* ]]; then
+  # Extract mode argument after the command
+  view_mode=""
+  if [[ "$prompt" =~ /claude-bumper-lanes:bumper-view[[:space:]]+([a-z]+) ]]; then
+    view_mode="${BASH_REMATCH[1]}"
+  fi
+  view_output=$("$BIN_DIR/set-view-mode.sh" "$session_id" "$view_mode" 2>&1)
+  output_command_result "$view_output"
+  exit 0
+fi
+
 exit 0

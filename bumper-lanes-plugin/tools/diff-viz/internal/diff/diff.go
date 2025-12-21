@@ -12,19 +12,19 @@ import (
 
 // FileStat represents changes to a single file.
 type FileStat struct {
-	Path       string
-	Additions  int
-	Deletions  int
-	IsBinary   bool
+	Path        string
+	Additions   int
+	Deletions   int
+	IsBinary    bool
 	IsUntracked bool
 }
 
 // DiffStats holds all file changes from a git diff.
 type DiffStats struct {
-	Files       []FileStat
-	TotalAdd    int
-	TotalDel    int
-	TotalFiles  int
+	Files      []FileStat
+	TotalAdd   int
+	TotalDel   int
+	TotalFiles int
 }
 
 // GetDiffStats runs git diff --numstat and parses the output.

@@ -111,6 +111,31 @@ get_bumper_lanes_status() {
   fi
 }
 
+# Get view mode from session state (defaults to "tree")
+get_view_mode() {
+  local session_id=$(echo "$input" | jq -r '.session_id')
+  local workspace_dir=$(echo "$input" | jq -r '.workspace.current_dir // ""')
+  [[ -z "$workspace_dir" ]] && {
+    echo "tree"
+    return
+  }
+
+  local git_dir
+  git_dir=$(git -C "$workspace_dir" rev-parse --absolute-git-dir 2>/dev/null) || {
+    echo "tree"
+    return
+  }
+  local checkpoint_file="$git_dir/bumper-checkpoints/session-$session_id"
+
+  if [[ -f "$checkpoint_file" ]]; then
+    local mode
+    mode=$(jq -r '.view_mode // "tree"' "$checkpoint_file" 2>/dev/null)
+    echo "${mode:-tree}"
+  else
+    echo "tree"
+  fi
+}
+
 # Get hierarchical diff tree (if git-diff-tree is available and there are changes)
 get_diff_tree() {
   local workspace_dir=$(echo "$input" | jq -r '.workspace.current_dir // ""')
@@ -124,9 +149,13 @@ get_diff_tree() {
   [[ ! -x "$diff_tree_bin" ]] && diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree"
   [[ ! -x "$diff_tree_bin" ]] && return
 
-  # Run from workspace directory
+  # Get view mode from session state
+  local view_mode
+  view_mode=$(get_view_mode)
+
+  # Run from workspace directory with selected mode
   local tree_output
-  tree_output=$(cd "$workspace_dir" && "$diff_tree_bin" 2>/dev/null) || return
+  tree_output=$(cd "$workspace_dir" && "$diff_tree_bin" --mode="$view_mode" 2>/dev/null) || return
 
   # Only return if there's actual content (not "No changes")
   [[ "$tree_output" == "No changes" ]] && return

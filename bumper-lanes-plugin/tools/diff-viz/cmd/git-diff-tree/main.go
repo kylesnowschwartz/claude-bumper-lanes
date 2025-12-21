@@ -2,12 +2,14 @@
 //
 // Usage:
 //
-//	git-diff-tree              # Working tree vs HEAD
-//	git-diff-tree --cached     # Staged changes
-//	git-diff-tree main feature # Compare branches
+//	git-diff-tree                    # Working tree vs HEAD (tree mode)
+//	git-diff-tree --cached           # Staged changes
+//	git-diff-tree --mode=collapsed   # Compact single-line format
+//	git-diff-tree main feature       # Compare branches
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -15,13 +17,37 @@ import (
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/render"
 )
 
+// Renderer interface for diff output.
+type Renderer interface {
+	Render(stats *diff.DiffStats)
+}
+
 func main() {
-	stats, err := diff.GetAllStats(os.Args[1:]...)
+	// Parse flags
+	mode := flag.String("mode", "tree", "Output mode: tree, collapsed")
+	noColor := flag.Bool("no-color", false, "Disable color output")
+	flag.Parse()
+
+	// Get diff stats with remaining args
+	stats, err := diff.GetAllStats(flag.Args()...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	renderer := render.NewTreeRenderer(os.Stdout, true)
+	useColor := !*noColor
+
+	// Select renderer based on mode
+	var renderer Renderer
+	switch *mode {
+	case "tree":
+		renderer = render.NewTreeRenderer(os.Stdout, useColor)
+	case "collapsed":
+		renderer = render.NewCollapsedRenderer(os.Stdout, useColor)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown mode: %s (use tree or collapsed)\n", *mode)
+		os.Exit(1)
+	}
+
 	renderer.Render(stats)
 }

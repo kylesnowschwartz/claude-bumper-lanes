@@ -220,3 +220,49 @@ reset_baseline_after_commit() {
 reset_baseline_stale() {
   _reset_baseline_internal "$@"
 }
+
+# set_view_mode() - Set diff visualization mode in session state
+# Args:
+#   $1 - session_id (conversation UUID)
+#   $2 - view_mode (tree|collapsed)
+# Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new view_mode
+# Purpose: Allow user to toggle between diff visualization modes in status line
+set_view_mode() {
+  local session_id=$1
+  local view_mode=$2
+
+  # Validate mode
+  case "$view_mode" in
+  tree | collapsed) ;;
+  *)
+    echo "ERROR: Invalid view mode '$view_mode'. Use 'tree' or 'collapsed'" >&2
+    return 1
+    ;;
+  esac
+
+  _atomic_update_state "$session_id" \
+    '.view_mode = $view_mode' \
+    --arg view_mode "$view_mode"
+}
+
+# get_view_mode() - Get current diff visualization mode from session state
+# Args:
+#   $1 - session_id (conversation UUID)
+# Returns: view_mode (tree|collapsed), defaults to "tree" if not set
+get_view_mode() {
+  local session_id=$1
+  local checkpoint_dir
+  checkpoint_dir=$(get_checkpoint_dir) || {
+    echo "tree"
+    return 0
+  }
+  local state_file="$checkpoint_dir/session-$session_id"
+
+  if [[ -f "$state_file" ]]; then
+    local mode
+    mode=$(jq -r '.view_mode // "tree"' "$state_file" 2>/dev/null)
+    echo "${mode:-tree}"
+  else
+    echo "tree"
+  fi
+}

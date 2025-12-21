@@ -13,12 +13,12 @@ import (
 
 // ANSI color codes
 const (
-	ColorDir     = "\033[34m"     // Blue
-	ColorFile    = "\033[38;5;8m" // Dark gray
-	ColorNew     = "\033[33m"     // Yellow for untracked/new files
-	ColorAdd     = "\033[32m"     // Green
-	ColorDel     = "\033[31m"     // Red
-	ColorReset   = "\033[0m"
+	ColorDir   = "\033[34m"     // Blue
+	ColorFile  = "\033[38;5;8m" // Dark gray
+	ColorNew   = "\033[33m"     // Yellow for untracked/new files
+	ColorAdd   = "\033[32m"     // Green
+	ColorDel   = "\033[31m"     // Red
+	ColorReset = "\033[0m"
 )
 
 // TreeNode represents a node in the file tree.
@@ -57,7 +57,7 @@ func (r *TreeRenderer) Render(stats *diff.DiffStats) {
 	// Render each top-level node
 	for i, child := range root.Children {
 		isLast := i == len(root.Children)-1
-		r.renderNode(child, "", isLast, []bool{})
+		r.renderNode(child, isLast, nil)
 	}
 
 	// Summary line
@@ -125,7 +125,7 @@ func (r *TreeRenderer) insertPath(root *TreeNode, file diff.FileStat) {
 
 // renderNode outputs a single tree node with proper prefixes.
 // parentIsLast tracks whether ancestors were last children (for prefix rendering).
-func (r *TreeRenderer) renderNode(node *TreeNode, prefix string, isLast bool, parentIsLast []bool) {
+func (r *TreeRenderer) renderNode(node *TreeNode, isLast bool, parentIsLast []bool) {
 	// Build prefix from parent state
 	var sb strings.Builder
 	for _, wasLast := range parentIsLast {
@@ -160,7 +160,7 @@ func (r *TreeRenderer) renderNode(node *TreeNode, prefix string, isLast bool, pa
 	newParentIsLast := append(parentIsLast, isLast)
 	for i, child := range node.Children {
 		childIsLast := i == len(node.Children)-1
-		r.renderNode(child, prefix, childIsLast, newParentIsLast)
+		r.renderNode(child, childIsLast, newParentIsLast)
 	}
 }
 
