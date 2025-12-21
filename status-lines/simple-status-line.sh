@@ -190,5 +190,11 @@ printf "\e[0m%s\e[0m\n" "$output"
 
 # If bumper lanes active and there's a diff tree, show it on subsequent lines
 if [[ -n "$BUMPER_STATUS" && -n "$DIFF_TREE" ]]; then
-  echo "$DIFF_TREE"
+  # ccstatusline technique for preserving whitespace in Claude Code status lines:
+  # 1. Replace spaces with non-breaking spaces (U+00A0 = UTF-8 0xC2 0xA0)
+  # 2. Prepend ANSI reset (\x1b[0m) to EACH line to override Claude Code's formatting
+  while IFS= read -r line; do
+    # Replace spaces with non-breaking spaces and prepend reset
+    printf '\e[0m%s\n' "${line// /$'\xc2\xa0'}"
+  done <<<"$DIFF_TREE"
 fi

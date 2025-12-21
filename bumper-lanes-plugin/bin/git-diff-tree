@@ -35,9 +35,13 @@ DIFF_ARGS="${DIFF_ARGS# }"
 
 # Colors
 if $USE_COLOR; then
-    C_DIR="\e[34m"; C_ADD="\e[32m"; C_DEL="\e[31m"; C_RST="\e[0m"
+    C_DIR="\e[34m"       # Blue for directories
+    C_FILE="\e[38;5;8m"  # Dark gray (fg 8) for files
+    C_ADD="\e[32m"       # Green for additions
+    C_DEL="\e[31m"       # Red for deletions
+    C_RST="\e[0m"        # Reset
 else
-    C_DIR=""; C_ADD=""; C_DEL=""; C_RST=""
+    C_DIR=""; C_FILE=""; C_ADD=""; C_DEL=""; C_RST=""
 fi
 
 # Default diff args
@@ -185,7 +189,7 @@ for ((idx=0; idx<total_items; idx++)); do
         stat=""
         [[ "$add" != "0" ]] && stat+="${C_ADD}+${add}${C_RST}"
         [[ "$del" != "0" ]] && { [[ -n "$stat" ]] && stat+=" "; stat+="${C_DEL}-${del}${C_RST}"; }
-        echo -e "${prefix}${connector}${name} ${stat}"
+        echo -e "${prefix}${connector}${C_FILE}${name}${C_RST} ${stat}"
     fi
 done
 
