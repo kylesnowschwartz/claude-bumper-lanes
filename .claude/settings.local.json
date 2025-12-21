@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [],
+    "ask": []
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/Users/kyle/Code/my-projects/claude-bumper-lanes/status-lines/simple-status-line.sh",
+    "padding": 0
+  }
+}
