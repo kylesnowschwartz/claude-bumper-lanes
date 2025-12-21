@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # git-diff-tree: Hierarchical diff visualization with stats
 #
+# Algorithm based on eza/ftdv pattern:
+# 1. Build tree structure from sorted paths
+# 2. Flatten with DFS, tracking parent_is_last[] at each depth
+# 3. Render prefix from parent_is_last[], add connector based on is_last
+#
 # Usage:
 #   git-diff-tree                    # Working tree vs HEAD
 #   git-diff-tree --cached           # Staged changes
@@ -26,22 +31,16 @@ while [[ $# -gt 0 ]]; do
         *) DIFF_ARGS+=" $1"; shift ;;
     esac
 done
-
-# Trim leading space
 DIFF_ARGS="${DIFF_ARGS# }"
 
-# Colors (conditionally enabled)
+# Colors
 if $USE_COLOR; then
-    C_DIR="\e[34m"    # Blue for directories
-    C_ADD="\e[32m"    # Green for additions
-    C_DEL="\e[31m"    # Red for deletions
-    C_DIM="\e[90m"    # Dim for summary
-    C_RST="\e[0m"     # Reset
+    C_DIR="\e[34m"; C_ADD="\e[32m"; C_DEL="\e[31m"; C_RST="\e[0m"
 else
-    C_DIR="" C_ADD="" C_DEL="" C_DIM="" C_RST=""
+    C_DIR=""; C_ADD=""; C_DEL=""; C_RST=""
 fi
 
-# Default diff args if none provided
+# Default diff args
 [[ -z "$DIFF_ARGS" ]] && DIFF_ARGS="HEAD"
 
 # Get diff data
@@ -68,7 +67,7 @@ done
 IFS=$'\n' sorted=($(sort <<< "${all_paths[*]}")); unset IFS
 total=${#sorted[@]}
 
-# Calculate totals for summary
+# Calculate totals
 calc_totals() {
     local total_add=0 total_del=0
     for path in "${sorted[@]}"; do
@@ -86,95 +85,108 @@ if $SUMMARY_ONLY; then
     exit 0
 fi
 
-# Full tree mode
+# =============================================================================
+# Simpler approach: Process sorted paths, emit dirs on first encounter
+# Track parent_is_last[] for prefix generation
+# =============================================================================
+
 declare -A seen_dirs
+declare -a parent_is_last
 
-# Helper: check if there's a sibling after current index at given depth
-has_sibling_after() {
-    local check_idx=$1 level=$2
-    local -n ref_parts=$3
+# Pre-compute: for each path component at each depth, is it the last sibling?
+# We do this by scanning ahead in the sorted list
 
-    for ((k=check_idx+1; k<total; k++)); do
-        IFS='/' read -ra cp <<< "${sorted[k]}"
-        # Must match all levels up to (level-1), then differ at level
-        local same=1
-        for ((m=0; m<level; m++)); do
-            [[ "${cp[m]:-}" != "${ref_parts[m]}" ]] && { same=0; break; }
-        done
-        if [[ $same -eq 1 && -n "${cp[level]:-}" && "${cp[level]}" != "${ref_parts[level]}" ]]; then
-            return 0
-        fi
-    done
-    return 1
-}
+# Get all unique "tree items" (dirs + files) in display order
+declare -a tree_items  # Each: "depth|full_path|name|is_dir"
 
-for ((idx=0; idx<total; idx++)); do
-    path="${sorted[idx]}"
+for path in "${sorted[@]}"; do
     IFS='/' read -ra parts <<< "$path"
-    depth=${#parts[@]}
 
-    # Print directories we haven't seen yet
+    # Emit any unseen directories first
     dir_path=""
-    for ((i=0; i<depth-1; i++)); do
-        dir_path="${dir_path:+$dir_path/}${parts[i]}"
+    for ((i=0; i<${#parts[@]}-1; i++)); do
+        if [[ -n "$dir_path" ]]; then
+            dir_path="$dir_path/${parts[i]}"
+        else
+            dir_path="${parts[i]}"
+        fi
 
         if [[ -z "${seen_dirs[$dir_path]:-}" ]]; then
             seen_dirs["$dir_path"]=1
-
-            # Build prefix based on ancestors
-            prefix=""
-            for ((j=0; j<i; j++)); do
-                if has_sibling_after "$idx" "$j" parts; then
-                    prefix+="│   "
-                else
-                    prefix+="    "
-                fi
-            done
-
-            # Check if this directory has siblings after it
-            if has_sibling_after "$idx" "$i" parts; then
-                branch="├── "
-            else
-                branch="└── "
-            fi
-
-            echo -e "${prefix}${branch}${C_DIR}${parts[i]}/${C_RST}"
+            tree_items+=("$i|$dir_path|${parts[i]}|1")
         fi
     done
 
-    # Build file prefix
-    prefix=""
-    for ((j=0; j<depth-1; j++)); do
-        if has_sibling_after "$idx" "$j" parts; then
-            prefix+="│   "
-        else
-            prefix+="    "
-        fi
-    done
+    # Emit the file
+    tree_items+=("$((${#parts[@]}-1))|$path|${parts[-1]}|0")
+done
 
-    # Check if this file is last in its directory (or at root)
-    my_dir="${path%/*}"
-    [[ "$my_dir" == "$path" ]] && my_dir=""
+# Now compute is_last for each item by looking at what follows
+total_items=${#tree_items[@]}
 
+for ((idx=0; idx<total_items; idx++)); do
+    IFS='|' read -r depth full_path name is_dir <<< "${tree_items[idx]}"
+
+    # Determine parent path for this item
+    if [[ "$is_dir" == "1" ]]; then
+        parent_path="${full_path%/*}"
+        [[ "$parent_path" == "$full_path" ]] && parent_path=""
+    else
+        parent_path="${full_path%/*}"
+        [[ "$parent_path" == "$full_path" ]] && parent_path=""
+    fi
+
+    # Check if there's another item at the same depth with the same parent after this one
     is_last=1
-    for ((k=idx+1; k<total; k++)); do
-        check="${sorted[k]}"
-        check_dir="${check%/*}"
-        [[ "$check_dir" == "$check" ]] && check_dir=""
-        [[ "$check_dir" == "$my_dir" ]] && { is_last=0; break; }
+    for ((k=idx+1; k<total_items; k++)); do
+        IFS='|' read -r k_depth k_path k_name k_is_dir <<< "${tree_items[k]}"
+
+        # Skip if deeper (children)
+        [[ "$k_depth" -gt "$depth" ]] && continue
+
+        # If same depth, check parent
+        if [[ "$k_depth" == "$depth" ]]; then
+            k_parent="${k_path%/*}"
+            [[ "$k_parent" == "$k_path" ]] && k_parent=""
+
+            if [[ "$k_parent" == "$parent_path" ]]; then
+                is_last=0
+            fi
+        fi
+        break  # Only need to check immediate next item at same or higher level
     done
 
-    branch=$([[ $is_last -eq 1 ]] && echo "└── " || echo "├── ")
-    filename="${parts[-1]}"
+    # Build prefix using parent_is_last
+    prefix=""
+    for ((d=0; d<depth; d++)); do
+        if [[ "${parent_is_last[$d]:-0}" == "1" ]]; then
+            prefix+="    "
+        else
+            prefix+="│   "
+        fi
+    done
 
-    # Format stats
-    add="${file_add[$path]}"
-    del="${file_del[$path]}"
-    stat=""
-    [[ "$add" != "0" ]] && stat+="${C_ADD}+${add}${C_RST}"
-    [[ "$del" != "0" ]] && { [[ -n "$stat" ]] && stat+=" "; stat+="${C_DEL}-${del}${C_RST}"; }
+    # Connector
+    if [[ "$is_last" == "1" ]]; then
+        connector="└── "
+    else
+        connector="├── "
+    fi
 
-    echo -e "${prefix}${branch}${filename} ${stat}"
+    # Update parent_is_last for this depth
+    parent_is_last[$depth]=$is_last
+
+    # Render
+    if [[ "$is_dir" == "1" ]]; then
+        echo -e "${prefix}${connector}${C_DIR}${name}/${C_RST}"
+    else
+        add="${file_add[$full_path]:-0}"
+        del="${file_del[$full_path]:-0}"
+        stat=""
+        [[ "$add" != "0" ]] && stat+="${C_ADD}+${add}${C_RST}"
+        [[ "$del" != "0" ]] && { [[ -n "$stat" ]] && stat+=" "; stat+="${C_DEL}-${del}${C_RST}"; }
+        echo -e "${prefix}${connector}${name} ${stat}"
+    fi
 done
 
 # Summary line
