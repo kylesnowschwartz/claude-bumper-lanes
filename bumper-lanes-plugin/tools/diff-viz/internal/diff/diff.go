@@ -201,24 +201,60 @@ func GetTreeDiffStats(baseTree, currentTree string) (*DiffStats, error) {
 }
 
 // CaptureCurrentTree returns the SHA of the current working tree.
-// Uses git write-tree to capture staged+unstaged state.
+// Uses a temporary index file to avoid modifying the real staging area.
+// This matches the bash implementation in git-state.sh.
 func CaptureCurrentTree() (string, error) {
-	// Add all changes to index (including untracked) temporarily
-	addCmd := exec.Command("git", "add", "-A")
-	if err := addCmd.Run(); err != nil {
+	// Create temp index file
+	tmpIndex, err := os.CreateTemp("", "git-index-*")
+	if err != nil {
 		return "", err
 	}
+	tmpIndexPath := tmpIndex.Name()
+	tmpIndex.Close()
+	defer os.Remove(tmpIndexPath)
 
-	// Capture tree
-	writeCmd := exec.Command("git", "write-tree")
+	// Helper to run git commands with GIT_INDEX_FILE set
+	gitWithTempIndex := func(args ...string) *exec.Cmd {
+		cmd := exec.Command("git", args...)
+		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+tmpIndexPath)
+		return cmd
+	}
+
+	// Initialize temp index with HEAD tree (or empty if no commits)
+	headRef, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err == nil && len(headRef) > 0 {
+		gitWithTempIndex("read-tree", strings.TrimSpace(string(headRef))).Run()
+	} else {
+		gitWithTempIndex("read-tree", "--empty").Run()
+	}
+
+	// Add tracked file changes (staged and unstaged)
+	gitWithTempIndex("add", "-u", ".").Run()
+
+	// Add untracked files (respecting .gitignore)
+	lsCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	untrackedOutput, _ := lsCmd.Output()
+	if len(untrackedOutput) > 0 {
+		scanner := bufio.NewScanner(bytes.NewReader(untrackedOutput))
+		for scanner.Scan() {
+			path := scanner.Text()
+			if path != "" {
+				gitWithTempIndex("add", path).Run()
+			}
+		}
+	}
+
+	// Write tree from temp index
+	writeCmd := gitWithTempIndex("write-tree")
 	output, err := writeCmd.Output()
 	if err != nil {
 		return "", err
 	}
 
-	// Reset index to HEAD (don't affect working tree)
-	resetCmd := exec.Command("git", "reset", "HEAD", "--quiet")
-	resetCmd.Run() // Ignore errors
+	treeSHA := strings.TrimSpace(string(output))
+	if treeSHA == "" {
+		return "", exec.ErrNotFound
+	}
 
-	return strings.TrimSpace(string(output)), nil
+	return treeSHA, nil
 }
