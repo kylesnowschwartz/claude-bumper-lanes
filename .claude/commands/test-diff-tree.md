@@ -6,7 +6,7 @@ argument-hint: "[optional: file count, default 8]"
 
 # Test git-diff-tree Visualizations
 
-Generate a nested directory structure with test files to validate all diff visualization modes (tree, collapsed, smart, hier, stacked).
+Generate a nested directory structure with test files to validate all diff visualization modes (tree, collapsed, smart, topn).
 
 ## Workflow
 
@@ -63,8 +63,7 @@ Available modes (`--mode` flag):
 | `tree` | Full hierarchical tree with `├──` branches (default) |
 | `collapsed` | Single-line grouped by top-level directory |
 | `smart` | Depth-2 aggregated sparkline |
-| `hier` | Hierarchical sparkline with depth-based intensity |
-| `stacked` | Multi-line stacked sparkline per directory |
+| `topn` | Top N files by change size (hotspots) |
 
 Also available:
 - `--summary` flag for totals only (works with any mode)
@@ -80,8 +79,7 @@ For each mode tested, verify:
 | `tree` | Proper `├──` and `└──` branches, directories blue with `/` suffix, stats aligned |
 | `collapsed` | Single line, groups separated by `│`, file counts in parens |
 | `smart` | Sparkline chars `▁▂▃▄▅▆▇█`, depth-2 aggregation labels |
-| `hier` | Density chars `░▒▓█`, hierarchical grouping |
-| `stacked` | Multi-line, one row per top-level dir |
+| `topn` | Top N files with ratio bars (green/red add/del split) |
 | `--summary` | Totals only, no file breakdown |
 
 **Color conventions** (all modes):

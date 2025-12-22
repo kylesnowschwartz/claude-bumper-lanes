@@ -15,15 +15,13 @@ import (
 
 // validModes is the single source of truth for available visualization modes.
 // Add new modes here - they'll automatically appear in help and validation.
-var validModes = []string{"tree", "collapsed", "smart", "hier", "stacked", "topn"}
+var validModes = []string{"tree", "collapsed", "smart", "topn"}
 
 // modeDescriptions provides help text for each mode.
 var modeDescriptions = map[string]string{
 	"tree":      "Indented tree with file stats (default)",
 	"collapsed": "Single-line summary per directory",
 	"smart":     "Depth-2 aggregated sparkline",
-	"hier":      "Hierarchical depth sparkline",
-	"stacked":   "Multi-line stacked bars",
 	"topn":      "Top N files by change size (hotspots)",
 }
 
@@ -169,10 +167,6 @@ func getRenderer(mode string, useColor bool) Renderer {
 		return render.NewCollapsedRenderer(os.Stdout, useColor)
 	case "smart":
 		return render.NewSmartSparklineRenderer(os.Stdout, useColor)
-	case "hier":
-		return render.NewHierarchicalSparklineRenderer(os.Stdout, useColor)
-	case "stacked":
-		return render.NewStackedSparklineRenderer(os.Stdout, useColor)
 	case "topn":
 		return render.NewTopNRenderer(os.Stdout, useColor, 5)
 	default:

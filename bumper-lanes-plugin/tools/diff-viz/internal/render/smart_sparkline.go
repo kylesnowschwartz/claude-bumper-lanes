@@ -13,9 +13,6 @@ import (
 
 const (
 	smartBarWidth = 6   // Fixed width for sparkline bars
-	smartFilled   = "█" // U+2588 Full block
-	smartMedium   = "▓" // U+2593 Dark shade
-	smartLight    = "▒" // U+2592 Medium shade
 	smartEmpty    = "░" // U+2591 Light shade
 )
 
@@ -230,54 +227,51 @@ func (r *SmartSparklineRenderer) formatTopDir(topDir string, groups []SmartGroup
 	return strings.Join(parts, " ")
 }
 
-// formatBar creates a sparkline bar with absolute scaling.
-// Uses fixed thresholds so bar size is consistent across diffs:
-//
-//	1-25 lines: 1 block, 26-50: 2, 51-100: 3, 101-200: 4, 201-400: 5, 400+: 6
+// formatBar creates a sparkline bar with ratio-split coloring.
+// Uses shared helpers from topn.go for consistent scaling across renderers.
+// Green = additions, Red = deletions, proportionally split.
 func (r *SmartSparklineRenderer) formatBar(add, del, _ int) string {
 	total := add + del
 	if total == 0 {
 		return strings.Repeat(smartEmpty, smartBarWidth)
 	}
 
-	// Absolute thresholds - full bar = significant change (400+ lines)
-	var filled int
-	switch {
-	case total >= 400:
-		filled = 6
-	case total >= 200:
-		filled = 5
-	case total >= 100:
-		filled = 4
-	case total >= 50:
-		filled = 3
-	case total >= 25:
+	// Use shared helpers for consistent scaling
+	filled := filledFromTotal(total)
+	if filled > smartBarWidth {
+		filled = smartBarWidth
+	}
+	block := blockChar(total)
+
+	// Ensure minimum 2 blocks when both add and del exist
+	if add > 0 && del > 0 && filled < 2 {
 		filled = 2
-	default:
-		filled = 1
 	}
 
-	// Block character based on absolute magnitude
-	block := smartLight
-	switch {
-	case total >= 200:
-		block = smartFilled
-	case total >= 100:
-		block = smartMedium
-	default:
-		block = smartLight
-	}
+	// Split bar into add (green) and del (red) portions
+	addBlocks := (add * filled) / total
+	delBlocks := filled - addBlocks
 
-	// Color: red if deletions dominate, green otherwise
-	blockColor := ColorAdd
-	if del > add {
-		blockColor = ColorDel
+	// Ensure at least 1 block for non-zero values
+	if add > 0 && addBlocks == 0 {
+		addBlocks = 1
+		delBlocks = filled - 1
+	} else if del > 0 && delBlocks == 0 {
+		delBlocks = 1
+		addBlocks = filled - 1
 	}
 
 	var sb strings.Builder
-	sb.WriteString(r.color(blockColor))
-	sb.WriteString(strings.Repeat(block, filled))
-	sb.WriteString(r.color(ColorReset))
+	if addBlocks > 0 {
+		sb.WriteString(r.color(ColorAdd))
+		sb.WriteString(strings.Repeat(block, addBlocks))
+		sb.WriteString(r.color(ColorReset))
+	}
+	if delBlocks > 0 {
+		sb.WriteString(r.color(ColorDel))
+		sb.WriteString(strings.Repeat(block, delBlocks))
+		sb.WriteString(r.color(ColorReset))
+	}
 	sb.WriteString(strings.Repeat(smartEmpty, smartBarWidth-filled))
 
 	return sb.String()
