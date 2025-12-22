@@ -11,45 +11,9 @@ import (
 )
 
 const (
-	barWidth     = 10  // Width of the sparkline bar
-	defaultCount = 5   // Default number of files to show
-	blockFull    = "█" // U+2588 Full block
-	blockMedium  = "▓" // U+2593 Dark shade
-	blockLight   = "▒" // U+2592 Medium shade
-	blockEmpty   = "░" // U+2591 Light shade
+	barWidth     = 10 // Width of the sparkline bar
+	defaultCount = 5  // Default number of files to show
 )
-
-// barThresholds maps minimum total changes to bar fill count.
-// Ordered descending so first match wins.
-var barThresholds = []struct {
-	minTotal int
-	filled   int
-}{
-	{400, 10}, {300, 9}, {200, 8}, {150, 7}, {100, 6},
-	{75, 5}, {50, 4}, {30, 3}, {15, 2}, {0, 1},
-}
-
-// filledFromTotal returns the number of filled bar blocks for a given total.
-func filledFromTotal(total int) int {
-	for _, t := range barThresholds {
-		if total >= t.minTotal {
-			return t.filled
-		}
-	}
-	return 1
-}
-
-// blockChar returns the appropriate block character based on magnitude.
-func blockChar(total int) string {
-	switch {
-	case total >= 200:
-		return blockFull
-	case total >= 100:
-		return blockMedium
-	default:
-		return blockLight
-	}
-}
 
 // TopNRenderer shows the N files with the most changes.
 type TopNRenderer struct {
@@ -161,7 +125,7 @@ func (r *TopNRenderer) formatStats(add, del int) string {
 func (r *TopNRenderer) formatBar(add, del int) string {
 	total := add + del
 	if total == 0 {
-		return strings.Repeat(blockEmpty, barWidth)
+		return strings.Repeat(BlockEmpty, barWidth)
 	}
 
 	filled := filledFromTotal(total)
@@ -197,7 +161,7 @@ func (r *TopNRenderer) formatBar(add, del int) string {
 		sb.WriteString(strings.Repeat(block, delBlocks))
 		sb.WriteString(r.color(ColorReset))
 	}
-	sb.WriteString(strings.Repeat(blockEmpty, barWidth-filled))
+	sb.WriteString(strings.Repeat(BlockEmpty, barWidth-filled))
 	return sb.String()
 }
 

@@ -11,16 +11,6 @@ import (
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 )
 
-// ANSI color codes
-const (
-	ColorDir   = "\033[34m"     // Blue
-	ColorFile  = "\033[38;5;8m" // Dark gray
-	ColorNew   = "\033[33m"     // Yellow for untracked/new files
-	ColorAdd   = "\033[32m"     // Green
-	ColorDel   = "\033[31m"     // Red
-	ColorReset = "\033[0m"
-)
-
 // TreeNode represents a node in the file tree.
 type TreeNode struct {
 	Name        string

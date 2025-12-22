@@ -207,7 +207,7 @@ func (r *PathStripRenderer) formatTopDir(topDir string, segments []pathSegment, 
 func (r *PathStripRenderer) formatProportionalBar(add, del, grandTotal int) string {
 	total := add + del
 	if total == 0 {
-		return blockEmpty
+		return BlockEmpty
 	}
 
 	// Calculate bar width as proportion of grand total
