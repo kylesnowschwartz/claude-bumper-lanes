@@ -3,7 +3,11 @@
     "allow": [
       "mcp__just__build-diff-viz",
       "Bash(./bumper-lanes-plugin/bin/git-diff-tree-go:*)",
-      "Bash(just test:*)"
+      "Bash(just test:*)",
+      "Bash(just build-diff-viz:*)",
+      "Bash(just check-go:*)",
+      "Bash(just test-go:*)",
+      "Bash(just test-unit:*)"
     ],
     "deny": [],
     "ask": []

@@ -51,7 +51,7 @@ get_threshold_limit() {
 
 # get_default_view_mode() - Read default view mode from config files with priority
 # Priority: Personal (.git/bumper-config.json) > Repo (.bumper-lanes.json) > Default
-# Returns: View mode string on stdout (tree, collapsed, smart, topn, pathstrip, icicle)
+# Returns: View mode string on stdout (tree, collapsed, smart, topn, icicle)
 get_default_view_mode() {
   local git_dir repo_root view_mode
 
@@ -66,7 +66,7 @@ get_default_view_mode() {
 
   # Get valid modes from binary (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip icicle"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle"
 
   # Priority 1: Personal config (untracked, in .git dir)
   local personal_config="$git_dir/bumper-config.json"
@@ -311,7 +311,7 @@ reset_baseline_stale() {
 # set_view_mode() - Set diff visualization mode in session state
 # Args:
 #   $1 - session_id (conversation UUID)
-#   $2 - view_mode (tree|collapsed|smart|topn|pathstrip)
+#   $2 - view_mode (tree|collapsed|smart|topn|icicle)
 # Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new view_mode
 # Purpose: Allow user to toggle between diff visualization modes in status line
 set_view_mode() {
@@ -320,7 +320,7 @@ set_view_mode() {
 
   # Query binary for valid modes (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip icicle"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle"
 
   # Validate mode
   if ! echo " $valid_modes " | grep -q " $view_mode "; then
@@ -336,7 +336,7 @@ set_view_mode() {
 # get_view_mode() - Get current diff visualization mode from session state
 # Args:
 #   $1 - session_id (conversation UUID)
-# Returns: view_mode (tree|collapsed|smart|topn|pathstrip|icicle)
+# Returns: view_mode (tree|collapsed|smart|topn|icicle)
 # Priority: Session override > Personal config > Repo config > Default
 get_view_mode() {
   local session_id=$1

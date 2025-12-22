@@ -15,7 +15,7 @@ import (
 
 // validModes is the single source of truth for available visualization modes.
 // Add new modes here - they'll automatically appear in help and validation.
-var validModes = []string{"tree", "collapsed", "smart", "topn", "pathstrip", "icicle"}
+var validModes = []string{"tree", "collapsed", "smart", "topn", "icicle"}
 
 // modeDescriptions provides help text for each mode.
 var modeDescriptions = map[string]string{
@@ -23,7 +23,6 @@ var modeDescriptions = map[string]string{
 	"collapsed": "Single-line summary per directory",
 	"smart":     "Depth-2 aggregated sparkline",
 	"topn":      "Top N files by change size (hotspots)",
-	"pathstrip": "Proportional path segments with inline bars",
 	"icicle":    "Horizontal icicle chart (width = magnitude)",
 }
 
@@ -173,8 +172,6 @@ func getRenderer(mode string, useColor bool, width, depth int) Renderer {
 		return render.NewSmartSparklineRenderer(os.Stdout, useColor)
 	case "topn":
 		return render.NewTopNRenderer(os.Stdout, useColor, 5)
-	case "pathstrip":
-		return render.NewPathStripRenderer(os.Stdout, useColor)
 	case "icicle":
 		r := render.NewIcicleRenderer(os.Stdout, useColor)
 		r.Width = width
