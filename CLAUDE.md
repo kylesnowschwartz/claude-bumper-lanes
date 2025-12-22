@@ -75,15 +75,40 @@ We're actively developing a catalogue of visualization tools to illustrate how d
 @.agent-history/2025-12-22-diff-visualization-catalog.md
 @.agent-history/2025-12-22-library-reference-map.md
 
+### Go Diff-Viz Development
+
+When modifying the diff-viz tool:
+
+1. Make changes in `bumper-lanes-plugin/tools/diff-viz/`
+2. Run `just check-go` to verify compilation
+3. Run `just test-go` to run unit tests
+4. Run `just build-diff-viz` to build the binary
+5. Test visually: `./bumper-lanes-plugin/bin/git-diff-tree-go -m <mode>`
+
+The binary at `bumper-lanes-plugin/bin/git-diff-tree-go` is what the status line hooks use.
+
+### Adding a New Renderer
+
+Each renderer in `internal/render/` follows this pattern:
+
+- Constructor: `NewXxxRenderer(w io.Writer, useColor bool) *XxxRenderer`
+- Must implement: `Render(stats *diff.DiffStats)`
+- Use shared tree utilities from `path.go`: `BuildTreeFromFiles()`, `CalcTotals()`, `CollapseSingleChildPaths()`
+- Color constants: `ColorAdd`, `ColorDel`, `ColorDir`, `ColorReset`
+
+When adding CLI flags for a renderer (e.g., `--width`, `--depth`), update `getRenderer()` in main.go to pass them.
+
 ### Adding New View Modes
 
 When adding a new diff visualization mode, update ALL of these:
 
-1. `tools/diff-viz/cmd/git-diff-tree/main.go` - mode flag and switch case
-2. `hooks/lib/state-manager.sh` - `set_view_mode()` case validation + error message
-3. `hooks/bin/set-view-mode.sh` - available modes help text
-4. `commands/bumper-view.md` - argument-hint list
-5. **Rebuild the binary**: `just build-diff-viz` (status line uses compiled binary, not `go run`)
+1. `tools/diff-viz/cmd/git-diff-tree/main.go` - `validModes` slice + `getRenderer()` switch case
+2. `hooks/lib/state-manager.sh` - fallback mode list in `set_view_mode()`
+3. `hooks/bin/set-view-mode.sh` - fallback mode list for display
+4. `commands/bumper-view.md` - `argument-hint` in frontmatter
+5. **Rebuild the binary**: `just build-diff-viz`
+
+The binary's `--list-modes` flag is the source of truth, but fallbacks exist when binary isn't in PATH.
 
 ## Just Commands
 
