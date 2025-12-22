@@ -4,7 +4,6 @@ package render
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -77,6 +76,42 @@ type IcicleCell struct {
 // Width returns the cell width in characters.
 func (c IcicleCell) Width() int {
 	return c.End - c.Start
+}
+
+// Color returns the appropriate color code based on add/del ratio.
+func (c IcicleCell) Color() string {
+	switch {
+	case c.Add > 0 && c.Del == 0:
+		return ColorAdd
+	case c.Del > 0 && c.Add == 0:
+		return ColorDel
+	default:
+		return ColorDir
+	}
+}
+
+// formatCentered returns the label centered within width, with ANSI color codes.
+// The colorFn converts color codes to ANSI (or empty string if color disabled).
+// reserveRight leaves space for a trailing separator (typically 1).
+func (c IcicleCell) formatCentered(truncateFn func(string, int) string, colorFn func(string) string, width, reserveRight int) (content string, visualWidth int) {
+	label := truncateFn(c.Label, width-reserveRight)
+	labelLen := utf8.RuneCountInString(label)
+
+	padding := width - labelLen - reserveRight
+	if padding < 0 {
+		padding = 0
+	}
+	leftPad := padding / 2
+	rightPad := padding - leftPad
+
+	var sb strings.Builder
+	sb.WriteString(strings.Repeat(" ", leftPad))
+	sb.WriteString(colorFn(c.Color()))
+	sb.WriteString(label)
+	sb.WriteString(colorFn(ColorReset))
+	sb.WriteString(strings.Repeat(" ", rightPad))
+
+	return sb.String(), leftPad + labelLen + rightPad
 }
 
 // IcicleRenderer renders diff stats as a horizontal icicle/flame chart.
@@ -171,7 +206,7 @@ func (r *IcicleRenderer) buildLevels(stats *diff.DiffStats) {
 
 		for _, cell := range prevLevel {
 			// Find the node for this cell
-			node := r.findNode(tree, cell.Path)
+			node := FindNode(tree, cell.Path)
 			if node == nil || !node.IsDir || len(node.Children) == 0 {
 				continue
 			}
@@ -188,113 +223,19 @@ func (r *IcicleRenderer) buildLevels(stats *diff.DiffStats) {
 	}
 }
 
-// findNode recursively finds a node by path in the tree.
-func (r *IcicleRenderer) findNode(node *TreeNode, path string) *TreeNode {
-	if node.Path == path {
-		return node
-	}
-	for _, child := range node.Children {
-		if found := r.findNode(child, path); found != nil {
-			return found
-		}
-	}
-	return nil
-}
 
-// buildTree constructs a tree from flat file paths (similar to TreeRenderer).
+// buildTree constructs a tree from flat file paths.
+// Uses shared tree utilities, then adds icicle-specific processing.
 func (r *IcicleRenderer) buildTree(files []diff.FileStat) *TreeNode {
-	root := &TreeNode{Name: "", IsDir: true}
+	root := BuildTreeFromFiles(files)
 
-	// Sort files for consistent output
-	sortedFiles := make([]diff.FileStat, len(files))
-	copy(sortedFiles, files)
-	sort.Slice(sortedFiles, func(i, j int) bool {
-		return sortedFiles[i].Path < sortedFiles[j].Path
-	})
-
-	for _, f := range sortedFiles {
-		r.insertPath(root, f)
-	}
-
-	// Calculate totals for directories
-	r.calcTotals(root)
+	// Calculate totals for directories (needed for proportional sizing)
+	CalcTotals(root)
 
 	// Collapse single-child chains (e.g., bumper-lanes-plugin/tools/diff-viz/ -> one node)
-	r.collapseSingleChildPaths(root)
+	CollapseSingleChildPaths(root)
 
 	return root
-}
-
-// collapseSingleChildPaths merges chains of single-child directories.
-// e.g., a/b/c/d where each has one child becomes "a/b/c/d" as one node.
-func (r *IcicleRenderer) collapseSingleChildPaths(node *TreeNode) {
-	for i, child := range node.Children {
-		// First, recursively collapse children
-		r.collapseSingleChildPaths(child)
-
-		// Then, if this child is a dir with exactly one child that's also a dir,
-		// merge them together
-		for child.IsDir && len(child.Children) == 1 && child.Children[0].IsDir {
-			grandchild := child.Children[0]
-			child.Name = child.Name + "/" + grandchild.Name
-			child.Path = grandchild.Path
-			child.Children = grandchild.Children
-			// Note: Add/Del already calculated correctly since they propagate up
-		}
-
-		node.Children[i] = child
-	}
-}
-
-// insertPath adds a file to the tree.
-func (r *IcicleRenderer) insertPath(root *TreeNode, file diff.FileStat) {
-	parts := strings.Split(file.Path, string(filepath.Separator))
-	current := root
-
-	for i, part := range parts {
-		isFile := i == len(parts)-1
-
-		var child *TreeNode
-		for _, c := range current.Children {
-			if c.Name == part {
-				child = c
-				break
-			}
-		}
-
-		if child == nil {
-			child = &TreeNode{
-				Name:  part,
-				Path:  strings.Join(parts[:i+1], string(filepath.Separator)),
-				IsDir: !isFile,
-			}
-			current.Children = append(current.Children, child)
-		}
-
-		if isFile {
-			child.Add = file.Additions
-			child.Del = file.Deletions
-		}
-
-		current = child
-	}
-}
-
-// calcTotals recursively calculates add/del totals for directories.
-func (r *IcicleRenderer) calcTotals(node *TreeNode) (add, del int) {
-	if !node.IsDir {
-		return node.Add, node.Del
-	}
-
-	for _, child := range node.Children {
-		childAdd, childDel := r.calcTotals(child)
-		add += childAdd
-		del += childDel
-	}
-
-	node.Add = add
-	node.Del = del
-	return add, del
 }
 
 // buildLevelCells creates cells for nodes within given bounds.
@@ -423,52 +364,27 @@ func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 	var sb strings.Builder
 	sb.WriteString(r.style.Vertical)
 
-	pos := 1 // Start after left border
+	pos := 1 // Start after left border (position in visual columns)
 	for i, cell := range level {
-		// Fill gap if needed
+		// Fill gap before cell if needed
 		for pos < cell.Start+1 { // +1 for border offset
 			sb.WriteString(" ")
 			pos++
 		}
 
-		// Render cell content (centered label)
-		cellWidth := cell.Width()
-		label := r.truncate(cell.Label, cellWidth-1) // Leave room for separator
+		// Render centered, colored cell content
+		content, visualWidth := cell.formatCentered(r.truncate, r.color, cell.Width(), 1)
+		sb.WriteString(content)
+		pos = cell.Start + 1 + visualWidth // +1 for left border offset
 
-		// Color based on add/del ratio
-		labelColor := ColorDir
-		if cell.Add > 0 && cell.Del == 0 {
-			labelColor = ColorAdd
-		} else if cell.Del > 0 && cell.Add == 0 {
-			labelColor = ColorDel
-		}
-
-		// Pad and center (use rune count for proper Unicode width)
-		padding := cellWidth - utf8.RuneCountInString(label) - 1
-		if padding < 0 {
-			padding = 0
-		}
-		leftPad := padding / 2
-		rightPad := padding - leftPad
-
-		sb.WriteString(strings.Repeat(" ", max(0, leftPad)))
-		sb.WriteString(r.color(labelColor))
-		sb.WriteString(label)
-		sb.WriteString(r.color(ColorReset))
-		sb.WriteString(strings.Repeat(" ", max(0, rightPad)))
-
-		// Track actual characters written
-		charsWritten := max(0, leftPad) + utf8.RuneCountInString(label) + max(0, rightPad)
-		pos = cell.Start + 1 + charsWritten // +1 for left border offset
-
-		// Cell separator between cells (not after last cell)
+		// Cell separator (not after last cell)
 		if i < len(level)-1 {
 			sb.WriteString(r.style.Vertical)
 			pos++
 		}
 	}
 
-	// Fill remaining space
+	// Fill remaining space to right border
 	for pos < r.Width-1 {
 		sb.WriteString(" ")
 		pos++

@@ -4,8 +4,6 @@ package render
 import (
 	"fmt"
 	"io"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
@@ -60,57 +58,7 @@ func (r *TreeRenderer) Render(stats *diff.DiffStats) {
 
 // buildTree constructs a tree from flat file paths.
 func (r *TreeRenderer) buildTree(files []diff.FileStat) *TreeNode {
-	root := &TreeNode{Name: "", IsDir: true}
-
-	// Sort files for consistent output
-	sortedFiles := make([]diff.FileStat, len(files))
-	copy(sortedFiles, files)
-	sort.Slice(sortedFiles, func(i, j int) bool {
-		return sortedFiles[i].Path < sortedFiles[j].Path
-	})
-
-	for _, f := range sortedFiles {
-		r.insertPath(root, f)
-	}
-
-	return root
-}
-
-// insertPath adds a file to the tree, creating intermediate directories.
-func (r *TreeRenderer) insertPath(root *TreeNode, file diff.FileStat) {
-	parts := strings.Split(file.Path, string(filepath.Separator))
-	current := root
-
-	for i, part := range parts {
-		isFile := i == len(parts)-1
-
-		// Find or create child
-		var child *TreeNode
-		for _, c := range current.Children {
-			if c.Name == part {
-				child = c
-				break
-			}
-		}
-
-		if child == nil {
-			child = &TreeNode{
-				Name:  part,
-				Path:  strings.Join(parts[:i+1], string(filepath.Separator)),
-				IsDir: !isFile,
-			}
-			current.Children = append(current.Children, child)
-		}
-
-		if isFile {
-			child.Add = file.Additions
-			child.Del = file.Deletions
-			child.IsBinary = file.IsBinary
-			child.IsUntracked = file.IsUntracked
-		}
-
-		current = child
-	}
+	return BuildTreeFromFiles(files)
 }
 
 // renderNode outputs a single tree node with proper prefixes.
