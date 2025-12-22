@@ -231,14 +231,15 @@ set_view_mode() {
   local session_id=$1
   local view_mode=$2
 
+  # Query binary for valid modes (with fallback)
+  local valid_modes
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart hier stacked topn"
+
   # Validate mode
-  case "$view_mode" in
-  tree | collapsed | smart | hier | stacked) ;;
-  *)
-    echo "ERROR: Invalid view mode '$view_mode'. Use 'tree', 'collapsed', 'smart', 'hier', or 'stacked'" >&2
+  if ! echo " $valid_modes " | grep -q " $view_mode "; then
+    echo "ERROR: Invalid view mode '$view_mode'. Valid: $valid_modes" >&2
     return 1
-    ;;
-  esac
+  fi
 
   _atomic_update_state "$session_id" \
     '.view_mode = $view_mode' \

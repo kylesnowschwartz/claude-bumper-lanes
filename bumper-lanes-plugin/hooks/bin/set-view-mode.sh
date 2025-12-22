@@ -19,8 +19,9 @@ fi
 if [[ -z "$view_mode" ]]; then
   # No mode specified - show current mode
   current=$(get_view_mode "$session_id")
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart hier stacked topn"
   echo "Current view mode: $current"
-  echo "Available modes: tree, collapsed, smart, hier, stacked"
+  echo "Available modes: $valid_modes"
   exit 0
 fi
 
