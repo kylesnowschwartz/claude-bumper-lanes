@@ -483,23 +483,38 @@ func (r *IcicleRenderer) renderStatsFooterFromCells(leaves []IcicleCell) {
 			pos++
 		}
 
-		// Format stats: "+N -M" or just "+N" if no deletions
-		var stats string
+		// Format stats with colors: green for +N, red for -N
+		addPart := fmt.Sprintf("+%d", cell.Add)
+		delPart := ""
 		if cell.Del > 0 {
-			stats = fmt.Sprintf("+%d -%d", cell.Add, cell.Del)
-		} else {
-			stats = fmt.Sprintf("+%d", cell.Add)
+			delPart = fmt.Sprintf(" -%d", cell.Del)
 		}
+
+		// Calculate visual width (without ANSI codes)
+		statsLen := utf8.RuneCountInString(addPart + delPart)
 
 		// Center the stats within the cell width (minus 1 for separator)
 		cellWidth := cell.Width()
-		statsLen := utf8.RuneCountInString(stats)
 		availWidth := cellWidth - 1 // Reserve 1 for separator
 
+		// Build colored stats string
+		var coloredStats strings.Builder
+		coloredStats.WriteString(r.color(ColorAdd))
+		coloredStats.WriteString(addPart)
+		coloredStats.WriteString(r.color(ColorReset))
+		if delPart != "" {
+			coloredStats.WriteString(r.color(ColorDel))
+			coloredStats.WriteString(delPart)
+			coloredStats.WriteString(r.color(ColorReset))
+		}
+
+		// Truncate if needed (rare, just skip coloring)
 		if statsLen > availWidth {
-			// Truncate stats if too wide
-			stats = stats[:availWidth]
+			plainStats := addPart + delPart
+			plainStats = plainStats[:availWidth]
 			statsLen = availWidth
+			coloredStats.Reset()
+			coloredStats.WriteString(plainStats)
 		}
 
 		padding := availWidth - statsLen
@@ -507,14 +522,7 @@ func (r *IcicleRenderer) renderStatsFooterFromCells(leaves []IcicleCell) {
 		rightPad := padding - leftPad
 
 		sb.WriteString(strings.Repeat(" ", leftPad))
-		// Color the stats
-		if cell.Add > 0 && cell.Del == 0 {
-			sb.WriteString(r.color(ColorAdd))
-		} else if cell.Del > 0 && cell.Add == 0 {
-			sb.WriteString(r.color(ColorDel))
-		}
-		sb.WriteString(stats)
-		sb.WriteString(r.color(ColorReset))
+		sb.WriteString(coloredStats.String())
 		sb.WriteString(strings.Repeat(" ", rightPad))
 
 		pos = cell.Start + 1 + availWidth

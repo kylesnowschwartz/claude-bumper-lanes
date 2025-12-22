@@ -274,7 +274,7 @@ set_view_mode() {
 
   # Query binary for valid modes (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip icicle"
 
   # Validate mode
   if ! echo " $valid_modes " | grep -q " $view_mode "; then
