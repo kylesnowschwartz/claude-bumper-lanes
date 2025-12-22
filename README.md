@@ -57,6 +57,36 @@ use directly.
 
 Requires `jq` and `awk`. Your script must read status line JSON into `$input`. See `status-lines/simple-status-line.sh` for full example.
 
+## Configuration
+
+Configure bumper-lanes via JSON config files. Personal config takes precedence over repo config.
+
+| File | Tracked | Purpose |
+|------|---------|---------|
+| `.git/bumper-config.json` | No | Personal overrides (in .git dir) |
+| `.bumper-lanes.json` | Yes | Shared team defaults |
+
+### Config Schema
+
+```json
+{
+  "threshold": 400,
+  "default_view_mode": "tree"
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `threshold` | 400 | Points budget before blocking (50-2000) |
+| `default_view_mode` | "tree" | Diff visualization: tree, collapsed, smart, topn, pathstrip, icicle |
+
+### Config Commands
+
+- `/bumper-config` - Show current configuration
+- `/bumper-config set 300` - Set repo threshold
+- `/bumper-config personal 500` - Set personal threshold
+- `/bumper-view <mode>` - Set visualization mode for current session
+
 ## How It Works
 
 - Fuel gauge warnings (PostToolUse) + enforcement blocking (Stop hook)

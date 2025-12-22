@@ -7,6 +7,9 @@ set -euo pipefail
 # Default threshold - can be overridden via config files
 readonly DEFAULT_THRESHOLD=400
 
+# Default view mode - can be overridden via config files
+readonly DEFAULT_VIEW_MODE="tree"
+
 # get_threshold_limit() - Read threshold from config files with priority
 # Priority: Personal (.git/bumper-config.json) > Repo (.bumper-lanes.json) > Default
 # Returns: Integer threshold value on stdout
@@ -44,6 +47,49 @@ get_threshold_limit() {
 
   # Priority 3: Default
   echo "$DEFAULT_THRESHOLD"
+}
+
+# get_default_view_mode() - Read default view mode from config files with priority
+# Priority: Personal (.git/bumper-config.json) > Repo (.bumper-lanes.json) > Default
+# Returns: View mode string on stdout (tree, collapsed, smart, topn, pathstrip, icicle)
+get_default_view_mode() {
+  local git_dir repo_root view_mode
+
+  git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || {
+    echo "$DEFAULT_VIEW_MODE"
+    return 0
+  }
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "$DEFAULT_VIEW_MODE"
+    return 0
+  }
+
+  # Get valid modes from binary (with fallback)
+  local valid_modes
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip icicle"
+
+  # Priority 1: Personal config (untracked, in .git dir)
+  local personal_config="$git_dir/bumper-config.json"
+  if [[ -f "$personal_config" ]]; then
+    view_mode=$(jq -r '.default_view_mode // empty' "$personal_config" 2>/dev/null)
+    if [[ -n "$view_mode" ]] && echo " $valid_modes " | grep -q " $view_mode "; then
+      echo "$view_mode"
+      return 0
+    fi
+  fi
+
+  # Priority 2: Repo config (tracked, in repo root)
+  local repo_config="$repo_root/.bumper-lanes.json"
+  if [[ -f "$repo_config" ]]; then
+    view_mode=$(jq -r '.default_view_mode // empty' "$repo_config" 2>/dev/null)
+    if [[ -n "$view_mode" ]] && echo " $valid_modes " | grep -q " $view_mode "; then
+      echo "$view_mode"
+      return 0
+    fi
+  fi
+
+  # Priority 3: Default
+  echo "$DEFAULT_VIEW_MODE"
 }
 
 # get_checkpoint_dir() - Returns absolute path to checkpoint directory
@@ -290,21 +336,26 @@ set_view_mode() {
 # get_view_mode() - Get current diff visualization mode from session state
 # Args:
 #   $1 - session_id (conversation UUID)
-# Returns: view_mode (tree|collapsed|smart|topn|pathstrip), defaults to "tree" if not set
+# Returns: view_mode (tree|collapsed|smart|topn|pathstrip|icicle)
+# Priority: Session override > Personal config > Repo config > Default
 get_view_mode() {
   local session_id=$1
   local checkpoint_dir
   checkpoint_dir=$(get_checkpoint_dir) || {
-    echo "tree"
+    get_default_view_mode
     return 0
   }
   local state_file="$checkpoint_dir/session-$session_id"
 
   if [[ -f "$state_file" ]]; then
     local mode
-    mode=$(jq -r '.view_mode // "tree"' "$state_file" 2>/dev/null)
-    echo "${mode:-tree}"
-  else
-    echo "tree"
+    mode=$(jq -r '.view_mode // empty' "$state_file" 2>/dev/null)
+    if [[ -n "$mode" ]]; then
+      echo "$mode"
+      return 0
+    fi
   fi
+
+  # No session override - use config default
+  get_default_view_mode
 }
