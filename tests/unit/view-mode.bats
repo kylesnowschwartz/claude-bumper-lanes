@@ -106,19 +106,19 @@ teardown() {
   assert_output --partial "Invalid view mode"
 }
 
-# Test 5a: set_view_mode sets mode to sparkline
+# Test 5a: set_view_mode sets mode to smart (sparkline)
 # bats test_tags=state,view_mode
-@test "set_view_mode sets view mode to sparkline" {
+@test "set_view_mode sets view mode to smart" {
   write_session_state "$SESSION_ID" "$BASELINE_TREE"
 
-  set_view_mode "$SESSION_ID" sparkline
+  set_view_mode "$SESSION_ID" smart
 
   local state
   state=$(read_session_state "$SESSION_ID")
   local view_mode
   view_mode=$(echo "$state" | jq -r '.view_mode')
 
-  assert_equal "$view_mode" "sparkline"
+  assert_equal "$view_mode" "smart"
 }
 
 # Test 6: View mode preserved across other updates

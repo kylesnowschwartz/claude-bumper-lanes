@@ -115,7 +115,8 @@ create_post_tool_use_input() {
   local hook_input=$(create_post_tool_use_input "git commit -m 'fix: update file'")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification (non-blocking for PostToolUse)
+  assert_equal "$status" 2
 
   # Verify session state was reset
   assert_file_exist "$SESSION_STATE_FILE"
@@ -207,7 +208,8 @@ create_post_tool_use_input() {
     local hook_input=$(create_post_tool_use_input "$cmd")
     run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-    assert_success
+    # Exit 2 = auto-reset notification
+    assert_equal "$status" 2
 
     # Verify reset occurred
     assert_json_field_equals "$SESSION_STATE_FILE" ".baseline_tree" "$new_tree"
@@ -268,7 +270,8 @@ create_post_tool_use_input() {
   local hook_input=$(create_post_tool_use_input "git commit -m 'fix: update file1'")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification
+  assert_equal "$status" 2
 
   # Verify baseline reset to tree with file1 committed
   assert_json_field_equals "$SESSION_STATE_FILE" ".baseline_tree" "$tree_after_commit"
@@ -310,7 +313,8 @@ create_post_tool_use_input() {
   local hook_input=$(create_post_tool_use_input "git commit -m 'add file'")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification
+  assert_equal "$status" 2
 
   # Verify stop_triggered is now false
   assert_json_field_equals "$SESSION_STATE_FILE" ".stop_triggered" "false"
@@ -367,7 +371,8 @@ EOF
   local hook_input=$(create_post_tool_use_input "$cmd")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification
+  assert_equal "$status" 2
 
   # Verify reset occurred
   assert_json_field_equals "$SESSION_STATE_FILE" ".baseline_tree" "$new_tree"
@@ -394,7 +399,8 @@ EOF
   local hook_input=$(create_post_tool_use_input "git commit --amend --no-edit")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification
+  assert_equal "$status" 2
 
   # Should reset (amend is still a commit)
   assert_json_field_equals "$SESSION_STATE_FILE" ".baseline_tree" "$amended_tree"
@@ -419,10 +425,10 @@ EOF
   local hook_input=$(create_post_tool_use_input "git commit -m 'add file'")
   run bash "$POST_TOOL_USE_HOOK" <<<"$hook_input"
 
-  assert_success
+  # Exit 2 = auto-reset notification
+  assert_equal "$status" 2
 
-  # Check for JSON feedback with systemMessage
-  assert_output --partial "systemMessage"
+  # Check for feedback message in stderr (captured in $output by bats)
   assert_output --partial "Auto-reset after commit"
   assert_output --partial "Fresh budget"
 }
