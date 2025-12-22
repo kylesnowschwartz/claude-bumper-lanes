@@ -125,7 +125,7 @@ get_bumper_lanes_status() {
   fi
 }
 
-# Get view mode from session state (defaults to "tree")
+# Get view mode: session state > personal config > repo config > default
 get_view_mode() {
   local session_id=$(echo "$input" | jq -r '.session_id')
   local workspace_dir=$(echo "$input" | jq -r '.workspace.current_dir // ""')
@@ -134,20 +134,50 @@ get_view_mode() {
     return
   }
 
-  local git_dir
+  local git_dir repo_root
   git_dir=$(git -C "$workspace_dir" rev-parse --absolute-git-dir 2>/dev/null) || {
     echo "tree"
     return
   }
-  local checkpoint_file="$git_dir/bumper-checkpoints/session-$session_id"
+  repo_root=$(git -C "$workspace_dir" rev-parse --show-toplevel 2>/dev/null) || repo_root=""
 
+  # Priority 1: Session state
+  local checkpoint_file="$git_dir/bumper-checkpoints/session-$session_id"
   if [[ -f "$checkpoint_file" ]]; then
     local mode
-    mode=$(jq -r '.view_mode // "tree"' "$checkpoint_file" 2>/dev/null)
-    echo "${mode:-tree}"
-  else
-    echo "tree"
+    mode=$(jq -r '.view_mode // empty' "$checkpoint_file" 2>/dev/null)
+    if [[ -n "$mode" ]]; then
+      echo "$mode"
+      return
+    fi
   fi
+
+  # Priority 2: Personal config (.git/bumper-config.json)
+  local personal_config="$git_dir/bumper-config.json"
+  if [[ -f "$personal_config" ]]; then
+    local mode
+    mode=$(jq -r '.default_view_mode // empty' "$personal_config" 2>/dev/null)
+    if [[ -n "$mode" ]]; then
+      echo "$mode"
+      return
+    fi
+  fi
+
+  # Priority 3: Repo config (.bumper-lanes.json)
+  if [[ -n "$repo_root" ]]; then
+    local repo_config="$repo_root/.bumper-lanes.json"
+    if [[ -f "$repo_config" ]]; then
+      local mode
+      mode=$(jq -r '.default_view_mode // empty' "$repo_config" 2>/dev/null)
+      if [[ -n "$mode" ]]; then
+        echo "$mode"
+        return
+      fi
+    fi
+  fi
+
+  # Priority 4: Default
+  echo "tree"
 }
 
 # Get hierarchical diff tree (if git-diff-tree is available and there are changes)
