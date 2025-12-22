@@ -57,15 +57,15 @@ func (r *TopNRenderer) Render(stats *diff.DiffStats) {
 	}
 	topFiles := files[:showCount]
 
-	// Find max path length for alignment (cap at 40 chars)
+	// Find max path length for alignment (cap at 80 chars)
 	maxPathLen := 0
 	for _, f := range topFiles {
 		if len(f.Path) > maxPathLen {
 			maxPathLen = len(f.Path)
 		}
 	}
-	if maxPathLen > 40 {
-		maxPathLen = 40
+	if maxPathLen > 80 {
+		maxPathLen = 80
 	}
 
 	// Print each file

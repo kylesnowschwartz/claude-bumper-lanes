@@ -1,6 +1,9 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "mcp__just__build-diff-viz",
+      "Bash(./bumper-lanes-plugin/bin/git-diff-tree-go:*)"
+    ],
     "deny": [],
     "ask": []
   },
