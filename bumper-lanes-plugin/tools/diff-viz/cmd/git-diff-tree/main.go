@@ -67,6 +67,8 @@ func main() {
 	mode := flag.String("m", "tree", "Output mode (shorthand)")
 	modeLong := flag.String("mode", "tree", "Output mode: "+strings.Join(validModes, ", "))
 	noColor := flag.Bool("no-color", false, "Disable color output")
+	width := flag.Int("width", 100, "Output width in columns (for icicle mode)")
+	depth := flag.Int("depth", 4, "Max hierarchy depth to render (for icicle mode, 0=unlimited)")
 	help := flag.Bool("h", false, "Show help")
 	listModes := flag.Bool("list-modes", false, "List valid modes (for scripting)")
 	scoreJSON := flag.Bool("score-json", false, "Output weighted score as JSON (for status line)")
@@ -111,7 +113,7 @@ func main() {
 	useColor := !*noColor
 
 	// Select renderer based on mode
-	renderer := getRenderer(selectedMode, useColor)
+	renderer := getRenderer(selectedMode, useColor, *width, *depth)
 	renderer.Render(stats)
 }
 
@@ -161,7 +163,7 @@ func isValidMode(mode string) bool {
 	return false
 }
 
-func getRenderer(mode string, useColor bool) Renderer {
+func getRenderer(mode string, useColor bool, width, depth int) Renderer {
 	switch mode {
 	case "tree":
 		return render.NewTreeRenderer(os.Stdout, useColor)
@@ -174,7 +176,10 @@ func getRenderer(mode string, useColor bool) Renderer {
 	case "pathstrip":
 		return render.NewPathStripRenderer(os.Stdout, useColor)
 	case "icicle":
-		return render.NewIcicleRenderer(os.Stdout, useColor)
+		r := render.NewIcicleRenderer(os.Stdout, useColor)
+		r.Width = width
+		r.MaxDepth = depth
+		return r
 	default:
 		// Should never reach here if isValidMode was called first
 		return render.NewTreeRenderer(os.Stdout, useColor)

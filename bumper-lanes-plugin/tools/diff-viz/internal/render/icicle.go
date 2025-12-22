@@ -161,16 +161,21 @@ func (r *IcicleRenderer) Render(stats *diff.DiffStats) {
 	r.renderBorder(0, true)
 
 	// Render each level with separators
+	lastLevel := len(r.levels) - 1
 	for depth := 0; depth < len(r.levels); depth++ {
 		r.renderContentRow(depth)
 
-		// Render separator (or bottom border if last)
-		if depth < len(r.levels)-1 {
+		// Render separator between levels
+		if depth < lastLevel {
 			r.renderSeparator(depth, depth+1)
-		} else {
-			r.renderBorder(depth, false)
 		}
 	}
+
+	// Render stats footer row (aligned to leaf cell columns)
+	leafCells := r.collectLeafCells()
+	r.renderLeafSeparator(lastLevel, leafCells)
+	r.renderStatsFooterFromCells(leafCells)
+	r.renderLeafBorder(leafCells)
 
 	// Summary line
 	fmt.Fprintf(r.w, "%s+%d%s %s-%d%s in %d files\n",
@@ -437,6 +442,166 @@ func (r *IcicleRenderer) renderSeparator(aboveIdx, belowIdx int) {
 	fmt.Fprintln(r.w, sb.String())
 }
 
+// renderLeafSeparator renders the separator between the last content row and footer.
+func (r *IcicleRenderer) renderLeafSeparator(lastLevelIdx int, leaves []IcicleCell) {
+	aboveBoundaries := r.getBoundaries(lastLevelIdx)
+	leafBoundaries := r.getLeafBoundaries(leaves)
+
+	var sb strings.Builder
+	sb.WriteString(r.style.LeftSep)
+
+	for pos := 1; pos < r.Width-1; pos++ {
+		above := aboveBoundaries[pos]
+		below := leafBoundaries[pos]
+
+		switch {
+		case above && below:
+			sb.WriteString(r.style.Cross)
+		case above:
+			sb.WriteString(r.style.BottomSep)
+		case below:
+			sb.WriteString(r.style.TopSep)
+		default:
+			sb.WriteString(r.style.Horizontal)
+		}
+	}
+
+	sb.WriteString(r.style.RightSep)
+	fmt.Fprintln(r.w, sb.String())
+}
+
+// renderStatsFooterFromCells renders the stats row from pre-collected leaf cells.
+func (r *IcicleRenderer) renderStatsFooterFromCells(leaves []IcicleCell) {
+	var sb strings.Builder
+	sb.WriteString(r.style.Vertical)
+
+	pos := 1 // Start after left border
+	for i, cell := range leaves {
+		// Fill gap before cell
+		for pos < cell.Start+1 {
+			sb.WriteString(" ")
+			pos++
+		}
+
+		// Format stats: "+N -M" or just "+N" if no deletions
+		var stats string
+		if cell.Del > 0 {
+			stats = fmt.Sprintf("+%d -%d", cell.Add, cell.Del)
+		} else {
+			stats = fmt.Sprintf("+%d", cell.Add)
+		}
+
+		// Center the stats within the cell width (minus 1 for separator)
+		cellWidth := cell.Width()
+		statsLen := utf8.RuneCountInString(stats)
+		availWidth := cellWidth - 1 // Reserve 1 for separator
+
+		if statsLen > availWidth {
+			// Truncate stats if too wide
+			stats = stats[:availWidth]
+			statsLen = availWidth
+		}
+
+		padding := availWidth - statsLen
+		leftPad := padding / 2
+		rightPad := padding - leftPad
+
+		sb.WriteString(strings.Repeat(" ", leftPad))
+		// Color the stats
+		if cell.Add > 0 && cell.Del == 0 {
+			sb.WriteString(r.color(ColorAdd))
+		} else if cell.Del > 0 && cell.Add == 0 {
+			sb.WriteString(r.color(ColorDel))
+		}
+		sb.WriteString(stats)
+		sb.WriteString(r.color(ColorReset))
+		sb.WriteString(strings.Repeat(" ", rightPad))
+
+		pos = cell.Start + 1 + availWidth
+
+		// Cell separator (not after last cell)
+		if i < len(leaves)-1 {
+			sb.WriteString(r.style.Vertical)
+			pos++
+		}
+	}
+
+	// Fill remaining space
+	for pos < r.Width-1 {
+		sb.WriteString(" ")
+		pos++
+	}
+
+	sb.WriteString(r.style.Vertical)
+	fmt.Fprintln(r.w, sb.String())
+}
+
+// renderLeafBorder renders the bottom border aligned to leaf cells.
+func (r *IcicleRenderer) renderLeafBorder(leaves []IcicleCell) {
+	boundaries := r.getLeafBoundaries(leaves)
+
+	var sb strings.Builder
+	sb.WriteString(r.style.BottomLeft)
+
+	for pos := 1; pos < r.Width-1; pos++ {
+		if boundaries[pos] {
+			sb.WriteString(r.style.BottomSep)
+		} else {
+			sb.WriteString(r.style.Horizontal)
+		}
+	}
+
+	sb.WriteString(r.style.BottomRight)
+	fmt.Fprintln(r.w, sb.String())
+}
+
+// getLeafBoundaries returns boundary positions for leaf cells.
+func (r *IcicleRenderer) getLeafBoundaries(leaves []IcicleCell) map[int]bool {
+	boundaries := make(map[int]bool)
+	usableWidth := r.Width - 2
+
+	for _, cell := range leaves {
+		if cell.End < usableWidth {
+			boundaries[cell.End] = true
+		}
+	}
+
+	return boundaries
+}
+
+// collectLeafCells returns all leaf cells across all levels.
+// A leaf is a cell that has no children in the next level.
+func (r *IcicleRenderer) collectLeafCells() []IcicleCell {
+	var leaves []IcicleCell
+
+	for depth := 0; depth < len(r.levels); depth++ {
+		for _, cell := range r.levels[depth] {
+			isLeaf := true
+
+			// Check if any cell in the next level falls within this cell's bounds
+			if depth+1 < len(r.levels) {
+				for _, child := range r.levels[depth+1] {
+					if child.Start >= cell.Start && child.Start < cell.End {
+						isLeaf = false
+						break
+					}
+				}
+			}
+
+			if isLeaf {
+				leaves = append(leaves, cell)
+			}
+		}
+	}
+
+	// Sort by Start position for proper rendering order
+	sort.Slice(leaves, func(i, j int) bool {
+		return leaves[i].Start < leaves[j].Start
+	})
+
+	return leaves
+}
+
 // getBoundaries returns a map of pixel positions where vertical lines exist.
 func (r *IcicleRenderer) getBoundaries(levelIdx int) map[int]bool {
 	boundaries := make(map[int]bool)
@@ -457,7 +622,9 @@ func (r *IcicleRenderer) getBoundaries(levelIdx int) map[int]bool {
 	return boundaries
 }
 
-// truncate shortens a string to fit within maxLen runes, preserving trailing "/" for directories.
+// truncate shortens a string to fit within maxLen runes.
+// Preserves file extensions when possible: "longfilename.go" → "longf….go"
+// Preserves trailing "/" for directories: "somelongdir/" → "somelo…/"
 func (r *IcicleRenderer) truncate(s string, maxLen int) string {
 	if maxLen <= 0 {
 		return ""
@@ -467,21 +634,37 @@ func (r *IcicleRenderer) truncate(s string, maxLen int) string {
 		return s
 	}
 
-	// Preserve trailing "/" for directories
+	// Handle directories (trailing "/")
 	isDir := len(s) > 0 && s[len(s)-1] == '/'
 	if isDir {
-		s = s[:len(s)-1] // Remove "/" temporarily
-		maxLen--         // Reserve space for it
+		s = s[:len(s)-1]
+		maxLen--
 		runeCount--
 	}
 
 	var result string
 	if maxLen <= 2 {
-		// Too short for ellipsis, just truncate by runes
+		// Too short for any fancy truncation
 		result = string([]rune(s)[:min(runeCount, maxLen)])
 	} else {
-		// Truncate with ellipsis: "longname" -> "long~"
-		result = string([]rune(s)[:maxLen-1]) + "~"
+		// Try to preserve file extension
+		lastDot := strings.LastIndex(s, ".")
+		if lastDot > 0 {
+			ext := s[lastDot:] // includes the dot
+			extLen := utf8.RuneCountInString(ext)
+
+			// Need at least 2 chars of name + "…" + extension
+			if maxLen >= 2+1+extLen {
+				nameLen := maxLen - 1 - extLen
+				result = string([]rune(s[:lastDot])[:nameLen]) + "…" + ext
+			} else {
+				// Not enough room for extension, fall back
+				result = string([]rune(s)[:maxLen-1]) + "…"
+			}
+		} else {
+			// No extension, simple truncation
+			result = string([]rune(s)[:maxLen-1]) + "…"
+		}
 	}
 
 	if isDir {
