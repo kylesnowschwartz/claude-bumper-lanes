@@ -11,13 +11,45 @@ import (
 )
 
 const (
-	topnBarWidth = 10    // Width of the sparkline bar
-	topnDefault  = 5     // Default number of files to show
-	topnFilled   = "█"   // U+2588 Full block
-	topnMedium   = "▓"   // U+2593 Dark shade
-	topnLight    = "▒"   // U+2592 Medium shade
-	topnEmpty    = "░"   // U+2591 Light shade
+	barWidth     = 10  // Width of the sparkline bar
+	defaultCount = 5   // Default number of files to show
+	blockFull    = "█" // U+2588 Full block
+	blockMedium  = "▓" // U+2593 Dark shade
+	blockLight   = "▒" // U+2592 Medium shade
+	blockEmpty   = "░" // U+2591 Light shade
 )
+
+// barThresholds maps minimum total changes to bar fill count.
+// Ordered descending so first match wins.
+var barThresholds = []struct {
+	minTotal int
+	filled   int
+}{
+	{400, 10}, {300, 9}, {200, 8}, {150, 7}, {100, 6},
+	{75, 5}, {50, 4}, {30, 3}, {15, 2}, {0, 1},
+}
+
+// filledFromTotal returns the number of filled bar blocks for a given total.
+func filledFromTotal(total int) int {
+	for _, t := range barThresholds {
+		if total >= t.minTotal {
+			return t.filled
+		}
+	}
+	return 1
+}
+
+// blockChar returns the appropriate block character based on magnitude.
+func blockChar(total int) string {
+	switch {
+	case total >= 200:
+		return blockFull
+	case total >= 100:
+		return blockMedium
+	default:
+		return blockLight
+	}
+}
 
 // TopNRenderer shows the N files with the most changes.
 type TopNRenderer struct {
@@ -29,7 +61,7 @@ type TopNRenderer struct {
 // NewTopNRenderer creates a top-N summary renderer.
 func NewTopNRenderer(w io.Writer, useColor bool, n int) *TopNRenderer {
 	if n <= 0 {
-		n = topnDefault
+		n = defaultCount
 	}
 	return &TopNRenderer{N: n, UseColor: useColor, w: w}
 }
@@ -51,22 +83,15 @@ func (r *TopNRenderer) Render(stats *diff.DiffStats) {
 	})
 
 	// Take top N
-	showCount := r.N
-	if showCount > len(files) {
-		showCount = len(files)
-	}
+	showCount := min(r.N, len(files))
 	topFiles := files[:showCount]
 
 	// Find max path length for alignment (cap at 80 chars)
 	maxPathLen := 0
 	for _, f := range topFiles {
-		if len(f.Path) > maxPathLen {
-			maxPathLen = len(f.Path)
-		}
+		maxPathLen = max(maxPathLen, len(f.Path))
 	}
-	if maxPathLen > 80 {
-		maxPathLen = 80
-	}
+	maxPathLen = min(maxPathLen, 80)
 
 	// Print each file
 	for _, f := range topFiles {
@@ -133,48 +158,14 @@ func (r *TopNRenderer) formatStats(add, del int) string {
 }
 
 // formatBar creates a sparkline bar with absolute scaling.
-// Same thresholds as smart_sparkline for consistency.
 func (r *TopNRenderer) formatBar(add, del int) string {
 	total := add + del
 	if total == 0 {
-		return strings.Repeat(topnEmpty, topnBarWidth)
+		return strings.Repeat(blockEmpty, barWidth)
 	}
 
-	// Absolute thresholds (same as smart_sparkline, scaled to 10-width bar)
-	var filled int
-	switch {
-	case total >= 400:
-		filled = 10
-	case total >= 300:
-		filled = 9
-	case total >= 200:
-		filled = 8
-	case total >= 150:
-		filled = 7
-	case total >= 100:
-		filled = 6
-	case total >= 75:
-		filled = 5
-	case total >= 50:
-		filled = 4
-	case total >= 30:
-		filled = 3
-	case total >= 15:
-		filled = 2
-	default:
-		filled = 1
-	}
-
-	// Block character based on magnitude
-	block := topnLight
-	switch {
-	case total >= 200:
-		block = topnFilled
-	case total >= 100:
-		block = topnMedium
-	default:
-		block = topnLight
-	}
+	filled := filledFromTotal(total)
+	block := blockChar(total)
 
 	// Ensure minimum 2 blocks when both add and del exist
 	// so we can always show the split
@@ -206,7 +197,7 @@ func (r *TopNRenderer) formatBar(add, del int) string {
 		sb.WriteString(strings.Repeat(block, delBlocks))
 		sb.WriteString(r.color(ColorReset))
 	}
-	sb.WriteString(strings.Repeat(topnEmpty, topnBarWidth-filled))
+	sb.WriteString(strings.Repeat(blockEmpty, barWidth-filled))
 	return sb.String()
 }
 

@@ -12,24 +12,24 @@ import (
 )
 
 const (
-	smartBarWidth = 6    // Fixed width for sparkline bars
-	smartFilled   = "█"  // U+2588 Full block
-	smartMedium   = "▓"  // U+2593 Dark shade
-	smartLight    = "▒"  // U+2592 Medium shade
-	smartEmpty    = "░"  // U+2591 Light shade
+	smartBarWidth = 6   // Fixed width for sparkline bars
+	smartFilled   = "█" // U+2588 Full block
+	smartMedium   = "▓" // U+2593 Dark shade
+	smartLight    = "▒" // U+2592 Medium shade
+	smartEmpty    = "░" // U+2591 Light shade
 )
 
 // SmartGroup represents files aggregated at depth 2.
 // e.g., src/lib contains parser.go, lexer.go
 type SmartGroup struct {
-	TopDir    string         // Top-level: src, tests, docs
-	SubPath   string         // Depth-2 path: lib, render, or filename for root files
+	TopDir    string // Top-level: src, tests, docs
+	SubPath   string // Depth-2 path: lib, render, or filename for root files
 	Files     []diff.FileStat
 	TotalAdd  int
 	TotalDel  int
 	FileCount int
 	HasNew    bool
-	IsFile    bool           // True if SubPath is a single file (not aggregated)
+	IsFile    bool // True if SubPath is a single file (not aggregated)
 }
 
 // SmartSparklineRenderer renders diff stats with depth-aware aggregation.
@@ -232,7 +232,8 @@ func (r *SmartSparklineRenderer) formatTopDir(topDir string, groups []SmartGroup
 
 // formatBar creates a sparkline bar with absolute scaling.
 // Uses fixed thresholds so bar size is consistent across diffs:
-//   1-25 lines: 1 block, 26-50: 2, 51-100: 3, 101-200: 4, 201-400: 5, 400+: 6
+//
+//	1-25 lines: 1 block, 26-50: 2, 51-100: 3, 101-200: 4, 201-400: 5, 400+: 6
 func (r *SmartSparklineRenderer) formatBar(add, del, _ int) string {
 	total := add + del
 	if total == 0 {

@@ -23,20 +23,20 @@ const (
 
 // Depth-based color gradient (shallow to deep)
 var depthColors = []string{
-	"\033[32m",  // Green (depth 0)
-	"\033[36m",  // Cyan (depth 1)
-	"\033[34m",  // Blue (depth 2)
-	"\033[35m",  // Magenta (depth 3)
-	"\033[91m",  // Bright red (depth 4)
-	"\033[93m",  // Bright yellow (depth 5)
-	"\033[95m",  // Bright magenta (depth 6)
-	"\033[97m",  // Bright white (depth 7+)
+	"\033[32m", // Green (depth 0)
+	"\033[36m", // Cyan (depth 1)
+	"\033[34m", // Blue (depth 2)
+	"\033[35m", // Magenta (depth 3)
+	"\033[91m", // Bright red (depth 4)
+	"\033[93m", // Bright yellow (depth 5)
+	"\033[95m", // Bright magenta (depth 6)
+	"\033[97m", // Bright white (depth 7+)
 }
 
 // HierDirStats holds stats with per-depth breakdown.
 type HierDirStats struct {
 	Name       string
-	ByDepth    []int  // Changes at each depth level
+	ByDepth    []int // Changes at each depth level
 	Total      int
 	MaxDepth   int
 	FileCount  int
