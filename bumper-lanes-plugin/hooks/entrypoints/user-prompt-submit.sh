@@ -59,4 +59,18 @@ if [[ "$prompt" == *"/claude-bumper-lanes:bumper-view"* ]]; then
   exit 0
 fi
 
+# Check if user typed /claude-bumper-lanes:bumper-config
+if [[ "$prompt" == *"/claude-bumper-lanes:bumper-config"* ]]; then
+  # Extract action and value arguments after the command
+  action="show"
+  value=""
+  if [[ "$prompt" =~ /claude-bumper-lanes:bumper-config[[:space:]]+([a-z]+)([[:space:]]+([0-9]+))? ]]; then
+    action="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[3]:-}"
+  fi
+  config_output=$("$BIN_DIR/set-threshold.sh" "$session_id" "$action" "$value" 2>&1)
+  output_command_result "$config_output"
+  exit 0
+fi
+
 exit 0

@@ -33,6 +33,28 @@ Defense-in-depth hook system with three layers:
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
+## Configuration
+
+Threshold is configurable via JSON files (priority order):
+
+1. **Personal** (`.git/bumper-config.json`): Untracked, per-developer override
+2. **Repo** (`.bumper-lanes.json`): Tracked, shared team default
+3. **Default**: 400 points
+
+### Config Commands
+
+- `/bumper-config` - Show current configuration
+- `/bumper-config set 300` - Set repo threshold (creates `.bumper-lanes.json`)
+- `/bumper-config personal 500` - Set personal threshold (in `.git/`, untracked)
+
+### Config Schema
+
+```json
+{"threshold": 300}
+```
+
+Threshold range: 50-2000 points. After changing config, run `/bumper-reset` to apply to current session.
+
 ## Project Structure
 
 ```

@@ -4,6 +4,48 @@ set -euo pipefail
 # state-manager.sh - SessionId-based session state management
 # Purpose: Persist and retrieve session state for threshold tracking
 
+# Default threshold - can be overridden via config files
+readonly DEFAULT_THRESHOLD=400
+
+# get_threshold_limit() - Read threshold from config files with priority
+# Priority: Personal (.git/bumper-config.json) > Repo (.bumper-lanes.json) > Default
+# Returns: Integer threshold value on stdout
+get_threshold_limit() {
+  local git_dir repo_root threshold
+
+  git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || {
+    echo "$DEFAULT_THRESHOLD"
+    return 0
+  }
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "$DEFAULT_THRESHOLD"
+    return 0
+  }
+
+  # Priority 1: Personal config (untracked, in .git dir)
+  local personal_config="$git_dir/bumper-config.json"
+  if [[ -f "$personal_config" ]]; then
+    threshold=$(jq -r '.threshold // empty' "$personal_config" 2>/dev/null)
+    if [[ -n "$threshold" ]] && [[ "$threshold" =~ ^[0-9]+$ ]]; then
+      echo "$threshold"
+      return 0
+    fi
+  fi
+
+  # Priority 2: Repo config (tracked, in repo root)
+  local repo_config="$repo_root/.bumper-lanes.json"
+  if [[ -f "$repo_config" ]]; then
+    threshold=$(jq -r '.threshold // empty' "$repo_config" 2>/dev/null)
+    if [[ -n "$threshold" ]] && [[ "$threshold" =~ ^[0-9]+$ ]]; then
+      echo "$threshold"
+      return 0
+    fi
+  fi
+
+  # Priority 3: Default
+  echo "$DEFAULT_THRESHOLD"
+}
+
 # get_checkpoint_dir() - Returns absolute path to checkpoint directory
 # Handles git worktrees where .git is a file, not a directory
 # Returns: Absolute path like "/path/repo/.git/bumper-checkpoints" or "/path/.git/worktrees/name/bumper-checkpoints"
@@ -50,11 +92,10 @@ write_session_state() {
     fi
   fi
 
-  # WHY 400 points:
-  # - Alpha testing value (generous to avoid hitting limits constantly)
-  # - Production default should be 200 (GitLab-aligned, Cisco-validated)
-  # - User can override by editing this file and running /bumper-reset
-  #
+  # Load threshold from config (personal > repo > default)
+  local threshold_limit
+  threshold_limit=$(get_threshold_limit)
+
   # Atomic write: temp file + mv to prevent race conditions when multiple
   # hooks run in parallel (e.g., 10 Stop hooks all firing simultaneously)
   local temp_file
@@ -67,7 +108,7 @@ write_session_state() {
   "previous_tree": "$previous_tree",
   "accumulated_score": $accumulated_score,
   "created_at": "$timestamp",
-  "threshold_limit": 400,
+  "threshold_limit": $threshold_limit,
   "repo_path": "$repo_path",
   "stop_triggered": $stop_triggered
 }
