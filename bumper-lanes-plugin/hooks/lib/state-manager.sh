@@ -265,7 +265,7 @@ reset_baseline_stale() {
 # set_view_mode() - Set diff visualization mode in session state
 # Args:
 #   $1 - session_id (conversation UUID)
-#   $2 - view_mode (tree|collapsed|sparkline)
+#   $2 - view_mode (tree|collapsed|smart|topn|pathstrip)
 # Updates: {git-dir}/bumper-checkpoints/session-{sessionId} with new view_mode
 # Purpose: Allow user to toggle between diff visualization modes in status line
 set_view_mode() {
@@ -274,7 +274,7 @@ set_view_mode() {
 
   # Query binary for valid modes (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip"
 
   # Validate mode
   if ! echo " $valid_modes " | grep -q " $view_mode "; then
@@ -290,7 +290,7 @@ set_view_mode() {
 # get_view_mode() - Get current diff visualization mode from session state
 # Args:
 #   $1 - session_id (conversation UUID)
-# Returns: view_mode (tree|collapsed|sparkline), defaults to "tree" if not set
+# Returns: view_mode (tree|collapsed|smart|topn|pathstrip), defaults to "tree" if not set
 get_view_mode() {
   local session_id=$1
   local checkpoint_dir
