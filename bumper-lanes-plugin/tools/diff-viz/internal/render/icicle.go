@@ -117,12 +117,13 @@ func (c IcicleCell) formatCentered(truncateFn func(string, int) string, colorFn 
 // IcicleRenderer renders diff stats as a horizontal icicle/flame chart.
 // Width encodes magnitude, vertical stacking shows hierarchy.
 type IcicleRenderer struct {
-	UseColor bool
-	Width    int // Total width of the chart
-	MaxDepth int // Maximum depth levels to render (0 = unlimited)
-	w        io.Writer
-	style    BoxStyle
-	levels   [][]IcicleCell // cells at each depth level
+	UseColor     bool
+	Width        int // Total width of the chart
+	MaxDepth     int // Maximum depth levels to render (0 = unlimited)
+	MinCellWidth int // Minimum width per cell (wider = less visual clutter)
+	w            io.Writer
+	style        BoxStyle
+	levels       [][]IcicleCell // cells at each depth level
 }
 
 // NewIcicleRenderer creates an icicle renderer.
@@ -132,11 +133,12 @@ func NewIcicleRenderer(w io.Writer, useColor bool) *IcicleRenderer {
 		style = ASCIIBoxStyle()
 	}
 	return &IcicleRenderer{
-		UseColor: useColor,
-		Width:    80, // Default width (standard terminal)
-		MaxDepth: 3,  // Default max depth (shows 3 hierarchy levels)
-		w:        w,
-		style:    style,
+		UseColor:     useColor,
+		Width:        100, // Default width (standard terminal)
+		MaxDepth:     4,   // Default max depth (shows 4 hierarchy levels)
+		MinCellWidth: 12,   // Default min cell width
+		w:            w,
+		style:        style,
 	}
 }
 
@@ -260,15 +262,14 @@ func (r *IcicleRenderer) buildLevelCells(nodes []*TreeNode, startPos, availWidth
 	})
 
 	// Calculate widths: reserve minimum for each, then distribute rest proportionally
-	const minCellWidth = 8 // Minimum width per cell (wider = less visual clutter)
-	minReserved := len(sorted) * minCellWidth
+	minReserved := len(sorted) * r.MinCellWidth
 	if minReserved > availWidth {
 		// Not enough space for all nodes - take what fits
-		sorted = sorted[:availWidth/minCellWidth]
+		sorted = sorted[:availWidth/r.MinCellWidth]
 		if len(sorted) == 0 {
 			return nil
 		}
-		minReserved = len(sorted) * minCellWidth
+		minReserved = len(sorted) * r.MinCellWidth
 	}
 
 	// Calculate proportional widths with minimum guarantee
@@ -280,7 +281,7 @@ func (r *IcicleRenderer) buildLevelCells(nodes []*TreeNode, startPos, availWidth
 		if extraWidth > 0 && totalChanges > 0 {
 			extra = (nodeTotal * extraWidth) / totalChanges
 		}
-		widths[i] = minCellWidth + extra
+		widths[i] = r.MinCellWidth + extra
 	}
 
 	// Adjust to fill remaining space (avoid gaps)
@@ -361,14 +362,24 @@ func (r *IcicleRenderer) renderBorder(levelIdx int, isTop bool) {
 func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 	level := r.levels[levelIdx]
 
+	// Get parent boundaries to draw separators in empty regions
+	var parentBoundaries map[int]bool
+	if levelIdx > 0 {
+		parentBoundaries = r.getBoundaries(levelIdx - 1)
+	}
+
 	var sb strings.Builder
 	sb.WriteString(r.style.Vertical)
 
 	pos := 1 // Start after left border (position in visual columns)
 	for i, cell := range level {
-		// Fill gap before cell if needed
+		// Fill gap before cell, respecting parent boundaries
 		for pos < cell.Start+1 { // +1 for border offset
-			sb.WriteString(" ")
+			if parentBoundaries[pos] {
+				sb.WriteString(r.style.Vertical)
+			} else {
+				sb.WriteString(" ")
+			}
 			pos++
 		}
 
@@ -384,9 +395,13 @@ func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 		}
 	}
 
-	// Fill remaining space to right border
+	// Fill remaining space, respecting parent boundaries
 	for pos < r.Width-1 {
-		sb.WriteString(" ")
+		if parentBoundaries[pos] {
+			sb.WriteString(r.style.Vertical)
+		} else {
+			sb.WriteString(" ")
+		}
 		pos++
 	}
 
