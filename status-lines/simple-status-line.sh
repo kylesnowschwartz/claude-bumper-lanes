@@ -88,26 +88,40 @@ get_bumper_lanes_status() {
   # No session file = bumper lanes not active
   [[ ! -f "$checkpoint_file" ]] && return
 
-  # Read state flags
+  # Read state flags and baseline
   local stop_triggered=$(jq -r '.stop_triggered // false' "$checkpoint_file" 2>/dev/null)
   local paused=$(jq -r '.paused // false' "$checkpoint_file" 2>/dev/null)
-  local accumulated_score=$(jq -r '.accumulated_score // 0' "$checkpoint_file" 2>/dev/null)
+  local baseline_tree=$(jq -r '.baseline_tree // ""' "$checkpoint_file" 2>/dev/null)
   local threshold_limit=$(jq -r '.threshold_limit // 400' "$checkpoint_file" 2>/dev/null)
+
+  # Calculate score FRESH using Go binary (fixes stale value bug)
+  # This computes the actual diff from baseline to current working tree
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local diff_tree_bin="$script_dir/../bumper-lanes-plugin/bin/git-diff-tree-go"
+  local score=0
+
+  if [[ -x "$diff_tree_bin" && -n "$baseline_tree" ]]; then
+    local score_json
+    score_json=$(cd "$workspace_dir" && "$diff_tree_bin" --score-json --baseline="$baseline_tree" 2>/dev/null)
+    if [[ -n "$score_json" ]]; then
+      score=$(echo "$score_json" | jq -r '.score // 0')
+    fi
+  fi
 
   # Calculate percentage (avoid division by zero)
   local percentage=0
   if [[ "$threshold_limit" -gt 0 ]]; then
-    percentage=$(awk "BEGIN {printf \"%.0f\", ($accumulated_score / $threshold_limit) * 100}")
+    percentage=$(awk "BEGIN {printf \"%.0f\", ($score / $threshold_limit) * 100}")
   fi
 
   # Return format: "state score/limit percentage"
   # States: active, tripped, paused
   if [[ "$paused" == "true" ]]; then
-    echo "paused $accumulated_score $threshold_limit $percentage"
+    echo "paused $score $threshold_limit $percentage"
   elif [[ "$stop_triggered" == "true" ]]; then
-    echo "tripped $accumulated_score $threshold_limit $percentage"
+    echo "tripped $score $threshold_limit $percentage"
   else
-    echo "active $accumulated_score $threshold_limit $percentage"
+    echo "active $score $threshold_limit $percentage"
   fi
 }
 

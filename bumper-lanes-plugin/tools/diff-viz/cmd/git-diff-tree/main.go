@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/render"
+	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/scoring"
 )
 
 // validModes is the single source of truth for available visualization modes.
@@ -38,6 +40,7 @@ Examples:
   git-diff-tree HEAD~3             Last 3 commits
   git-diff-tree main feature       Compare branches
   git-diff-tree -m smart           Compact sparkline view
+  git-diff-tree --score-json       Output weighted score as JSON
 
 Modes:
 `)
@@ -66,6 +69,8 @@ func main() {
 	noColor := flag.Bool("no-color", false, "Disable color output")
 	help := flag.Bool("h", false, "Show help")
 	listModes := flag.Bool("list-modes", false, "List valid modes (for scripting)")
+	scoreJSON := flag.Bool("score-json", false, "Output weighted score as JSON (for status line)")
+	baseline := flag.String("baseline", "", "Baseline tree SHA to compare against (uses current working tree)")
 	flag.Parse()
 
 	if *help {
@@ -76,6 +81,12 @@ func main() {
 	if *listModes {
 		fmt.Println(strings.Join(validModes, " "))
 		os.Exit(0)
+	}
+
+	// Handle --score-json mode
+	if *scoreJSON {
+		outputScoreJSON(*baseline)
+		return
 	}
 
 	// Use -m if set, otherwise --mode
@@ -102,6 +113,43 @@ func main() {
 	// Select renderer based on mode
 	renderer := getRenderer(selectedMode, useColor)
 	renderer.Render(stats)
+}
+
+// outputScoreJSON computes and outputs the weighted score as JSON.
+// If baseline is provided, compares baseline tree to current working tree.
+// Otherwise, compares HEAD to current working tree.
+func outputScoreJSON(baseline string) {
+	var stats *diff.DiffStats
+	var err error
+
+	if baseline != "" {
+		// Compare baseline tree to current working tree
+		currentTree, err := diff.CaptureCurrentTree()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error capturing tree: %v\n", err)
+			os.Exit(1)
+		}
+		stats, err = diff.GetTreeDiffStats(baseline, currentTree)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// Default: compare HEAD to working tree
+		stats, err = diff.GetAllStats()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	score := scoring.Calculate(stats)
+	output, err := json.Marshal(score)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(output))
 }
 
 func isValidMode(mode string) bool {

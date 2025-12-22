@@ -10,7 +10,7 @@ Then check for read work:
 !`bd ready`
 
 Review what was just accomplished:
-!`git log -3`
+!`git log -8`
 
 Review the code structure:
 !`eza --tree --level 5 --git-ignore bumper-lanes-plugin/tools/diff-viz`

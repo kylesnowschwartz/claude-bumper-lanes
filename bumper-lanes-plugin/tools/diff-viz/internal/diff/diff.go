@@ -158,3 +158,67 @@ func GetAllStats(args ...string) (*DiffStats, error) {
 
 	return stats, nil
 }
+
+// GetTreeDiffStats compares two git tree SHAs using git diff-tree.
+// This is used for comparing against a baseline snapshot.
+func GetTreeDiffStats(baseTree, currentTree string) (*DiffStats, error) {
+	// git diff-tree --numstat baseline current
+	cmd := exec.Command("git", "diff-tree", "--numstat", "-r", baseTree, currentTree)
+	output, err := cmd.Output()
+	if err != nil {
+		return &DiffStats{}, nil
+	}
+
+	stats, err := ParseNumstat(string(output))
+	if err != nil {
+		return nil, err
+	}
+
+	// Get file status (A=Added, M=Modified) for weighted scoring
+	statusCmd := exec.Command("git", "diff-tree", "-r", "--name-status", "--diff-filter=AM", baseTree, currentTree)
+	statusOutput, _ := statusCmd.Output()
+
+	// Mark files as new or modified based on status
+	statusLines := make(map[string]byte)
+	scanner := bufio.NewScanner(bytes.NewReader(statusOutput))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) >= 2 && line[1] == '\t' {
+			status := line[0]
+			path := line[2:]
+			statusLines[path] = status
+		}
+	}
+
+	// Update file stats with new/modified status
+	for i := range stats.Files {
+		if status, ok := statusLines[stats.Files[i].Path]; ok {
+			stats.Files[i].IsUntracked = (status == 'A') // Treat "Added" as new file
+		}
+	}
+
+	return stats, nil
+}
+
+// CaptureCurrentTree returns the SHA of the current working tree.
+// Uses git write-tree to capture staged+unstaged state.
+func CaptureCurrentTree() (string, error) {
+	// Add all changes to index (including untracked) temporarily
+	addCmd := exec.Command("git", "add", "-A")
+	if err := addCmd.Run(); err != nil {
+		return "", err
+	}
+
+	// Capture tree
+	writeCmd := exec.Command("git", "write-tree")
+	output, err := writeCmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	// Reset index to HEAD (don't affect working tree)
+	resetCmd := exec.Command("git", "reset", "HEAD", "--quiet")
+	resetCmd.Run() // Ignore errors
+
+	return strings.TrimSpace(string(output)), nil
+}
