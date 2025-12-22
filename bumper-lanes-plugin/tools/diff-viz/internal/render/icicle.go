@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 )
@@ -97,7 +98,7 @@ func NewIcicleRenderer(w io.Writer, useColor bool) *IcicleRenderer {
 	}
 	return &IcicleRenderer{
 		UseColor: useColor,
-		Width:    60, // Default width
+		Width:    80, // Default width (standard terminal)
 		MaxDepth: 3,  // Default max depth (shows 3 hierarchy levels)
 		w:        w,
 		style:    style,
@@ -318,7 +319,7 @@ func (r *IcicleRenderer) buildLevelCells(nodes []*TreeNode, startPos, availWidth
 	})
 
 	// Calculate widths: reserve minimum for each, then distribute rest proportionally
-	const minCellWidth = 4 // Minimum width per cell
+	const minCellWidth = 8 // Minimum width per cell (wider = less visual clutter)
 	minReserved := len(sorted) * minCellWidth
 	if minReserved > availWidth {
 		// Not enough space for all nodes - take what fits
@@ -423,7 +424,7 @@ func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 	sb.WriteString(r.style.Vertical)
 
 	pos := 1 // Start after left border
-	for _, cell := range level {
+	for i, cell := range level {
 		// Fill gap if needed
 		for pos < cell.Start+1 { // +1 for border offset
 			sb.WriteString(" ")
@@ -442,8 +443,8 @@ func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 			labelColor = ColorDel
 		}
 
-		// Pad and center (ensure non-negative padding)
-		padding := cellWidth - len(label) - 1
+		// Pad and center (use rune count for proper Unicode width)
+		padding := cellWidth - utf8.RuneCountInString(label) - 1
 		if padding < 0 {
 			padding = 0
 		}
@@ -456,9 +457,12 @@ func (r *IcicleRenderer) renderContentRow(levelIdx int) {
 		sb.WriteString(r.color(ColorReset))
 		sb.WriteString(strings.Repeat(" ", max(0, rightPad)))
 
-		// Cell separator (unless it's handled by next cell)
-		pos = cell.End + 1 // +1 for border offset
-		if pos < r.Width-1 {
+		// Track actual characters written
+		charsWritten := max(0, leftPad) + utf8.RuneCountInString(label) + max(0, rightPad)
+		pos = cell.Start + 1 + charsWritten // +1 for left border offset
+
+		// Cell separator between cells (not after last cell)
+		if i < len(level)-1 {
 			sb.WriteString(r.style.Vertical)
 			pos++
 		}
@@ -510,27 +514,49 @@ func (r *IcicleRenderer) getBoundaries(levelIdx int) map[int]bool {
 		return boundaries
 	}
 
+	usableWidth := r.Width - 2 // Account for left/right borders
 	for _, cell := range r.levels[levelIdx] {
 		// Mark end position as boundary (between cells)
-		// +1 offset for left border
-		boundaries[cell.End] = true
+		// BUT don't mark the right edge - it's the box border, not an internal separator
+		if cell.End < usableWidth {
+			boundaries[cell.End] = true
+		}
 	}
 
 	return boundaries
 }
 
-// truncate shortens a string to fit within maxLen.
+// truncate shortens a string to fit within maxLen runes, preserving trailing "/" for directories.
 func (r *IcicleRenderer) truncate(s string, maxLen int) string {
 	if maxLen <= 0 {
 		return ""
 	}
-	if len(s) <= maxLen {
+	runeCount := utf8.RuneCountInString(s)
+	if runeCount <= maxLen {
 		return s
 	}
-	if maxLen <= 3 {
-		return s[:maxLen]
+
+	// Preserve trailing "/" for directories
+	isDir := len(s) > 0 && s[len(s)-1] == '/'
+	if isDir {
+		s = s[:len(s)-1] // Remove "/" temporarily
+		maxLen--         // Reserve space for it
+		runeCount--
 	}
-	return s[:maxLen-1] + "…"
+
+	var result string
+	if maxLen <= 2 {
+		// Too short for ellipsis, just truncate by runes
+		result = string([]rune(s)[:min(runeCount, maxLen)])
+	} else {
+		// Truncate with ellipsis: "longname" -> "long~"
+		result = string([]rune(s)[:maxLen-1]) + "~"
+	}
+
+	if isDir {
+		result += "/"
+	}
+	return result
 }
 
 // color returns the ANSI code if color is enabled.
