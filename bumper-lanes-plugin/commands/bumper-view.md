@@ -1,6 +1,6 @@
 ---
 description: Set diff visualization mode in status line
-argument-hint: tree|collapsed|smart|topn|icicle
+argument-hint: tree|collapsed|smart|topn|icicle|brackets
 ---
 
 /claude-bumper-lanes:bumper-view

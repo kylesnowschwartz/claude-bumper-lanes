@@ -15,7 +15,7 @@ import (
 
 // validModes is the single source of truth for available visualization modes.
 // Add new modes here - they'll automatically appear in help and validation.
-var validModes = []string{"tree", "collapsed", "smart", "topn", "icicle"}
+var validModes = []string{"tree", "collapsed", "smart", "topn", "icicle", "brackets"}
 
 // modeDescriptions provides help text for each mode.
 var modeDescriptions = map[string]string{
@@ -24,6 +24,7 @@ var modeDescriptions = map[string]string{
 	"smart":     "Depth-2 aggregated sparkline",
 	"topn":      "Top N files by change size (hotspots)",
 	"icicle":    "Horizontal icicle chart (width = magnitude)",
+	"brackets":  "Nested brackets [dir file█ file██] (single-line hierarchy)",
 }
 
 func usage() string {
@@ -177,6 +178,8 @@ func getRenderer(mode string, useColor bool, width, depth int) Renderer {
 		r.Width = width
 		r.MaxDepth = depth
 		return r
+	case "brackets":
+		return render.NewBracketsRenderer(os.Stdout, useColor)
 	default:
 		// Should never reach here if isValidMode was called first
 		return render.NewTreeRenderer(os.Stdout, useColor)

@@ -1,5 +1,7 @@
 ---
 description: Load the bumper-lanes development framework and skills into context for building
+allowed-tools: Bash(git log:*), Bash(bd:*), Bash(eza:*), Skill
+
 ---
 
 Then check for read work:

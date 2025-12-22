@@ -17,7 +17,7 @@ if [[ -z "$session_id" ]]; then
 fi
 
 # Get valid modes from binary (with fallback)
-valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn pathstrip icicle"
+valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle brackets"
 
 if [[ -z "$view_mode" ]]; then
   # No mode specified - show current mode and config

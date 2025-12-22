@@ -66,7 +66,7 @@ get_default_view_mode() {
 
   # Get valid modes from binary (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle brackets"
 
   # Priority 1: Personal config (untracked, in .git dir)
   local personal_config="$git_dir/bumper-config.json"
@@ -320,7 +320,7 @@ set_view_mode() {
 
   # Query binary for valid modes (with fallback)
   local valid_modes
-  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle"
+  valid_modes=$(git-diff-tree-go --list-modes 2>/dev/null) || valid_modes="tree collapsed smart topn icicle brackets"
 
   # Validate mode
   if ! echo " $valid_modes " | grep -q " $view_mode "; then
