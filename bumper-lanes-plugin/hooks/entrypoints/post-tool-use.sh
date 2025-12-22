@@ -56,10 +56,6 @@ if ! reset_baseline_after_commit "$session_id" "$current_tree" 2>/dev/null; then
   exit 0
 fi
 
-# Output structured feedback for Claude Code
-# PostToolUse hooks return JSON with systemMessage to inform the agent
-jq -n '{
-    systemMessage: "✓ Bumper lanes: Auto-reset after commit. Fresh budget: 400 pts."
-  }'
-
-exit 0
+# Output feedback to stderr so Claude sees it (exit 2 = non-blocking for PostToolUse)
+echo "✓ Bumper lanes: Auto-reset after commit. Fresh budget: 400 pts." >&2
+exit 2
