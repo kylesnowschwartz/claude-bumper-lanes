@@ -211,58 +211,11 @@ func (r *PathStripRenderer) formatProportionalBar(add, del, grandTotal int) stri
 	}
 
 	// Calculate bar width as proportion of grand total
-	// Minimum 1 block, scale up to stripBarWidth
-	barWidth := (total * stripBarWidth) / grandTotal
-	if barWidth < 1 {
-		barWidth = 1
-	}
-	if barWidth > stripBarWidth {
-		barWidth = stripBarWidth
-	}
-
-	// Ensure minimum 2 blocks when both add and del exist
-	// so we can show the split (same as other renderers)
-	if add > 0 && del > 0 && barWidth < 2 {
-		barWidth = 2
-	}
-
-	// Choose block character based on magnitude
+	filled := max(1, min((total*stripBarWidth)/grandTotal, stripBarWidth))
 	block := blockChar(total)
 
-	// Split into add (green) and del (red) portions
-	if add == 0 {
-		return r.color(ColorDel) + strings.Repeat(block, barWidth) + r.color(ColorReset)
-	}
-	if del == 0 {
-		return r.color(ColorAdd) + strings.Repeat(block, barWidth) + r.color(ColorReset)
-	}
-
-	// Both add and del exist - split proportionally
-	addBlocks := (add * barWidth) / total
-	delBlocks := barWidth - addBlocks
-
-	// Ensure at least 1 block for each non-zero value
-	if addBlocks == 0 && add > 0 {
-		addBlocks = 1
-		delBlocks = barWidth - 1
-	} else if delBlocks == 0 && del > 0 {
-		delBlocks = 1
-		addBlocks = barWidth - 1
-	}
-
-	var sb strings.Builder
-	if addBlocks > 0 {
-		sb.WriteString(r.color(ColorAdd))
-		sb.WriteString(strings.Repeat(block, addBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-	if delBlocks > 0 {
-		sb.WriteString(r.color(ColorDel))
-		sb.WriteString(strings.Repeat(block, delBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-
-	return sb.String()
+	// RatioBar handles the add/del split and min 2 blocks logic
+	return RatioBar(add, del, filled, filled, block, r.color)
 }
 
 // color returns the ANSI code if color is enabled.

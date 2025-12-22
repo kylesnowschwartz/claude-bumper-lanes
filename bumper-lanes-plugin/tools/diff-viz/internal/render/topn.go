@@ -124,45 +124,9 @@ func (r *TopNRenderer) formatStats(add, del int) string {
 // formatBar creates a sparkline bar with absolute scaling.
 func (r *TopNRenderer) formatBar(add, del int) string {
 	total := add + del
-	if total == 0 {
-		return strings.Repeat(BlockEmpty, barWidth)
-	}
-
 	filled := filledFromTotal(total)
 	block := blockChar(total)
-
-	// Ensure minimum 2 blocks when both add and del exist
-	// so we can always show the split
-	if add > 0 && del > 0 && filled < 2 {
-		filled = 2
-	}
-
-	// Split bar into add (green) and del (red) portions
-	addBlocks := (add * filled) / total
-	delBlocks := filled - addBlocks
-
-	// Ensure at least 1 block for non-zero values
-	if add > 0 && addBlocks == 0 {
-		addBlocks = 1
-		delBlocks = filled - 1
-	} else if del > 0 && delBlocks == 0 {
-		delBlocks = 1
-		addBlocks = filled - 1
-	}
-
-	var sb strings.Builder
-	if addBlocks > 0 {
-		sb.WriteString(r.color(ColorAdd))
-		sb.WriteString(strings.Repeat(block, addBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-	if delBlocks > 0 {
-		sb.WriteString(r.color(ColorDel))
-		sb.WriteString(strings.Repeat(block, delBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-	sb.WriteString(strings.Repeat(BlockEmpty, barWidth-filled))
-	return sb.String()
+	return RatioBar(add, del, filled, barWidth, block, r.color)
 }
 
 // renderSummary outputs the totals line.

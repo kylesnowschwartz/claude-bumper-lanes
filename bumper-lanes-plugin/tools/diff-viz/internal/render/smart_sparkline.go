@@ -228,53 +228,11 @@ func (r *SmartSparklineRenderer) formatTopDir(topDir string, groups []SmartGroup
 }
 
 // formatBar creates a sparkline bar with ratio-split coloring.
-// Uses shared helpers from topn.go for consistent scaling across renderers.
-// Green = additions, Red = deletions, proportionally split.
 func (r *SmartSparklineRenderer) formatBar(add, del, _ int) string {
 	total := add + del
-	if total == 0 {
-		return strings.Repeat(smartEmpty, smartBarWidth)
-	}
-
-	// Use shared helpers for consistent scaling
-	filled := filledFromTotal(total)
-	if filled > smartBarWidth {
-		filled = smartBarWidth
-	}
+	filled := min(filledFromTotal(total), smartBarWidth)
 	block := blockChar(total)
-
-	// Ensure minimum 2 blocks when both add and del exist
-	if add > 0 && del > 0 && filled < 2 {
-		filled = 2
-	}
-
-	// Split bar into add (green) and del (red) portions
-	addBlocks := (add * filled) / total
-	delBlocks := filled - addBlocks
-
-	// Ensure at least 1 block for non-zero values
-	if add > 0 && addBlocks == 0 {
-		addBlocks = 1
-		delBlocks = filled - 1
-	} else if del > 0 && delBlocks == 0 {
-		delBlocks = 1
-		addBlocks = filled - 1
-	}
-
-	var sb strings.Builder
-	if addBlocks > 0 {
-		sb.WriteString(r.color(ColorAdd))
-		sb.WriteString(strings.Repeat(block, addBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-	if delBlocks > 0 {
-		sb.WriteString(r.color(ColorDel))
-		sb.WriteString(strings.Repeat(block, delBlocks))
-		sb.WriteString(r.color(ColorReset))
-	}
-	sb.WriteString(strings.Repeat(smartEmpty, smartBarWidth-filled))
-
-	return sb.String()
+	return RatioBar(add, del, filled, smartBarWidth, block, r.color)
 }
 
 // color returns the ANSI code if color is enabled.
