@@ -76,6 +76,18 @@ diff-viz *ARGS:
     @just build-diff-viz
     ./bumper-lanes-plugin/bin/git-diff-tree-go {{ARGS}}
 
+# Install diff-viz to ~/.local/bin (symlink)
+install-diff-viz:
+    @just build-diff-viz
+    @mkdir -p ~/.local/bin
+    ln -sf "$(pwd)/bumper-lanes-plugin/bin/git-diff-tree-go" ~/.local/bin/git-diff-tree
+    @echo "Installed: ~/.local/bin/git-diff-tree"
+
+# Uninstall diff-viz
+uninstall-diff-viz:
+    rm -f ~/.local/bin/git-diff-tree
+    @echo "Removed: ~/.local/bin/git-diff-tree"
+
 # Clean Go build artifacts
 clean-go:
     rm -f bumper-lanes-plugin/bin/git-diff-tree-go
