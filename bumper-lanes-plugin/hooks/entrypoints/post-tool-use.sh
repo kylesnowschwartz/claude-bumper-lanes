@@ -16,6 +16,7 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id')
 tool_name=$(echo "$input" | jq -r '.tool_name')
 hook_event_name=$(echo "$input" | jq -r '.hook_event_name')
+threshold_limit=$(get_threshold_limit)
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
 
 # Validate hook event (defensive check)
@@ -57,5 +58,5 @@ if ! reset_baseline_after_commit "$session_id" "$current_tree" 2>/dev/null; then
 fi
 
 # Output feedback to stderr so Claude sees it (exit 2 = non-blocking for PostToolUse)
-echo "✓ Bumper lanes: Auto-reset after commit. Fresh budget: 400 pts." >&2
+echo "✓ Bumper lanes: Auto-reset after commit. Fresh budget: "$threshold_limit" pts." >&2
 exit 2
