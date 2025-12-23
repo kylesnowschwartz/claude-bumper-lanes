@@ -111,9 +111,45 @@ func cmdSessionEnd() error {
 	return hooks.SessionEnd(input)
 }
 
-// User command stubs - to be implemented in Phase 3
-func cmdReset(args []string) error  { return nil }
-func cmdPause(args []string) error  { return nil }
-func cmdResume(args []string) error { return nil }
-func cmdView(args []string) error   { return nil }
-func cmdConfig(args []string) error { return nil }
+// User command implementations
+
+func cmdReset(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: bumper-lanes reset <session_id>")
+	}
+	return hooks.Reset(args[0])
+}
+
+func cmdPause(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: bumper-lanes pause <session_id>")
+	}
+	return hooks.Pause(args[0])
+}
+
+func cmdResume(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: bumper-lanes resume <session_id>")
+	}
+	return hooks.Resume(args[0])
+}
+
+func cmdView(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: bumper-lanes view <session_id> <mode>")
+	}
+	return hooks.View(args[0], args[1])
+}
+
+func cmdConfig(args []string) error {
+	if len(args) == 0 || args[0] == "show" {
+		return hooks.ConfigShow()
+	}
+	if args[0] == "set" && len(args) >= 2 {
+		return hooks.ConfigSet(args[1])
+	}
+	if args[0] == "personal" && len(args) >= 2 {
+		return hooks.ConfigPersonal(args[1])
+	}
+	return fmt.Errorf("usage: bumper-lanes config [show|set <value>|personal <value>]")
+}

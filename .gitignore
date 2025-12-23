@@ -13,6 +13,7 @@ __pycache__/
 
 # Go binaries
 bumper-lanes-plugin/bin/git-diff-tree-go
+bumper-lanes-plugin/bin/bumper-lanes
 bumper-lanes-plugin/tools/diff-viz/git-diff-tree
 *.exe
 

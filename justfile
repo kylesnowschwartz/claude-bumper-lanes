@@ -64,7 +64,12 @@ version:
 # ─────────────────────────────────────────────────────────────
 
 # Build all Go tools
-build: build-diff-viz
+build: build-diff-viz build-bumper-lanes
+
+# Build the bumper-lanes tool
+build-bumper-lanes:
+    cd bumper-lanes-plugin/tools/bumper-lanes && go build -o ../../bin/bumper-lanes ./cmd/bumper-lanes
+    @echo "Built: bumper-lanes-plugin/bin/bumper-lanes"
 
 # Build the diff-viz tool
 build-diff-viz:
