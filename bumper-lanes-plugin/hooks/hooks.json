@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/session-start.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes session-start"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/stop.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes stop"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/user-prompt-submit.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes user-prompt-submit"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/post-tool-use.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes post-tool-use"
           }
         ]
       },
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/post-tool-use-feedback.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes post-tool-use"
           }
         ]
       }
@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/entrypoints/session-end.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes session-end"
           }
         ]
       }
