@@ -15,10 +15,16 @@ import (
 
 // HookInput represents the JSON input from Claude Code hooks.
 type HookInput struct {
-	SessionID      string `json:"session_id"`
-	StopHookActive bool   `json:"stop_hook_active,omitempty"`
-	ToolName       string `json:"tool_name,omitempty"`
-	HookEventName  string `json:"hook_event_name,omitempty"`
+	SessionID      string     `json:"session_id"`
+	StopHookActive bool       `json:"stop_hook_active,omitempty"`
+	ToolName       string     `json:"tool_name,omitempty"`
+	HookEventName  string     `json:"hook_event_name,omitempty"`
+	ToolInput      *ToolInput `json:"tool_input,omitempty"`
+}
+
+// ToolInput contains the input for a tool invocation.
+type ToolInput struct {
+	Command string `json:"command,omitempty"` // For Bash tool
 }
 
 // StopResponse is the JSON response for Stop hooks.

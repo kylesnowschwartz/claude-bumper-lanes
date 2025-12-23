@@ -3,13 +3,23 @@ package hooks
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
+	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
-// PostToolUse handles the PostToolUse hook event for Write/Edit tools.
-// It provides fuel gauge warnings based on threshold consumption.
+// gitCommitPattern matches git commit commands with optional flags.
+// Matches: git commit, git -C /path commit, git --git-dir=/x commit
+// Rejects: prose like "use git to commit"
+var gitCommitPattern = regexp.MustCompile(`git\s+(-{1,2}[A-Za-z-]+([ =]("[^"]*"|\S+))?\s+)*commit\b`)
+
+// PostToolUse handles the PostToolUse hook event.
+// For Write/Edit: provides fuel gauge warnings
+// For Bash: detects git commits and auto-resets baseline
 // Returns exit code 2 to ensure stderr reaches Claude.
 func PostToolUse(input *HookInput) (exitCode int) {
 	// Validate hook event
@@ -17,13 +27,58 @@ func PostToolUse(input *HookInput) (exitCode int) {
 		return 0
 	}
 
-	// Only process Write/Edit tools
+	// Route based on tool type
 	switch input.ToolName {
 	case "Write", "Edit":
-		// Proceed
+		return handleWriteEdit(input)
+	case "Bash":
+		return handleBashCommit(input)
 	default:
 		return 0
 	}
+}
+
+// handleBashCommit detects git commits and auto-resets baseline.
+func handleBashCommit(input *HookInput) int {
+	// Need command to check
+	if input.ToolInput == nil || input.ToolInput.Command == "" {
+		return 0
+	}
+
+	// Check if this is a git commit command
+	if !gitCommitPattern.MatchString(input.ToolInput.Command) {
+		return 0
+	}
+
+	// Load session state
+	sess, err := state.Load(input.SessionID)
+	if err != nil {
+		return 0 // No session - fail open
+	}
+
+	// Get the tree SHA from HEAD (what was just committed)
+	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0 // Failed to get tree - fail open
+	}
+	currentTree := strings.TrimSpace(string(output))
+
+	// Reset baseline
+	currentBranch := GetCurrentBranch()
+	sess.ResetBaseline(currentTree, currentBranch)
+	if err := sess.Save(); err != nil {
+		return 0
+	}
+
+	// Output feedback
+	threshold := config.LoadThreshold()
+	fmt.Fprintf(os.Stderr, "✓ Bumper lanes: Auto-reset after commit. Fresh budget: %d pts.\n", threshold)
+	return 2
+}
+
+// handleWriteEdit provides fuel gauge warnings after file modifications.
+func handleWriteEdit(input *HookInput) int {
 
 	// Load session state
 	sess, err := state.Load(input.SessionID)
