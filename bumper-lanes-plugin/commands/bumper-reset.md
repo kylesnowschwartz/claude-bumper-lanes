@@ -1,9 +1,8 @@
 ---
 description: Reset the diff baseline and restore threshold budget
+allowed-tools: Bash(bumper-lanes:*)
+allowed-tools: Bash
+model: claude-haiku-4-5
 ---
 
-/claude-bumper-lanes:bumper-reset
-
-Resetting baseline... (This command is handled by the UserPromptSubmit hook)
-
-Additional user arguments: $ARGUMENTS
+!`${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes reset $ARGUMENTS`

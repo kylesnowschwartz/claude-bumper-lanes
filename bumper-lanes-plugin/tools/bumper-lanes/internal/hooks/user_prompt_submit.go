@@ -17,11 +17,15 @@ type UserPromptInput struct {
 }
 
 // UserPromptOutput is the JSON output for user-prompt-submit hook.
+// Uses additionalContext to let Claude acknowledge (triggering status line refresh).
 type UserPromptOutput struct {
-	HookSpecificOutput struct {
-		HookEventName     string `json:"hookEventName"`
-		AdditionalContext string `json:"additionalContext"`
-	} `json:"hookSpecificOutput"`
+	HookSpecificOutput *HookSpecificOutput `json:"hookSpecificOutput,omitempty"`
+}
+
+// HookSpecificOutput contains context added to the prompt.
+type HookSpecificOutput struct {
+	HookEventName     string `json:"hookEventName"`
+	AdditionalContext string `json:"additionalContext"`
 }
 
 // Command patterns
@@ -34,9 +38,12 @@ const (
 )
 
 // Regex patterns for extracting arguments
+// These match both inline args and "Additional user arguments:" from command expansion
 var (
-	viewModePattern   = regexp.MustCompile(`/claude-bumper-lanes:bumper-view\s+([a-z]+)`)
-	configArgsPattern = regexp.MustCompile(`/claude-bumper-lanes:bumper-config\s+([a-z]+)(?:\s+(\d+))?`)
+	viewModePattern       = regexp.MustCompile(`/claude-bumper-lanes:bumper-view\s+([a-z]+)`)
+	viewModeArgsPattern   = regexp.MustCompile(`Additional user arguments:\s*([a-z]+)`)
+	configArgsPattern     = regexp.MustCompile(`/claude-bumper-lanes:bumper-config\s+([a-z]+)(?:\s+(\d+))?`)
+	configArgsAltPattern  = regexp.MustCompile(`Additional user arguments:\s*([a-z]+)(?:\s+(\d+))?`)
 )
 
 
@@ -54,83 +61,98 @@ func UserPromptSubmitFromStdin() int {
 		return 0 // Fail open
 	}
 
-	prompt := input.Prompt
-	sessionID := input.SessionID
+	// All commands now use bash execution via command files
+	// Hook handlers left in place for reference only
 
-	// Check for commands in order of specificity
+	// /bumper-reset - DISABLED: using bash execution instead
+	// if strings.Contains(prompt, cmdReset) {
+	// 	output := captureOutput(func() error {
+	// 		return Reset(sessionID)
+	// 	})
+	// 	outputCommandResult(output)
+	// 	return 0
+	// }
 
-	// /bumper-reset
-	if strings.Contains(prompt, cmdReset) {
-		output := captureOutput(func() error {
-			return Reset(sessionID)
-		})
-		outputCommandResult(output)
-		return 0
-	}
+	// /bumper-pause - DISABLED: using bash execution instead
+	// if strings.Contains(prompt, cmdPause) {
+	// 	output := captureOutput(func() error {
+	// 		return Pause(sessionID)
+	// 	})
+	// 	outputCommandResult(output)
+	// 	return 0
+	// }
 
-	// /bumper-pause
-	if strings.Contains(prompt, cmdPause) {
-		output := captureOutput(func() error {
-			return Pause(sessionID)
-		})
-		outputCommandResult(output)
-		return 0
-	}
+	// /bumper-resume - DISABLED: using bash execution instead
+	// if strings.Contains(prompt, cmdResume) {
+	// 	output := captureOutput(func() error {
+	// 		return Resume(sessionID)
+	// 	})
+	// 	outputCommandResult(output)
+	// 	return 0
+	// }
 
-	// /bumper-resume
-	if strings.Contains(prompt, cmdResume) {
-		output := captureOutput(func() error {
-			return Resume(sessionID)
-		})
-		outputCommandResult(output)
-		return 0
-	}
+	// /bumper-view <mode> - DISABLED: testing if !`bash` syntax works with $ARGUMENTS
+	// if strings.Contains(prompt, cmdView) {
+	// 	mode := ""
+	// 	// Try inline pattern first: /bumper-view tree
+	// 	if matches := viewModePattern.FindStringSubmatch(prompt); len(matches) > 1 {
+	// 		mode = matches[1]
+	// 	}
+	// 	// Fall back to command expansion: "Additional user arguments: tree"
+	// 	if mode == "" {
+	// 		if matches := viewModeArgsPattern.FindStringSubmatch(prompt); len(matches) > 1 {
+	// 			mode = matches[1]
+	// 		}
+	// 	}
+	// 	output := captureOutput(func() error {
+	// 		return View(sessionID, mode)
+	// 	})
+	// 	outputCommandResult(output)
+	// 	return 0
+	// }
 
-	// /bumper-view <mode>
-	if strings.Contains(prompt, cmdView) {
-		mode := ""
-		if matches := viewModePattern.FindStringSubmatch(prompt); len(matches) > 1 {
-			mode = matches[1]
-		}
-		output := captureOutput(func() error {
-			return View(sessionID, mode)
-		})
-		outputCommandResult(output)
-		return 0
-	}
-
-	// /bumper-config [action] [value]
-	if strings.Contains(prompt, cmdConfig) {
-		action := "show"
-		value := ""
-		if matches := configArgsPattern.FindStringSubmatch(prompt); len(matches) > 1 {
-			action = matches[1]
-			if len(matches) > 2 {
-				value = matches[2]
-			}
-		}
-
-		output := captureOutput(func() error {
-			switch action {
-			case "show":
-				return ConfigShow()
-			case "set":
-				if value == "" {
-					return fmt.Errorf("usage: /bumper-config set <value>")
-				}
-				return ConfigSet(value)
-			case "personal":
-				if value == "" {
-					return fmt.Errorf("usage: /bumper-config personal <value>")
-				}
-				return ConfigPersonal(value)
-			default:
-				return fmt.Errorf("unknown config action: %s", action)
-			}
-		})
-		outputCommandResult(output)
-		return 0
-	}
+	// /bumper-config [action] [value] - DISABLED: using bash execution instead
+	// if strings.Contains(prompt, cmdConfig) {
+	// 	action := "show"
+	// 	value := ""
+	// 	// Try inline pattern first: /bumper-config set 300
+	// 	if matches := configArgsPattern.FindStringSubmatch(prompt); len(matches) > 1 {
+	// 		action = matches[1]
+	// 		if len(matches) > 2 {
+	// 			value = matches[2]
+	// 		}
+	// 	}
+	// 	// Fall back to command expansion: "Additional user arguments: set 300"
+	// 	if action == "show" {
+	// 		if matches := configArgsAltPattern.FindStringSubmatch(prompt); len(matches) > 1 {
+	// 			action = matches[1]
+	// 			if len(matches) > 2 {
+	// 				value = matches[2]
+	// 			}
+	// 		}
+	// 	}
+	//
+	// 	output := captureOutput(func() error {
+	// 		switch action {
+	// 		case "show":
+	// 			return ConfigShow()
+	// 		case "set":
+	// 			if value == "" {
+	// 				return fmt.Errorf("usage: /bumper-config set <value>")
+	// 			}
+	// 			return ConfigSet(value)
+	// 		case "personal":
+	// 			if value == "" {
+	// 				return fmt.Errorf("usage: /bumper-config personal <value>")
+	// 			}
+	// 			return ConfigPersonal(value)
+	// 		default:
+	// 			return fmt.Errorf("unknown config action: %s", action)
+	// 		}
+	// 	})
+	// 	outputCommandResult(output)
+	// 	return 0
+	// }
 
 	// No command matched - silent success
 	return 0
@@ -167,12 +189,18 @@ func captureOutput(fn func() error) string {
 	return strings.TrimSpace(output)
 }
 
-// outputCommandResult outputs the hookSpecificOutput JSON.
+// outputCommandResult outputs JSON with additionalContext.
+// Claude sees this and acknowledges briefly, which triggers status line refresh.
 func outputCommandResult(output string) {
-	result := UserPromptOutput{}
-	result.HookSpecificOutput.HookEventName = "UserPromptSubmit"
-	result.HookSpecificOutput.AdditionalContext = output
+	// Format: checkmark + result, tells Claude command already executed
+	context := fmt.Sprintf("✓ %s\n\nThis command was executed by a hook. Acknowledge with just: ✓", output)
 
+	result := UserPromptOutput{
+		HookSpecificOutput: &HookSpecificOutput{
+			HookEventName:     "UserPromptSubmit",
+			AdditionalContext: context,
+		},
+	}
 	data, _ := json.Marshal(result)
 	fmt.Println(string(data))
 }

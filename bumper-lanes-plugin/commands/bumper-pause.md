@@ -1,9 +1,8 @@
 ---
 description: Temporarily suspend threshold enforcement while continuing to track changes
+allowed-tools: Bash(bumper-lanes:*)
+allowed-tools: Bash
+model: claude-haiku-4-5
 ---
 
-/claude-bumper-lanes:bumper-pause
-
-Pausing enforcement... (This command is handled by the UserPromptSubmit hook)
-
-Additional user arguments: $ARGUMENTS
+!`${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes pause $ARGUMENTS`

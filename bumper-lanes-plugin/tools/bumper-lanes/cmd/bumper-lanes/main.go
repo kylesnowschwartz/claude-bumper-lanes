@@ -150,10 +150,27 @@ func cmdResume(args []string) error {
 }
 
 func cmdView(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: bumper-lanes view <session_id> <mode>")
+	// Get session_id from env var or first arg
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	mode := ""
+
+	if len(args) >= 2 {
+		// Explicit: bumper-lanes view <session_id> <mode>
+		sessionID = args[0]
+		mode = args[1]
+	} else if len(args) == 1 {
+		// Short form: bumper-lanes view <mode> (uses env var for session)
+		mode = args[0]
 	}
-	return hooks.View(args[0], args[1])
+
+	if sessionID == "" {
+		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as first arg")
+	}
+	if mode == "" {
+		return fmt.Errorf("usage: bumper-lanes view <mode>")
+	}
+
+	return hooks.View(sessionID, mode)
 }
 
 func cmdConfig(args []string) error {

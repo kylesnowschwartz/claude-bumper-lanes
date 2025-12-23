@@ -1,10 +1,8 @@
 ---
 description: Set diff visualization mode in status line
-argument-hint: tree|collapsed|smart|topn|icicle|brackets
+argument-hint: [tree|collapsed|smart|topn|icicle|brackets]
+allowed-tools: Bash
+model: claude-haiku-4-5
 ---
 
-/claude-bumper-lanes:bumper-view
-
-Setting view mode... (This command is handled by the UserPromptSubmit hook)
-
-Additional user arguments: $ARGUMENTS
+!`${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes view $ARGUMENTS`
