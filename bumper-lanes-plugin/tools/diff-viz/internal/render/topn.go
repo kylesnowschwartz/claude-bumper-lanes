@@ -50,12 +50,12 @@ func (r *TopNRenderer) Render(stats *diff.DiffStats) {
 	showCount := min(r.N, len(files))
 	topFiles := files[:showCount]
 
-	// Find max path length for alignment (cap at 80 chars)
+	// Calculate max path length for alignment.
+	// Display paths as-is (no truncation) to maintain alignment of stats column.
 	maxPathLen := 0
 	for _, f := range topFiles {
 		maxPathLen = max(maxPathLen, len(f.Path))
 	}
-	maxPathLen = min(maxPathLen, 80)
 
 	// Print each file
 	for _, f := range topFiles {
@@ -70,12 +70,8 @@ func (r *TopNRenderer) Render(stats *diff.DiffStats) {
 func (r *TopNRenderer) renderFile(f diff.FileStat, maxPathLen int) {
 	var sb strings.Builder
 
-	// Path (truncated if needed, left-aligned)
+	// Path (left-aligned with padding)
 	path := f.Path
-	if len(path) > maxPathLen {
-		path = "..." + path[len(path)-maxPathLen+3:]
-	}
-
 	pathColor := ColorReset
 	if f.IsUntracked {
 		pathColor = ColorNew
