@@ -70,13 +70,12 @@ func (r *TopNRenderer) Render(stats *diff.DiffStats) {
 func (r *TopNRenderer) renderFile(f diff.FileStat, maxPathLen int) {
 	var sb strings.Builder
 
-	// Path (left-aligned with padding)
+	// Path (left-aligned with padding, no indent for compact status line display)
 	path := f.Path
 	pathColor := ColorReset
 	if f.IsUntracked {
 		pathColor = ColorNew
 	}
-	sb.WriteString("  ")
 	sb.WriteString(r.color(pathColor))
 	sb.WriteString(fmt.Sprintf("%-*s", maxPathLen, path))
 	sb.WriteString(r.color(ColorReset))
@@ -129,9 +128,8 @@ func (r *TopNRenderer) formatBar(add, del int) string {
 func (r *TopNRenderer) renderSummary(stats *diff.DiffStats, shown int) {
 	fmt.Fprintln(r.w)
 
-	// Total line
+	// Total line (no indent for compact display)
 	var sb strings.Builder
-	sb.WriteString("  ")
 	sb.WriteString(r.color(ColorAdd))
 	sb.WriteString(fmt.Sprintf("+%d", stats.TotalAdd))
 	sb.WriteString(r.color(ColorReset))

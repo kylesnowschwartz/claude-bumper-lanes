@@ -228,7 +228,8 @@ func getDiffTree(viewMode, viewOpts string) string {
 		return ""
 	}
 
-	result := strings.TrimSpace(string(output))
+	// Only trim trailing whitespace - preserve leading spaces for alignment
+	result := strings.TrimRight(string(output), " \t\n\r")
 	if result == "No changes" {
 		return ""
 	}
