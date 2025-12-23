@@ -28,14 +28,15 @@ old_baseline=$(echo "$session_state" | jq -r '.baseline_tree')
 threshold_limit=$(echo "$session_state" | jq -r '.threshold_limit')
 created_at=$(echo "$session_state" | jq -r '.created_at')
 
-# Compute final diff stats (for reporting accepted changes)
+# Capture current working tree state
 current_tree=$(capture_tree)
 if [[ -z "$current_tree" ]]; then
   echo "⚠ Bumper Lanes: Failed to reset baseline. Please try again."
   exit 1
 fi
 
-diff_output=$(compute_diff "$old_baseline" "$current_tree")
+# Get diff summary for reporting (inline, no separate function needed)
+diff_output=$(git diff-tree --shortstat "$old_baseline" "$current_tree" 2>/dev/null || echo "0 files changed")
 
 # Parse diff stats inline (git diff-tree --shortstat format)
 # Format: "N files changed, X insertions(+), Y deletions(-)"

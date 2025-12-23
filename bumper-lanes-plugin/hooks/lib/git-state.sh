@@ -41,35 +41,6 @@ capture_tree() {
   return 0
 }
 
-# compute_diff() - Computes diff statistics between two tree SHAs
-# Args:
-#   $1 - baseline_tree (40-char SHA)
-#   $2 - current_tree (40-char SHA)
-# Returns: git diff-tree --shortstat output on stdout
-#   Format: "N files changed, X insertions(+), Y deletions(-)"
-compute_diff() {
-  local baseline_tree=$1
-  local current_tree=$2
-
-  if [[ -z "$baseline_tree" ]] || [[ -z "$current_tree" ]]; then
-    echo "ERROR: compute_diff requires two tree SHAs" >&2
-    return 1
-  fi
-
-  # Use git diff-tree to compare trees
-  local diff_output
-  diff_output=$(git diff-tree --shortstat "$baseline_tree" "$current_tree" 2>/dev/null)
-
-  if [[ -z "$diff_output" ]]; then
-    # No changes or error - return zero stats
-    echo "0 files changed, 0 insertions(+), 0 deletions(-)"
-    return 0
-  fi
-
-  echo "$diff_output"
-  return 0
-}
-
 # get_current_branch() - Gets current branch name
 # Returns: branch name on stdout, or empty if detached HEAD
 get_current_branch() {
