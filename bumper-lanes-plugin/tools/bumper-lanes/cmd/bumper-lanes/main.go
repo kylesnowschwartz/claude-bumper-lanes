@@ -4,9 +4,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/statusline"
 )
 
 const usage = `bumper-lanes - Threshold enforcement for Claude Code
@@ -27,6 +29,10 @@ User Commands (called via user-prompt-submit):
   resume <session>  Re-enable enforcement
   view <session>    Set visualization mode
   config            Show/set threshold configuration
+
+Status Line Widget:
+  status              Output bumper-lanes status (reads JSON from stdin)
+                      Pipe Claude Code status JSON to get formatted widget output
 `
 
 func main() {
@@ -62,6 +68,8 @@ func main() {
 		err = cmdView(args)
 	case "config":
 		err = cmdConfig(args)
+	case "status":
+		err = cmdStatus()
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -159,4 +167,28 @@ func cmdConfig(args []string) error {
 		return hooks.ConfigPersonal(args[1])
 	}
 	return fmt.Errorf("usage: bumper-lanes config [show|set <value>|personal <value>]")
+}
+
+// Status line widget command
+
+func cmdStatus() error {
+	// Read JSON from stdin
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("reading stdin: %w", err)
+	}
+
+	input, err := statusline.ParseInput(data)
+	if err != nil {
+		return err
+	}
+
+	output, err := statusline.Render(input)
+	if err != nil {
+		return err
+	}
+
+	// Output the formatted widget
+	fmt.Print(statusline.FormatOutput(output))
+	return nil
 }
