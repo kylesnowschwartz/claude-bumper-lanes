@@ -31,24 +31,29 @@ const (
 
 // Calculate computes bumper-lanes score from diff stats.
 // New files (IsUntracked=true) get 1.0× weight, edits get 1.3× weight.
+// Deletions are ignored (they reduce complexity, not add review burden).
 func Calculate(stats *diff.DiffStats) *WeightedScore {
 	var newAdd, editAdd int
+	var filesWithAdditions int // Only count files that add lines (not pure deletions)
 
 	for _, f := range stats.Files {
-		if f.IsUntracked {
-			newAdd += f.Additions
-		} else {
-			editAdd += f.Additions
+		if f.Additions > 0 {
+			filesWithAdditions++
+			if f.IsUntracked {
+				newAdd += f.Additions
+			} else {
+				editAdd += f.Additions
+			}
 		}
+		// Files with only deletions (Additions == 0) don't count toward scatter
 	}
 
-	// Calculate scatter penalty
+	// Calculate scatter penalty (only for files with additions)
 	var scatter int
-	fileCount := stats.TotalFiles
-	if fileCount >= scatterHighThreshold {
-		scatter = (fileCount - freeTier) * scatterPenaltyHigh
-	} else if fileCount >= scatterLowThreshold {
-		scatter = (fileCount - freeTier) * scatterPenaltyLow
+	if filesWithAdditions >= scatterHighThreshold {
+		scatter = (filesWithAdditions - freeTier) * scatterPenaltyHigh
+	} else if filesWithAdditions >= scatterLowThreshold {
+		scatter = (filesWithAdditions - freeTier) * scatterPenaltyLow
 	}
 
 	// Weighted score: (new × 10 + edit × 13) / 10 + scatter
@@ -59,7 +64,7 @@ func Calculate(stats *diff.DiffStats) *WeightedScore {
 		Score:          score,
 		NewAdditions:   newAdd,
 		EditAdditions:  editAdd,
-		FilesTouched:   fileCount,
+		FilesTouched:   filesWithAdditions, // Only files with additions
 		ScatterPenalty: scatter,
 	}
 }
