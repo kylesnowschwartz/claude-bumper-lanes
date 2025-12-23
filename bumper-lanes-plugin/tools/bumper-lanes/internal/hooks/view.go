@@ -1,15 +1,19 @@
 package hooks
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
 // View handles the view user command.
-// It sets the visualization mode for the session.
+// It sets the visualization mode for both session and personal config.
 func View(sessionID, mode string) error {
 	sess, err := state.Load(sessionID)
 	if err != nil {
@@ -22,14 +26,52 @@ func View(sessionID, mode string) error {
 		return fmt.Errorf("invalid mode %q. Valid: %s", mode, strings.Join(validModes, ", "))
 	}
 
+	// Update session state (immediate effect)
 	sess.SetViewMode(mode)
-
 	if err := sess.Save(); err != nil {
 		return fmt.Errorf("failed to save state: %w", err)
 	}
 
+	// Persist to personal config (.git/bumper-config.json) for future sessions
+	if err := persistViewModeToConfig(mode); err != nil {
+		fmt.Printf("View mode set to: %s (session only - config save failed: %v)\n", mode, err)
+		return nil
+	}
+
 	fmt.Printf("View mode set to: %s\n", mode)
 	return nil
+}
+
+// persistViewModeToConfig saves the view mode to personal config.
+func persistViewModeToConfig(mode string) error {
+	gitDir, err := config.GetGitDir()
+	if err != nil {
+		return err
+	}
+
+	personalConfig := filepath.Join(gitDir, "bumper-config.json")
+
+	// Read existing config or create new
+	var cfg map[string]interface{}
+	data, err := os.ReadFile(personalConfig)
+	if err == nil {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			cfg = make(map[string]interface{})
+		}
+	} else {
+		cfg = make(map[string]interface{})
+	}
+
+	// Update view mode
+	cfg["default_view_mode"] = mode
+
+	// Write back
+	newData, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(personalConfig, newData, 0644)
 }
 
 // getValidModes queries git-diff-tree for valid modes.

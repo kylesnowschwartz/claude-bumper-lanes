@@ -28,14 +28,19 @@ type Config struct {
 	DefaultViewMode string `json:"default_view_mode,omitempty"`
 }
 
-// getGitDir returns the absolute git directory path.
-func getGitDir() (string, error) {
+// GetGitDir returns the absolute git directory path.
+func GetGitDir() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--absolute-git-dir")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// getGitDir is an alias for internal use (backwards compat).
+func getGitDir() (string, error) {
+	return GetGitDir()
 }
 
 // getRepoRoot returns the repository root path.
