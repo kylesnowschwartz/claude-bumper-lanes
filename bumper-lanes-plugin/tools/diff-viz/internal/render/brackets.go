@@ -250,13 +250,15 @@ func (r *BracketsRenderer) renderNode(node *bracketNode, maxVal int, depth int) 
 		sb.WriteString(r.color(ColorReset))
 
 		if r.ShowCounts {
-			// Show +N-M format
+			// Show +N -M format with spacing
 			if node.Add > 0 {
+				sb.WriteString(" ")
 				sb.WriteString(r.color(ColorAdd))
 				sb.WriteString(fmt.Sprintf("+%d", node.Add))
 				sb.WriteString(r.color(ColorReset))
 			}
 			if node.Del > 0 {
+				sb.WriteString(" ")
 				sb.WriteString(r.color(ColorDel))
 				sb.WriteString(fmt.Sprintf("-%d", node.Del))
 				sb.WriteString(r.color(ColorReset))
