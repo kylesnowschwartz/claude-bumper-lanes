@@ -1,5 +1,5 @@
-// Package statusline provides the bumper-lanes status line widget.
-// This outputs formatted status text that can be integrated into any status line.
+// Package statusline provides a complete status line for Claude Code.
+// Outputs model, git branch, cost, and bumper-lanes widget.
 package statusline
 
 import (
@@ -16,12 +16,17 @@ import (
 )
 
 // StatusInput is the JSON payload from Claude Code's status line hook.
-// We only parse the fields we need.
 type StatusInput struct {
 	SessionID string `json:"session_id"`
+	Model     struct {
+		DisplayName string `json:"display_name"`
+	} `json:"model"`
 	Workspace struct {
 		CurrentDir string `json:"current_dir"`
 	} `json:"workspace"`
+	Cost struct {
+		TotalCostUSD float64 `json:"total_cost_usd"`
+	} `json:"cost"`
 }
 
 // StatusOutput holds the widget output.
@@ -42,66 +47,92 @@ type StatusOutput struct {
 
 // ANSI color codes
 const (
-	colorGreen  = "\033[32m"
-	colorRed    = "\033[31m"
-	colorYellow = "\033[33m"
-	colorReset  = "\033[0m"
+	colorGreen   = "\033[32m"
+	colorRed     = "\033[31m"
+	colorYellow  = "\033[33m"
+	colorBlue    = "\033[94m"
+	colorMagenta = "\033[95m"
+	colorCost    = "\033[35m"
+	colorReset   = "\033[0m"
 )
 
-// Render produces the bumper-lanes status widget from Claude Code's status input.
+// Render produces a complete status line from Claude Code's status input.
 // Returns StatusOutput with formatted text ready for display.
 func Render(input *StatusInput) (*StatusOutput, error) {
-	if input.Workspace.CurrentDir == "" {
-		return &StatusOutput{}, nil // Not in a workspace, nothing to show
+	var parts []string
+
+	// Model name
+	model := input.Model.DisplayName
+	if model == "" {
+		model = "?"
+	}
+	parts = append(parts, fmt.Sprintf("%s[%s]%s", colorMagenta, model, colorReset))
+
+	// Directory name (basename only)
+	if input.Workspace.CurrentDir != "" {
+		dir := filepath.Base(input.Workspace.CurrentDir)
+		parts = append(parts, dir)
 	}
 
-	// Change to workspace directory for git operations
+	// Change to workspace for git operations
 	origDir, _ := os.Getwd()
-	if err := os.Chdir(input.Workspace.CurrentDir); err != nil {
-		return &StatusOutput{}, nil // Can't access workspace
-	}
-	defer os.Chdir(origDir)
-
-	// Load session state
-	sess, err := state.Load(input.SessionID)
-	if err != nil {
-		return &StatusOutput{}, nil // No session = bumper-lanes not active
-	}
-
-	// Calculate fresh score using diff-viz binary
-	score := calculateScore(sess.BaselineTree)
-	limit := sess.ThresholdLimit
-	percentage := 0
-	if limit > 0 {
-		percentage = (score * 100) / limit
-	}
-
-	// Determine state
-	var stateStr string
-	if sess.Paused {
-		stateStr = "paused"
-	} else if sess.StopTriggered {
-		stateStr = "tripped"
-	} else {
-		stateStr = "active"
-	}
-
-	// Format status line
-	statusLine := formatStatusLine(stateStr, score, limit, percentage)
-
-	// Get diff tree visualization
-	// Priority: session state > personal config > repo config > default
-	diffTree := ""
-	if stateStr != "paused" {
-		viewMode := sess.GetViewMode()
-		if viewMode == "" {
-			viewMode = config.LoadViewMode() // fallback chain
+	if input.Workspace.CurrentDir != "" {
+		if err := os.Chdir(input.Workspace.CurrentDir); err == nil {
+			defer os.Chdir(origDir)
 		}
-		diffTree = getDiffTree(viewMode)
+	}
+
+	// Git branch with dirty indicator
+	if branch := getGitBranch(); branch != "" {
+		if isGitDirty() {
+			parts = append(parts, fmt.Sprintf("%s%s%s %s*%s", colorBlue, branch, colorReset, colorYellow, colorReset))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s%s%s", colorBlue, branch, colorReset))
+		}
+	}
+
+	// Cost
+	cost := fmt.Sprintf("$%.2f", input.Cost.TotalCostUSD)
+	parts = append(parts, fmt.Sprintf("%s%s%s", colorCost, cost, colorReset))
+
+	// Bumper-lanes widget (if active)
+	var stateStr string
+	var score, limit, percentage int
+	var diffTree string
+
+	sess, err := state.Load(input.SessionID)
+	if err == nil {
+		// Calculate fresh score
+		score = calculateScore(sess.BaselineTree)
+		limit = sess.ThresholdLimit
+		if limit > 0 {
+			percentage = (score * 100) / limit
+		}
+
+		// Determine state
+		if sess.Paused {
+			stateStr = "paused"
+		} else if sess.StopTriggered {
+			stateStr = "tripped"
+		} else {
+			stateStr = "active"
+		}
+
+		// Add bumper status to parts
+		parts = append(parts, formatBumperStatus(stateStr, score, limit, percentage))
+
+		// Get diff tree visualization
+		if stateStr != "paused" {
+			viewMode := sess.GetViewMode()
+			if viewMode == "" {
+				viewMode = config.LoadViewMode()
+			}
+			diffTree = getDiffTree(viewMode)
+		}
 	}
 
 	return &StatusOutput{
-		StatusLine: statusLine,
+		StatusLine: strings.Join(parts, " | "),
 		DiffTree:   diffTree,
 		State:      stateStr,
 		Score:      score,
@@ -110,16 +141,33 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	}, nil
 }
 
-// formatStatusLine produces the colored status text.
-func formatStatusLine(stateStr string, score, limit, percentage int) string {
+// getGitBranch returns current branch name or empty string.
+func getGitBranch() string {
+	cmd := exec.Command("git", "branch", "--show-current")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// isGitDirty returns true if working tree has uncommitted changes.
+func isGitDirty() bool {
+	cmd := exec.Command("git", "diff", "--quiet", "HEAD")
+	err := cmd.Run()
+	return err != nil // non-zero exit = dirty
+}
+
+// formatBumperStatus produces the colored bumper-lanes status text.
+func formatBumperStatus(stateStr string, score, limit, percentage int) string {
 	switch stateStr {
 	case "paused":
-		return fmt.Sprintf("%sPaused: run /bumper-resume%s", colorYellow, colorReset)
+		return fmt.Sprintf("%sPaused: /bumper-resume%s", colorYellow, colorReset)
 	case "tripped":
-		return fmt.Sprintf("%sbumper-lanes tripped (%d/%d - %d%%)%s",
+		return fmt.Sprintf("%stripped (%d/%d - %d%%)%s",
 			colorRed, score, limit, percentage, colorReset)
 	default: // active
-		return fmt.Sprintf("%sbumper-lanes active (%d/%d - %d%%)%s",
+		return fmt.Sprintf("%sactive (%d/%d - %d%%)%s",
 			colorGreen, score, limit, percentage, colorReset)
 	}
 }
