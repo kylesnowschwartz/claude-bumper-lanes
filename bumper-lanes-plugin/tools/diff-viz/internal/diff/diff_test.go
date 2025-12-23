@@ -186,3 +186,61 @@ func TestParseNumstat_BinaryFileDetails(t *testing.T) {
 		t.Errorf("Deletions = %d, want 0 for binary", f.Deletions)
 	}
 }
+
+func TestDiffStats_ToJSON(t *testing.T) {
+	stats := &DiffStats{
+		Files: []FileStat{
+			{Path: "src/main.go", Additions: 10, Deletions: 5, IsBinary: false, IsUntracked: false},
+			{Path: "new.go", Additions: 20, Deletions: 0, IsBinary: false, IsUntracked: true},
+			{Path: "image.png", Additions: 0, Deletions: 0, IsBinary: true, IsUntracked: false},
+		},
+		TotalAdd:   30,
+		TotalDel:   5,
+		TotalFiles: 3,
+	}
+
+	json := stats.ToJSON()
+
+	// Check totals
+	if json.Totals.Adds != 30 {
+		t.Errorf("Totals.Adds = %d, want 30", json.Totals.Adds)
+	}
+	if json.Totals.Dels != 5 {
+		t.Errorf("Totals.Dels = %d, want 5", json.Totals.Dels)
+	}
+	if json.Totals.FileCount != 3 {
+		t.Errorf("Totals.FileCount = %d, want 3", json.Totals.FileCount)
+	}
+
+	// Check files
+	if len(json.Files) != 3 {
+		t.Fatalf("expected 3 files, got %d", len(json.Files))
+	}
+
+	// First file: regular modified file
+	if json.Files[0].Path != "src/main.go" {
+		t.Errorf("Files[0].Path = %q, want %q", json.Files[0].Path, "src/main.go")
+	}
+	if json.Files[0].Adds != 10 {
+		t.Errorf("Files[0].Adds = %d, want 10", json.Files[0].Adds)
+	}
+	if json.Files[0].Dels != 5 {
+		t.Errorf("Files[0].Dels = %d, want 5", json.Files[0].Dels)
+	}
+	if json.Files[0].Binary {
+		t.Error("Files[0].Binary = true, want false")
+	}
+	if json.Files[0].New {
+		t.Error("Files[0].New = true, want false")
+	}
+
+	// Second file: new file
+	if !json.Files[1].New {
+		t.Error("Files[1].New = false, want true")
+	}
+
+	// Third file: binary file
+	if !json.Files[2].Binary {
+		t.Error("Files[2].Binary = false, want true")
+	}
+}

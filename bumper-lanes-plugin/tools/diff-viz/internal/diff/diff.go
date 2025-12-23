@@ -19,6 +19,51 @@ type FileStat struct {
 	IsUntracked bool
 }
 
+// FileStatJSON is the JSON-serializable representation of a file's stats.
+type FileStatJSON struct {
+	Path   string `json:"path"`
+	Adds   int    `json:"adds"`
+	Dels   int    `json:"dels"`
+	Binary bool   `json:"binary,omitempty"`
+	New    bool   `json:"new,omitempty"`
+}
+
+// TotalsJSON is the JSON-serializable representation of total stats.
+type TotalsJSON struct {
+	Adds      int `json:"adds"`
+	Dels      int `json:"dels"`
+	FileCount int `json:"fileCount"`
+}
+
+// StatsJSON is the JSON-serializable representation of diff stats.
+// This is the output format for --stats-json flag.
+type StatsJSON struct {
+	Files  []FileStatJSON `json:"files"`
+	Totals TotalsJSON     `json:"totals"`
+}
+
+// ToJSON converts DiffStats to JSON-serializable format.
+func (s *DiffStats) ToJSON() StatsJSON {
+	files := make([]FileStatJSON, len(s.Files))
+	for i, f := range s.Files {
+		files[i] = FileStatJSON{
+			Path:   f.Path,
+			Adds:   f.Additions,
+			Dels:   f.Deletions,
+			Binary: f.IsBinary,
+			New:    f.IsUntracked,
+		}
+	}
+	return StatsJSON{
+		Files: files,
+		Totals: TotalsJSON{
+			Adds:      s.TotalAdd,
+			Dels:      s.TotalDel,
+			FileCount: s.TotalFiles,
+		},
+	}
+}
+
 // DiffStats holds all file changes from a git diff.
 type DiffStats struct {
 	Files      []FileStat

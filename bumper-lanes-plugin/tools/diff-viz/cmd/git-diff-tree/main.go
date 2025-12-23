@@ -41,6 +41,7 @@ Examples:
   git-diff-tree main feature       Compare branches
   git-diff-tree -m smart           Compact sparkline view
   git-diff-tree --score-json       Output weighted score as JSON
+  git-diff-tree --stats-json       Output raw diff stats as JSON
 
 Modes:
 `)
@@ -72,6 +73,7 @@ func main() {
 	help := flag.Bool("h", false, "Show help")
 	listModes := flag.Bool("list-modes", false, "List valid modes (for scripting)")
 	scoreJSON := flag.Bool("score-json", false, "Output weighted score as JSON (for status line)")
+	statsJSON := flag.Bool("stats-json", false, "Output raw diff stats as JSON (for bumper-lanes)")
 	baseline := flag.String("baseline", "", "Baseline tree SHA to compare against (uses current working tree)")
 	flag.Parse()
 
@@ -83,6 +85,12 @@ func main() {
 	if *listModes {
 		fmt.Println(strings.Join(validModes, " "))
 		os.Exit(0)
+	}
+
+	// Handle --stats-json mode (raw stats for bumper-lanes)
+	if *statsJSON {
+		outputStatsJSON(*baseline)
+		return
 	}
 
 	// Handle --score-json mode
@@ -115,6 +123,40 @@ func main() {
 	// Select renderer based on mode
 	renderer := getRenderer(selectedMode, useColor, *width, *depth)
 	renderer.Render(stats)
+}
+
+// outputStatsJSON outputs raw diff stats as JSON.
+// This provides the interface for bumper-lanes to consume diff data
+// without Go import coupling.
+func outputStatsJSON(baseline string) {
+	var stats *diff.DiffStats
+	var err error
+
+	if baseline != "" {
+		currentTree, err := diff.CaptureCurrentTree()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error capturing tree: %v\n", err)
+			os.Exit(1)
+		}
+		stats, err = diff.GetTreeDiffStats(baseline, currentTree)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		stats, err = diff.GetAllStats()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	output, err := json.Marshal(stats.ToJSON())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(output))
 }
 
 // outputScoreJSON computes and outputs the weighted score as JSON.
