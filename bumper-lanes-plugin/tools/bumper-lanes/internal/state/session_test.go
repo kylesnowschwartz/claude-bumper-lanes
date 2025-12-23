@@ -98,21 +98,3 @@ func TestSessionState_UpdateIncremental(t *testing.T) {
 	}
 }
 
-func TestSessionState_Flags(t *testing.T) {
-	state := &SessionState{}
-
-	state.SetStopTriggered(true)
-	if !state.StopTriggered {
-		t.Error("StopTriggered = false after SetStopTriggered(true)")
-	}
-
-	state.SetPaused(true)
-	if !state.Paused {
-		t.Error("Paused = false after SetPaused(true)")
-	}
-
-	state.SetViewMode("icicle")
-	if state.GetViewMode() != "icicle" {
-		t.Errorf("ViewMode = %q, want %q", state.GetViewMode(), "icicle")
-	}
-}

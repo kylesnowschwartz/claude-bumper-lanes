@@ -248,3 +248,195 @@ func TestStopSkipsWhenStopHookActive(t *testing.T) {
 		}
 	})
 }
+
+// TestEndToEndThresholdDecision verifies the full flow: file changes → score → block/allow.
+// This catches regressions where scoring works but decision logic breaks.
+func TestEndToEndThresholdDecision(t *testing.T) {
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	t.Run("blocks when score exceeds threshold", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Set up plugin root for binary
+		pluginRoot := filepath.Join(origDir, "..", "..", "..", "..")
+		os.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
+		defer os.Unsetenv("CLAUDE_PLUGIN_ROOT")
+
+		binPath := GetGitDiffTreePath()
+		if _, err := os.Stat(binPath); os.IsNotExist(err) {
+			t.Skipf("Binary not found at %s", binPath)
+		}
+
+		// Get baseline
+		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+		output, _ := cmd.Output()
+		baselineTree := strings.TrimSpace(string(output))
+
+		// Create file with enough lines to exceed low threshold
+		testFile := filepath.Join(tmpDir, "large.go")
+		var content strings.Builder
+		content.WriteString("package main\n")
+		for i := 0; i < 50; i++ {
+			content.WriteString("// line\n")
+		}
+		os.WriteFile(testFile, []byte(content.String()), 0644)
+
+		// Create session with LOW threshold (easy to exceed)
+		sessionID := "test-e2e-block"
+		sess, _ := state.New(sessionID, baselineTree, "main", 30) // 30 pts = easy to exceed
+		sess.AccumulatedScore = 50                                 // Already over
+		sess.Save()
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		input := &HookInput{
+			SessionID:      sessionID,
+			HookEventName:  "Stop",
+			StopHookActive: false,
+		}
+
+		Stop(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf [8192]byte
+		n, _ := r.Read(buf[:])
+		outputStr := string(buf[:n])
+
+		// Should output a block response
+		if !strings.Contains(outputStr, `"decision":"block"`) {
+			t.Errorf("Expected block decision, got: %s", outputStr)
+		}
+	})
+
+	t.Run("allows when score under threshold", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+		output, _ := cmd.Output()
+		currentTree := strings.TrimSpace(string(output))
+
+		// Session with HIGH threshold and LOW score
+		sessionID := "test-e2e-allow"
+		sess, _ := state.New(sessionID, currentTree, "main", 1000)
+		sess.AccumulatedScore = 10 // Way under 1000
+		sess.Save()
+
+		input := &HookInput{
+			SessionID:      sessionID,
+			HookEventName:  "Stop",
+			StopHookActive: false,
+		}
+
+		err := Stop(input)
+
+		// Should return nil (no block)
+		if err != nil {
+			t.Errorf("Expected nil (allow), got error: %v", err)
+		}
+	})
+}
+
+// TestSessionStateConsistencyAcrossHooks verifies PostToolUse saves state that Stop can read.
+// Catches: forgotten Save(), format changes, path mismatches.
+func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	output, _ := cmd.Output()
+	baselineTree := strings.TrimSpace(string(output))
+
+	sessionID := "test-consistency"
+
+	t.Run("state survives PostToolUse → Stop roundtrip", func(t *testing.T) {
+		// Create initial state (simulating SessionStart)
+		sess, err := state.New(sessionID, baselineTree, "main", 400)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		sess.Save()
+
+		// Simulate PostToolUse updating state
+		loaded, err := state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("state.Load() error = %v", err)
+		}
+		loaded.AccumulatedScore = 150
+		loaded.PreviousTree = "new-tree-sha"
+		loaded.SetViewMode("collapsed")
+		loaded.Save()
+
+		// Simulate Stop reading state
+		reloaded, err := state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("state.Load() after update error = %v", err)
+		}
+
+		// Verify all fields survived
+		if reloaded.AccumulatedScore != 150 {
+			t.Errorf("AccumulatedScore = %d, want 150", reloaded.AccumulatedScore)
+		}
+		if reloaded.PreviousTree != "new-tree-sha" {
+			t.Errorf("PreviousTree = %q, want %q", reloaded.PreviousTree, "new-tree-sha")
+		}
+		if reloaded.GetViewMode() != "collapsed" {
+			t.Errorf("ViewMode = %q, want %q", reloaded.GetViewMode(), "collapsed")
+		}
+		if reloaded.BaselineTree != baselineTree {
+			t.Errorf("BaselineTree changed unexpectedly")
+		}
+		if reloaded.ThresholdLimit != 400 {
+			t.Errorf("ThresholdLimit = %d, want 400", reloaded.ThresholdLimit)
+		}
+	})
+
+	t.Run("state file is valid JSON", func(t *testing.T) {
+		// Find the state file
+		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
+		statePath := filepath.Join(strings.TrimSpace(string(gitDir)), "bumper-checkpoints", "session-"+sessionID)
+
+		data, err := os.ReadFile(statePath)
+		if err != nil {
+			t.Fatalf("ReadFile() error = %v", err)
+		}
+
+		// Should be valid JSON
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(data, &parsed); err != nil {
+			t.Errorf("State file is not valid JSON: %v\nContent: %s", err, string(data))
+		}
+
+		// Should have required fields
+		requiredFields := []string{"session_id", "baseline_tree", "threshold_limit"}
+		for _, field := range requiredFields {
+			if _, ok := parsed[field]; !ok {
+				t.Errorf("State file missing required field: %s", field)
+			}
+		}
+	})
+}

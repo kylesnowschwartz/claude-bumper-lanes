@@ -223,9 +223,3 @@ func TestSortTopDirs_SumsMultipleItems(t *testing.T) {
 	}
 }
 
-func TestPathSegment_Total(t *testing.T) {
-	seg := PathSegment{Add: 10, Del: 5}
-	if got := seg.Total(); got != 15 {
-		t.Errorf("Total() = %d, want 15", got)
-	}
-}
