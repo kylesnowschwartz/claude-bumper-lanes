@@ -124,6 +124,7 @@ type IcicleRenderer struct {
 	w            io.Writer
 	style        BoxStyle
 	levels       [][]IcicleCell // cells at each depth level
+	droppedCount int            // nodes dropped due to width constraints
 }
 
 // NewIcicleRenderer creates an icicle renderer.
@@ -178,10 +179,17 @@ func (r *IcicleRenderer) Render(stats *diff.DiffStats) {
 	r.renderLeafBorder(leafCells)
 
 	// Summary line
-	fmt.Fprintf(r.w, "%s+%d%s %s-%d%s in %d files\n",
-		r.color(ColorAdd), stats.TotalAdd, r.color(ColorReset),
-		r.color(ColorDel), stats.TotalDel, r.color(ColorReset),
-		stats.TotalFiles)
+	if r.droppedCount > 0 {
+		fmt.Fprintf(r.w, "%s+%d%s %s-%d%s in %d files (%d hidden)\n",
+			r.color(ColorAdd), stats.TotalAdd, r.color(ColorReset),
+			r.color(ColorDel), stats.TotalDel, r.color(ColorReset),
+			stats.TotalFiles, r.droppedCount)
+	} else {
+		fmt.Fprintf(r.w, "%s+%d%s %s-%d%s in %d files\n",
+			r.color(ColorAdd), stats.TotalAdd, r.color(ColorReset),
+			r.color(ColorDel), stats.TotalDel, r.color(ColorReset),
+			stats.TotalFiles)
+	}
 }
 
 // buildLevels constructs the hierarchical cell structure from diff stats.
@@ -270,10 +278,13 @@ func (r *IcicleRenderer) buildLevelCells(nodes []*TreeNode, startPos, availWidth
 	minReserved := len(sorted) * r.MinCellWidth
 	if minReserved > availWidth {
 		// Not enough space for all nodes - take what fits
-		sorted = sorted[:availWidth/r.MinCellWidth]
-		if len(sorted) == 0 {
+		maxNodes := availWidth / r.MinCellWidth
+		if maxNodes == 0 {
+			r.droppedCount += len(sorted)
 			return nil
 		}
+		r.droppedCount += len(sorted) - maxNodes
+		sorted = sorted[:maxNodes]
 		minReserved = len(sorted) * r.MinCellWidth
 	}
 
