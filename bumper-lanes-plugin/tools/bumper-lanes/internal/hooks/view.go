@@ -12,6 +12,34 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
+// ViewShow displays the current view mode and available options.
+func ViewShow(sessionID string) error {
+	validModes := getValidModes()
+
+	// Try to get current mode from session
+	currentMode := ""
+	sess, err := state.Load(sessionID)
+	if err == nil {
+		currentMode = sess.GetViewMode()
+	}
+
+	// Fall back to config default
+	configMode := config.LoadViewMode()
+	if currentMode == "" {
+		currentMode = configMode
+	}
+	if currentMode == "" {
+		currentMode = "tree" // Ultimate fallback
+	}
+
+	fmt.Printf("Current mode: %s\n", currentMode)
+	if configMode != "" && configMode != currentMode {
+		fmt.Printf("Config default: %s\n", configMode)
+	}
+	fmt.Printf("Available modes: %s\n", strings.Join(validModes, ", "))
+	return nil
+}
+
 // View handles the view user command.
 // It sets the visualization mode for both session and personal config.
 // opts contains additional flags like "--width 100 --depth 3".

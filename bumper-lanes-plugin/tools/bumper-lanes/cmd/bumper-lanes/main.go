@@ -178,7 +178,8 @@ func cmdView(args []string) error {
 		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
 	}
 	if mode == "" {
-		return fmt.Errorf("usage: bumper-lanes view <mode> [--width N] [--depth N]")
+		// No mode provided - show current mode and available options
+		return hooks.ViewShow(sessionID)
 	}
 
 	optsStr := strings.Join(opts, " ")
