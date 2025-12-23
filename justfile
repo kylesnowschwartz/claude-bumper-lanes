@@ -1,30 +1,20 @@
-# Claude Bumper Lanes Test Suite (Bats Framework)
+# Claude Bumper Lanes - Go Implementation
 
 # Run all tests (default)
 default: test
 
-# Run all test suites
-test: test-unit test-integration
+# Run all Go tests
+test: test-go
 
-# Run all unit tests with Bats
-test-unit:
-    tests/bats/bin/bats tests/unit/*.bats
+# Run Go tests for all packages
+test-go:
+    cd bumper-lanes-plugin/tools/diff-viz && go test ./...
+    cd bumper-lanes-plugin/tools/bumper-lanes && go test ./...
 
-# Run integration tests with Bats
-test-integration:
-    tests/bats/bin/bats tests/integration/*.bats
-
-# Run tests with TAP output (for CI)
-test-tap:
-    tests/bats/bin/bats --tap tests/**/*.bats
-
-# Run specific test file (without .bats extension)
-test-file FILE:
-    tests/bats/bin/bats tests/unit/{{FILE}}.bats
-
-# Initialize git submodules (run after clone)
-setup-tests:
-    git submodule update --init --recursive
+# Run tests with verbose output
+test-verbose:
+    cd bumper-lanes-plugin/tools/diff-viz && go test -v ./...
+    cd bumper-lanes-plugin/tools/bumper-lanes && go test -v ./...
 
 # Run manual threshold trip test
 test-manual-trip:
@@ -43,24 +33,12 @@ clean:
     rm -f generated-code.txt test-output.txt different-file.txt
     @echo "Cleaned generated files"
 
-# List available test files and tags
-list:
-    @echo "Available test files:"
-    @echo ""
-    @echo "Unit tests:"
-    @ls tests/unit/*.bats | xargs -n1 basename | sed 's/\.bats$$//'
-    @echo ""
-    @echo "Integration tests:"
-    @ls tests/integration/*.bats | xargs -n1 basename | sed 's/\.bats$$//'
-    @echo ""
-    @echo "Common tags: threshold, weighting, incremental, formatting, hooks"
-
-# Show Bats version
+# Show Go version
 version:
-    tests/bats/bin/bats --version
+    go version
 
 # ─────────────────────────────────────────────────────────────
-# Go Tools (diff-viz)
+# Go Build
 # ─────────────────────────────────────────────────────────────
 
 # Build all Go tools
@@ -96,17 +74,16 @@ uninstall-diff-viz:
 # Clean Go build artifacts
 clean-go:
     rm -f bumper-lanes-plugin/bin/git-diff-tree-go
+    rm -f bumper-lanes-plugin/bin/bumper-lanes
     rm -f bumper-lanes-plugin/tools/diff-viz/git-diff-tree
     @echo "Cleaned Go binaries"
-
-# Run Go tests
-test-go:
-    cd bumper-lanes-plugin/tools/diff-viz && go test ./...
 
 # Format Go code
 fmt-go:
     cd bumper-lanes-plugin/tools/diff-viz && go fmt ./...
+    cd bumper-lanes-plugin/tools/bumper-lanes && go fmt ./...
 
 # Check Go code (vet + build)
 check-go:
     cd bumper-lanes-plugin/tools/diff-viz && go vet ./... && go build ./...
+    cd bumper-lanes-plugin/tools/bumper-lanes && go vet ./... && go build ./...
