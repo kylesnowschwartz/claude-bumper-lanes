@@ -31,8 +31,10 @@ type StatusInput struct {
 
 // StatusOutput holds the widget output.
 type StatusOutput struct {
-	// StatusLine is the main status text (e.g., "active (125/400 - 31%)")
+	// StatusLine is the full status text (model | dir | branch | cost | bumper)
 	StatusLine string
+	// BumperIndicator is just the bumper-lanes piece (e.g., "active (125/400 - 31%)")
+	BumperIndicator string
 	// DiffTree is the multi-line diff visualization (may be empty)
 	DiffTree string
 	// State is the bumper-lanes state: "active", "tripped", "paused", or "" (inactive)
@@ -99,6 +101,7 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	var stateStr string
 	var score, limit, percentage int
 	var diffTree string
+	var bumperIndicator string
 
 	sess, err := state.Load(input.SessionID)
 	if err == nil {
@@ -118,8 +121,9 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 			stateStr = "active"
 		}
 
-		// Add bumper status to parts
-		parts = append(parts, formatBumperStatus(stateStr, score, limit, percentage))
+		// Format bumper indicator (capture for both full line and standalone use)
+		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage)
+		parts = append(parts, bumperIndicator)
 
 		// Get diff tree visualization (show even when paused)
 		viewMode := sess.GetViewMode()
@@ -131,12 +135,13 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	}
 
 	return &StatusOutput{
-		StatusLine: strings.Join(parts, " | "),
-		DiffTree:   diffTree,
-		State:      stateStr,
-		Score:      score,
-		Limit:      limit,
-		Percentage: percentage,
+		StatusLine:      strings.Join(parts, " | "),
+		BumperIndicator: bumperIndicator,
+		DiffTree:        diffTree,
+		State:           stateStr,
+		Score:           score,
+		Limit:           limit,
+		Percentage:      percentage,
 	}, nil
 }
 
@@ -267,9 +272,45 @@ func ParseInput(data []byte) (*StatusInput, error) {
 	return &input, nil
 }
 
+// Widget types for selective output.
+const (
+	WidgetAll       = "all"       // Full status line + diff tree (default)
+	WidgetIndicator = "indicator" // Just the bumper-lanes indicator
+	WidgetDiffTree  = "diff-tree" // Just the diff visualization
+)
+
 // FormatOutput converts StatusOutput to the final string output.
+// Widget selects which component to output: "all", "indicator", or "diff-tree".
 // Applies non-breaking space conversion for Claude Code compatibility.
-func FormatOutput(out *StatusOutput) string {
+func FormatOutput(out *StatusOutput, widget string) string {
+	switch widget {
+	case WidgetIndicator:
+		return out.FormatIndicator()
+	case WidgetDiffTree:
+		return out.FormatDiffTree()
+	default:
+		return out.FormatAll()
+	}
+}
+
+// FormatIndicator returns just the bumper-lanes indicator (e.g., "active (125/400 - 31%)").
+func (out *StatusOutput) FormatIndicator() string {
+	if out.BumperIndicator == "" {
+		return ""
+	}
+	return out.BumperIndicator + "\n"
+}
+
+// FormatDiffTree returns just the diff visualization with non-breaking space handling.
+func (out *StatusOutput) FormatDiffTree() string {
+	if out.DiffTree == "" {
+		return ""
+	}
+	return formatDiffTreeLines(out.DiffTree)
+}
+
+// FormatAll returns the full status line plus diff tree.
+func (out *StatusOutput) FormatAll() string {
 	if out.StatusLine == "" {
 		return ""
 	}
@@ -279,17 +320,22 @@ func FormatOutput(out *StatusOutput) string {
 	result.WriteString("\n")
 
 	if out.DiffTree != "" {
-		// Convert spaces to non-breaking spaces and prepend ANSI reset per line
-		// (ccstatusline technique for preserving whitespace in Claude Code)
-		lines := strings.Split(out.DiffTree, "\n")
-		for _, line := range lines {
-			// Replace spaces with non-breaking space (U+00A0)
-			line = strings.ReplaceAll(line, " ", "\u00A0")
-			result.WriteString("\033[0m")
-			result.WriteString(line)
-			result.WriteString("\n")
-		}
+		result.WriteString(formatDiffTreeLines(out.DiffTree))
 	}
 
+	return result.String()
+}
+
+// formatDiffTreeLines applies non-breaking space conversion for Claude Code compatibility.
+func formatDiffTreeLines(diffTree string) string {
+	var result strings.Builder
+	lines := strings.Split(diffTree, "\n")
+	for _, line := range lines {
+		// Replace spaces with non-breaking space (U+00A0)
+		line = strings.ReplaceAll(line, " ", "\u00A0")
+		result.WriteString("\033[0m")
+		result.WriteString(line)
+		result.WriteString("\n")
+	}
 	return result.String()
 }

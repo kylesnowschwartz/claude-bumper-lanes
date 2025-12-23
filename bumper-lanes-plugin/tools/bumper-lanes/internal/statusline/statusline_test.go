@@ -117,45 +117,63 @@ func TestFormatBumperStatus(t *testing.T) {
 }
 
 func TestFormatOutput(t *testing.T) {
-	t.Run("formats status line only", func(t *testing.T) {
+	t.Run("widget=all formats full output", func(t *testing.T) {
 		out := &StatusOutput{
-			StatusLine: "[Sonnet] | project | main | $1.23",
+			StatusLine:      "[Sonnet] | project | main | $1.23",
+			BumperIndicator: "active (100/400 - 25%)",
+			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
-		got := FormatOutput(out)
+		got := FormatOutput(out, WidgetAll)
 		if !strings.Contains(got, out.StatusLine) {
-			t.Errorf("FormatOutput() missing status line")
+			t.Errorf("FormatOutput(all) missing status line")
 		}
-		if !strings.HasSuffix(got, "\n") {
-			t.Errorf("FormatOutput() should end with newline")
+		if !strings.Contains(got, "\033[0m") {
+			t.Errorf("FormatOutput(all) missing ANSI reset in diff tree")
 		}
 	})
 
-	t.Run("formats with diff tree", func(t *testing.T) {
+	t.Run("widget=indicator returns only bumper indicator", func(t *testing.T) {
 		out := &StatusOutput{
-			StatusLine: "[Sonnet] | project",
-			DiffTree:   "├── src\n│   └── main.go +10",
+			StatusLine:      "[Sonnet] | project | main | $1.23 | active (100/400 - 25%)",
+			BumperIndicator: "active (100/400 - 25%)",
+			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
-		got := FormatOutput(out)
+		got := FormatOutput(out, WidgetIndicator)
 
-		// Should contain both parts
-		if !strings.Contains(got, out.StatusLine) {
-			t.Errorf("FormatOutput() missing status line")
+		// Should have indicator
+		if !strings.Contains(got, "active (100/400 - 25%)") {
+			t.Errorf("FormatOutput(indicator) missing indicator, got: %q", got)
+		}
+		// Should NOT have full status line parts
+		if strings.Contains(got, "Sonnet") {
+			t.Errorf("FormatOutput(indicator) should not include model name")
+		}
+		if strings.Contains(got, "├──") {
+			t.Errorf("FormatOutput(indicator) should not include diff tree")
+		}
+	})
+
+	t.Run("widget=diff-tree returns only visualization", func(t *testing.T) {
+		out := &StatusOutput{
+			StatusLine:      "[Sonnet] | project",
+			BumperIndicator: "active (100/400 - 25%)",
+			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
-		// Diff tree lines should have ANSI reset prefix
-		if !strings.Contains(got, "\033[0m") {
-			t.Errorf("FormatOutput() missing ANSI reset in diff tree")
-		}
+		got := FormatOutput(out, WidgetDiffTree)
 
-		// Spaces should be converted to non-breaking spaces
-		if strings.Contains(got, "│   └") {
-			t.Errorf("FormatOutput() should convert spaces to non-breaking spaces")
-		}
-		// Non-breaking space version
+		// Should have diff tree with non-breaking spaces
 		if !strings.Contains(got, "│\u00A0\u00A0\u00A0└") {
-			t.Errorf("FormatOutput() should use non-breaking spaces, got: %q", got)
+			t.Errorf("FormatOutput(diff-tree) should use non-breaking spaces, got: %q", got)
+		}
+		// Should NOT have status line
+		if strings.Contains(got, "Sonnet") {
+			t.Errorf("FormatOutput(diff-tree) should not include model name")
+		}
+		if strings.Contains(got, "active (100/400") {
+			t.Errorf("FormatOutput(diff-tree) should not include indicator")
 		}
 	})
 
@@ -164,9 +182,45 @@ func TestFormatOutput(t *testing.T) {
 			StatusLine: "",
 		}
 
-		got := FormatOutput(out)
+		got := FormatOutput(out, WidgetAll)
 		if got != "" {
 			t.Errorf("FormatOutput() with empty status = %q, want empty", got)
+		}
+	})
+
+	t.Run("handles empty indicator", func(t *testing.T) {
+		out := &StatusOutput{
+			StatusLine:      "[Sonnet] | project",
+			BumperIndicator: "",
+		}
+
+		got := FormatOutput(out, WidgetIndicator)
+		if got != "" {
+			t.Errorf("FormatOutput(indicator) with empty indicator = %q, want empty", got)
+		}
+	})
+
+	t.Run("handles empty diff tree", func(t *testing.T) {
+		out := &StatusOutput{
+			StatusLine: "[Sonnet] | project",
+			DiffTree:   "",
+		}
+
+		got := FormatOutput(out, WidgetDiffTree)
+		if got != "" {
+			t.Errorf("FormatOutput(diff-tree) with empty tree = %q, want empty", got)
+		}
+	})
+
+	t.Run("default widget is all", func(t *testing.T) {
+		out := &StatusOutput{
+			StatusLine: "[Sonnet] | project",
+		}
+
+		// Empty string should behave like "all"
+		got := FormatOutput(out, "")
+		if !strings.Contains(got, out.StatusLine) {
+			t.Errorf("FormatOutput('') should default to all, got: %q", got)
 		}
 	})
 }

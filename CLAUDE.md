@@ -12,9 +12,8 @@ Defense-in-depth hook system with three layers:
 
 ## Technology Stack
 
-- **Bash 4.0+**: Hook scripts and state management
+- **Go 1.21+**: Hook handler (`bumper-lanes`) and diff visualization (`git-diff-tree-go`)
 - **Git 2.x+**: Working tree snapshots via `git write-tree`, diff calculation via `git diff-tree`
-- **jq**: JSON parsing for hook I/O and session state
 - **Claude Code Hooks**: SessionStart, PostToolUse, Stop, UserPromptSubmit events
 
 ## Design Principles
@@ -58,13 +57,63 @@ Threshold range: 50-2000 points. After changing config, run `/bumper-reset` to a
 ## Project Structure
 
 ```
-bumper-lanes-plugin/hooks/
-├── entrypoints/       # Hook entry points (SessionStart, PostToolUse, Stop, UserPromptSubmit)
-├── lib/               # Shared utilities (git-state, state-manager, threshold calculation)
+bumper-lanes-plugin/
+├── bin/               # Built binaries (bumper-lanes, git-diff-tree-go)
+├── tools/
+│   ├── bumper-lanes/  # Hook handler and commands (Go)
+│   └── diff-viz/      # Diff visualization tool (Go)
+├── commands/          # Slash command definitions
 └── hooks.json         # Hook configuration and matchers
 ```
 
 See [docs/bumper-lanes-threshold-flow.mmd](docs/bumper-lanes-threshold-flow.mmd) for detailed flow diagrams.
+
+## Status Line Integration
+
+The `bumper-lanes status` command supports modular widgets for integration with custom status lines (ccstatusline, bash scripts, etc.).
+
+### Widget Modes
+
+```bash
+# Full output: status line + diff visualization (default)
+bumper-lanes status --widget=all
+
+# Just the threshold gauge: "active (125/400 - 31%)"
+bumper-lanes status --widget=indicator
+
+# Just the diff tree visualization
+bumper-lanes status --widget=diff-tree
+```
+
+### Custom Status Line Example
+
+```bash
+#!/bin/bash
+# Your custom status line script
+
+# Get Claude Code's status JSON
+claude_status_json=$(cat)
+
+# Cherry-pick just the bumper-lanes indicator
+bumper_gauge=$(echo "$claude_status_json" | bumper-lanes status --widget=indicator)
+
+# Compose your own status line
+echo "[$MY_CUSTOM_WIDGET] | $bumper_gauge | [other stuff]"
+```
+
+### Programmatic Access
+
+The `statusline.StatusOutput` struct exposes components for Go integrations:
+
+```go
+type StatusOutput struct {
+    StatusLine      string // Full line: model | dir | branch | cost | bumper
+    BumperIndicator string // Just: "active (125/400 - 31%)"
+    DiffTree        string // The visualization
+    State           string // "active", "tripped", "paused", or ""
+    Score, Limit, Percentage int
+}
+```
 
 ## Diff-Vizualization of diff scoring:
 

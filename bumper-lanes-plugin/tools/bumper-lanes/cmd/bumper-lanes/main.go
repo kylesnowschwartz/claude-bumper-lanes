@@ -31,8 +31,10 @@ User Commands (called via bash in command files):
   config            Show/set threshold configuration
 
 Status Line Widget:
-  status              Output bumper-lanes status (reads JSON from stdin)
-                      Pipe Claude Code status JSON to get formatted widget output
+  status [--widget=TYPE]  Output bumper-lanes status (reads JSON from stdin)
+                          Types: all (default), indicator, diff-tree
+                          Use --widget=indicator for just the threshold gauge
+                          Use --widget=diff-tree for just the visualization
 `
 
 func main() {
@@ -67,7 +69,7 @@ func main() {
 	case "config":
 		err = cmdConfig(args)
 	case "status":
-		err = cmdStatus()
+		err = cmdStatus(args)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -198,7 +200,17 @@ func cmdConfig(args []string) error {
 
 // Status line widget command
 
-func cmdStatus() error {
+func cmdStatus(args []string) error {
+	// Parse --widget flag
+	widget := statusline.WidgetAll
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "--widget=") {
+			widget = strings.TrimPrefix(arg, "--widget=")
+		} else if arg == "--widget" && i+1 < len(args) {
+			widget = args[i+1]
+		}
+	}
+
 	// Read JSON from stdin
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -216,6 +228,6 @@ func cmdStatus() error {
 	}
 
 	// Output the formatted widget
-	fmt.Print(statusline.FormatOutput(output))
+	fmt.Print(statusline.FormatOutput(output, widget))
 	return nil
 }
