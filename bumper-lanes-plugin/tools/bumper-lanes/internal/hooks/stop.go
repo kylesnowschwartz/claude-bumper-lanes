@@ -128,7 +128,18 @@ func Stop(input *HookInput) error {
 	sess.UpdateIncremental(currentTree, newAccum)
 	sess.Save()
 
-	// Format breakdown message
+	// Get cumulative stats from baseline for accurate breakdown display
+	// (incremental stats from PreviousTree may be 0 if PostToolUse already updated it)
+	cumulativeStats := getStatsJSON(sess.BaselineTree, currentTree)
+	var cumulativeScore *scoring.WeightedScore
+	if cumulativeStats != nil {
+		cumulativeScore = scoring.Calculate(cumulativeStats)
+	} else {
+		// Fallback to incremental stats if baseline diff fails
+		cumulativeScore = score
+	}
+
+	// Format breakdown message with cumulative stats
 	pct := (newAccum * 100) / sess.ThresholdLimit
 	reason := fmt.Sprintf(`
 
@@ -144,7 +155,7 @@ Ask the User: Would you like to conduct a structured, manual review?
 
 This workflow ensures incremental code review at predictable checkpoints.
 
-`, newAccum, sess.ThresholdLimit, pct, score.NewAdditions, score.EditAdditions, score.FilesTouched, score.ScatterPenalty)
+`, newAccum, sess.ThresholdLimit, pct, cumulativeScore.NewAdditions, cumulativeScore.EditAdditions, cumulativeScore.FilesTouched, cumulativeScore.ScatterPenalty)
 
 	// Build response - see function doc comment for explanation of these confusing semantics
 	resp := StopResponse{
@@ -164,10 +175,10 @@ This workflow ensures incremental code review at predictable checkpoints.
 			"score":                newAccum,
 			"threshold_limit":      sess.ThresholdLimit,
 			"threshold_percentage": pct,
-			"new_additions":        score.NewAdditions,
-			"edit_additions":       score.EditAdditions,
-			"files_touched":        score.FilesTouched,
-			"scatter_penalty":      score.ScatterPenalty,
+			"new_additions":        cumulativeScore.NewAdditions,
+			"edit_additions":       cumulativeScore.EditAdditions,
+			"files_touched":        cumulativeScore.FilesTouched,
+			"scatter_penalty":      cumulativeScore.ScatterPenalty,
 		},
 	}
 
