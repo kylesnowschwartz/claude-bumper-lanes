@@ -3,7 +3,7 @@ package hooks
 import (
 	"fmt"
 
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
 // Pause handles the pause user command.

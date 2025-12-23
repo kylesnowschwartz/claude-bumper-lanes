@@ -3,7 +3,7 @@ package render
 import (
 	"testing"
 
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 )
 
 func TestGetTopDir(t *testing.T) {

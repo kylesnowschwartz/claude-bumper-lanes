@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 )
 
 // BracketsRenderer renders diff stats as nested brackets showing hierarchy.

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/diff-viz/internal/diff"
 )
 
 // BuildTreeFromFiles constructs a tree from flat file paths.

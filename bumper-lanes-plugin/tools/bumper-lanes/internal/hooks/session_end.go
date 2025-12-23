@@ -1,7 +1,7 @@
 package hooks
 
 import (
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
 // SessionEnd handles the SessionEnd hook event.

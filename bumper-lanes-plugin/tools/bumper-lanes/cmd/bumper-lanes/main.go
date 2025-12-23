@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
 )
 
 const usage = `bumper-lanes - Threshold enforcement for Claude Code
@@ -15,10 +15,11 @@ Usage:
   bumper-lanes <command> [args]
 
 Hook Commands (called by hooks.json):
-  session-start     Initialize session state
-  post-tool-use     Fuel gauge warnings after Write/Edit
-  stop              Threshold enforcement check
-  session-end       Cleanup session state
+  session-start       Initialize session state
+  post-tool-use       Fuel gauge warnings after Write/Edit
+  stop                Threshold enforcement check
+  session-end         Cleanup session state
+  user-prompt-submit  Parse /bumper-* commands from prompt
 
 User Commands (called via user-prompt-submit):
   reset <session>   Reset baseline after review
@@ -49,6 +50,8 @@ func main() {
 		err = cmdStop()
 	case "session-end":
 		err = cmdSessionEnd()
+	case "user-prompt-submit":
+		exitCode = cmdUserPromptSubmit()
 	case "reset":
 		err = cmdReset(args)
 	case "pause":
@@ -109,6 +112,10 @@ func cmdSessionEnd() error {
 		return nil // Fail open
 	}
 	return hooks.SessionEnd(input)
+}
+
+func cmdUserPromptSubmit() int {
+	return hooks.UserPromptSubmitFromStdin()
 }
 
 // User command implementations
