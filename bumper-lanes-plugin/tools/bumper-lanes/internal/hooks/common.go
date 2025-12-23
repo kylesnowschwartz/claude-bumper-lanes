@@ -28,13 +28,20 @@ type ToolInput struct {
 }
 
 // StopResponse is the JSON response for Stop hooks.
+//
+// Claude Code Stop hook semantics are counterintuitive:
+//   - Continue: true = Claude keeps working, false = Claude stops entirely
+//   - Decision: "block" = block the STOP (keeps Claude working), not block Claude
+//   - continue: false takes precedence over decision: "block"
+//
+// See stop.go for detailed explanation of these semantics.
 type StopResponse struct {
-	Continue       bool        `json:"continue"`
-	SystemMessage  string      `json:"systemMessage,omitempty"`
-	SuppressOutput bool        `json:"suppressOutput,omitempty"`
-	Decision       string      `json:"decision,omitempty"`
-	Reason         string      `json:"reason,omitempty"`
-	ThresholdData  interface{} `json:"threshold_data,omitempty"`
+	Continue       bool        `json:"continue"`          // true=Claude continues, false=Claude stops
+	SystemMessage  string      `json:"systemMessage,omitempty"` // Injected into Claude's context
+	SuppressOutput bool        `json:"suppressOutput,omitempty"` // Hide Claude's pending output
+	Decision       string      `json:"decision,omitempty"`       // "block" = block the stop (not Claude!)
+	Reason         string      `json:"reason,omitempty"`         // Shown to user when blocking
+	ThresholdData  interface{} `json:"threshold_data,omitempty"` // Custom data for debugging
 }
 
 // ReadInput reads and parses hook JSON input from stdin.

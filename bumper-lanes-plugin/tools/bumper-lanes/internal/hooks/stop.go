@@ -13,7 +13,33 @@ import (
 )
 
 // Stop handles the Stop hook event.
-// It checks if the diff threshold is exceeded and blocks if necessary.
+// It checks if the diff threshold is exceeded and notifies Claude if so.
+//
+// IMPORTANT: Claude Code Stop Hook Semantics (confusing but documented)
+//
+// The Stop hook fires when Claude tries to finish a turn. The response JSON has:
+//
+//   - "continue": Controls whether Claude keeps working after the hook
+//     - true:  Claude can continue (talk, read files, use tools)
+//     - false: Claude stops entirely (can't even explain what happened)
+//
+//   - "decision": Only meaningful for Stop hooks, controls stopping behavior
+//     - "block": Prevents Claude from STOPPING (counterintuitively keeps Claude working)
+//     - omitted: Normal behavior
+//
+// The naming is confusing because "block" doesn't block Claude - it blocks the STOP.
+// Per Claude Code docs: "continue: false takes precedence over decision: block"
+//
+// For bumper-lanes threshold enforcement:
+//   - We use continue: true so Claude can still communicate with the user,
+//     read files to help with review, and explain the threshold situation.
+//   - We use decision: "block" + reason to show the threshold message.
+//   - Actual write/edit prevention is done via fuel gauge warnings that guide
+//     Claude's behavior, not by hard-blocking at the Stop hook level.
+//   - This is "soft enforcement" - Claude sees the warning and should stop
+//     accepting new work, but can still help the user review changes.
+//
+// Reference: https://docs.anthropic.com/en/docs/claude-code/hooks
 func Stop(input *HookInput) error {
 	// Check if this is a git repository
 	if !IsGitRepo() {
@@ -120,12 +146,20 @@ This workflow ensures incremental code review at predictable checkpoints.
 
 `, newAccum, sess.ThresholdLimit, pct, score.NewAdditions, score.EditAdditions, score.FilesTouched, score.ScatterPenalty)
 
+	// Build response - see function doc comment for explanation of these confusing semantics
 	resp := StopResponse{
-		Continue:       true,
-		SystemMessage:  "/bumper-reset after code review.",
+		// continue: true = Claude can keep working (talk, read, help with review)
+		// continue: false would prevent Claude from even explaining what happened
+		Continue: true,
+		// SystemMessage appears in Claude's context
+		SystemMessage: "/bumper-reset after code review.",
+		// SuppressOutput hides Claude's pending output (the turn it was about to finish)
 		SuppressOutput: true,
-		Decision:       "block",
-		Reason:         reason,
+		// decision: "block" = block the STOP, not block Claude (confusing naming!)
+		// This keeps Claude working so it can show the Reason message
+		Decision: "block",
+		// Reason is shown to the user explaining why we blocked the stop
+		Reason: reason,
 		ThresholdData: map[string]interface{}{
 			"score":                newAccum,
 			"threshold_limit":      sess.ThresholdLimit,
