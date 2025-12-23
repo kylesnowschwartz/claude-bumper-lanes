@@ -7,9 +7,6 @@ allowed-tools: Bash(git log:*), Bash(bd:*), Bash(eza:*), Bash(git branch:*), Ski
 Current branch:
 !`git branch --show-current`
 
-Active plan:
-@.agent-history/go-rewrite-plan.md
-
 Check for ready work:
 !`bd ready`
 

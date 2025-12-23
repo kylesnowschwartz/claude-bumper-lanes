@@ -7,14 +7,17 @@
       "Bash(just build-diff-viz:*)",
       "Bash(just check-go:*)",
       "Bash(just test-go:*)",
-      "Bash(just test-unit:*)"
+      "Bash(just test-unit:*)",
+      "Bash(git cat-file:*)",
+      "Bash(git diff-tree:*)",
+      "Bash(go test:*)"
     ],
     "deny": [],
     "ask": []
   },
   "statusLine": {
     "type": "command",
-    "command": "/Users/kyle/Code/my-projects/claude-bumper-lanes/status-lines/simple-status-line.sh",
+    "command": "/Users/kyle/Code/my-projects/claude-bumper-lanes/bumper-lanes-plugin/bin/bumper-lanes status",
     "padding": 0
   }
 }
