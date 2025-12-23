@@ -5,6 +5,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/kylewlacy/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
 )
 
 const usage = `bumper-lanes - Threshold enforcement for Claude Code
@@ -36,15 +38,17 @@ func main() {
 	args := os.Args[2:]
 
 	var err error
+	var exitCode int
+
 	switch cmd {
 	case "session-start":
-		err = cmdSessionStart(args)
+		err = cmdSessionStart()
 	case "post-tool-use":
-		err = cmdPostToolUse(args)
+		exitCode = cmdPostToolUse()
 	case "stop":
-		err = cmdStop(args)
+		err = cmdStop()
 	case "session-end":
-		err = cmdSessionEnd(args)
+		err = cmdSessionEnd()
 	case "reset":
 		err = cmdReset(args)
 	case "pause":
@@ -68,15 +72,48 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
 }
 
-// Stub implementations - to be filled in Phase 2
-func cmdSessionStart(args []string) error { return nil }
-func cmdPostToolUse(args []string) error  { return nil }
-func cmdStop(args []string) error         { return nil }
-func cmdSessionEnd(args []string) error   { return nil }
-func cmdReset(args []string) error        { return nil }
-func cmdPause(args []string) error        { return nil }
-func cmdResume(args []string) error       { return nil }
-func cmdView(args []string) error         { return nil }
-func cmdConfig(args []string) error       { return nil }
+// Hook command implementations
+
+func cmdSessionStart() error {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return nil // Fail open
+	}
+	return hooks.SessionStart(input)
+}
+
+func cmdPostToolUse() int {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return 0 // Fail open
+	}
+	return hooks.PostToolUse(input)
+}
+
+func cmdStop() error {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return nil // Fail open
+	}
+	return hooks.Stop(input)
+}
+
+func cmdSessionEnd() error {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return nil // Fail open
+	}
+	return hooks.SessionEnd(input)
+}
+
+// User command stubs - to be implemented in Phase 3
+func cmdReset(args []string) error  { return nil }
+func cmdPause(args []string) error  { return nil }
+func cmdResume(args []string) error { return nil }
+func cmdView(args []string) error   { return nil }
+func cmdConfig(args []string) error { return nil }
