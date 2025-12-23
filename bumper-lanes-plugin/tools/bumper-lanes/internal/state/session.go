@@ -26,6 +26,7 @@ type SessionState struct {
 	StopTriggered    bool   `json:"stop_triggered"`
 	Paused           bool   `json:"paused,omitempty"`
 	ViewMode         string `json:"view_mode,omitempty"`
+	ViewOpts         string `json:"view_opts,omitempty"` // Additional flags like "--width 100"
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -197,4 +198,14 @@ func (s *SessionState) SetViewMode(mode string) {
 // GetViewMode returns the current view mode, or empty string if not set.
 func (s *SessionState) GetViewMode() string {
 	return s.ViewMode
+}
+
+// SetViewOpts sets additional view options (flags like "--width 100").
+func (s *SessionState) SetViewOpts(opts string) {
+	s.ViewOpts = opts
+}
+
+// GetViewOpts returns current view options, or empty string if not set.
+func (s *SessionState) GetViewOpts() string {
+	return s.ViewOpts
 }

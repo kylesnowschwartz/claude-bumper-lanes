@@ -14,7 +14,8 @@ import (
 
 // View handles the view user command.
 // It sets the visualization mode for both session and personal config.
-func View(sessionID, mode string) error {
+// opts contains additional flags like "--width 100 --depth 3".
+func View(sessionID, mode, opts string) error {
 	sess, err := state.Load(sessionID)
 	if err != nil {
 		return fmt.Errorf("no session state for %s", sessionID)
@@ -28,17 +29,26 @@ func View(sessionID, mode string) error {
 
 	// Update session state (immediate effect)
 	sess.SetViewMode(mode)
+	sess.SetViewOpts(opts)
 	if err := sess.Save(); err != nil {
 		return fmt.Errorf("failed to save state: %w", err)
 	}
 
 	// Persist to personal config (.git/bumper-config.json) for future sessions
 	if err := persistViewModeToConfig(mode); err != nil {
-		fmt.Printf("View mode set to: %s (session only - config save failed: %v)\n", mode, err)
+		if opts != "" {
+			fmt.Printf("View mode set to: %s %s (session only - config save failed: %v)\n", mode, opts, err)
+		} else {
+			fmt.Printf("View mode set to: %s (session only - config save failed: %v)\n", mode, err)
+		}
 		return nil
 	}
 
-	fmt.Printf("View mode set to: %s\n", mode)
+	if opts != "" {
+		fmt.Printf("View mode set to: %s %s\n", mode, opts)
+	} else {
+		fmt.Printf("View mode set to: %s\n", mode)
+	}
 	return nil
 }
 

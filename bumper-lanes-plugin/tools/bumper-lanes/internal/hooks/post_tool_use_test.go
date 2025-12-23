@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -120,10 +121,10 @@ func TestFuelGaugeMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.tier, func(t *testing.T) {
 			msg := formatFuelGaugeMessage(tt.tier, tt.score, tt.threshold)
-			if !containsSubstring(msg, tt.tier) {
+			if !strings.Contains(msg, tt.tier) {
 				t.Errorf("message should contain tier %q, got: %s", tt.tier, msg)
 			}
-			if !containsSubstring(msg, tt.wantContain) {
+			if !strings.Contains(msg, tt.wantContain) {
 				t.Errorf("message should contain %q, got: %s", tt.wantContain, msg)
 			}
 		})

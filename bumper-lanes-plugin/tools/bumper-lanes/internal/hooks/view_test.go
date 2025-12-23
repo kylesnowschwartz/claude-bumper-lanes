@@ -38,7 +38,7 @@ func TestView(t *testing.T) {
 
 		// Call View
 		mode := "collapsed"
-		err = View(sessionID, mode)
+		err = View(sessionID, mode, "")
 		if err != nil {
 			t.Fatalf("View() error = %v", err)
 		}
@@ -87,7 +87,7 @@ func TestView(t *testing.T) {
 			t.Fatalf("Failed to save session: %v", err)
 		}
 
-		err = View(sessionID, "invalid_mode_xyz")
+		err = View(sessionID, "invalid_mode_xyz", "")
 		if err == nil {
 			t.Error("View() with invalid mode should return error")
 		}

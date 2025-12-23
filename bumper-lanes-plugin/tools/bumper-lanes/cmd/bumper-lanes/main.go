@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/statusline"
@@ -21,9 +22,8 @@ Hook Commands (called by hooks.json):
   post-tool-use       Fuel gauge warnings after Write/Edit
   stop                Threshold enforcement check
   session-end         Cleanup session state
-  user-prompt-submit  Parse /bumper-* commands from prompt
 
-User Commands (called via user-prompt-submit):
+User Commands (called via bash in command files):
   reset <session>   Reset baseline after review
   pause <session>   Temporarily disable enforcement
   resume <session>  Re-enable enforcement
@@ -56,8 +56,6 @@ func main() {
 		err = cmdStop()
 	case "session-end":
 		err = cmdSessionEnd()
-	case "user-prompt-submit":
-		exitCode = cmdUserPromptSubmit()
 	case "reset":
 		err = cmdReset(args)
 	case "pause":
@@ -122,55 +120,67 @@ func cmdSessionEnd() error {
 	return hooks.SessionEnd(input)
 }
 
-func cmdUserPromptSubmit() int {
-	return hooks.UserPromptSubmitFromStdin()
-}
-
 // User command implementations
 
 func cmdReset(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: bumper-lanes reset <session_id>")
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if len(args) >= 1 {
+		sessionID = args[0]
 	}
-	return hooks.Reset(args[0])
+	if sessionID == "" {
+		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
+	}
+	return hooks.Reset(sessionID)
 }
 
 func cmdPause(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: bumper-lanes pause <session_id>")
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if len(args) >= 1 {
+		sessionID = args[0]
 	}
-	return hooks.Pause(args[0])
+	if sessionID == "" {
+		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
+	}
+	return hooks.Pause(sessionID)
 }
 
 func cmdResume(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: bumper-lanes resume <session_id>")
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if len(args) >= 1 {
+		sessionID = args[0]
 	}
-	return hooks.Resume(args[0])
+	if sessionID == "" {
+		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
+	}
+	return hooks.Resume(sessionID)
 }
 
 func cmdView(args []string) error {
-	// Get session_id from env var or first arg
 	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
 	mode := ""
+	var opts []string
 
-	if len(args) >= 2 {
-		// Explicit: bumper-lanes view <session_id> <mode>
-		sessionID = args[0]
-		mode = args[1]
-	} else if len(args) == 1 {
-		// Short form: bumper-lanes view <mode> (uses env var for session)
-		mode = args[0]
+	// Parse args: first non-flag arg is mode, rest are flags
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			opts = append(opts, arg)
+		} else if mode == "" {
+			mode = arg
+		} else {
+			// Could be flag value (e.g., "100" after "--width")
+			opts = append(opts, arg)
+		}
 	}
 
 	if sessionID == "" {
-		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as first arg")
+		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
 	}
 	if mode == "" {
-		return fmt.Errorf("usage: bumper-lanes view <mode>")
+		return fmt.Errorf("usage: bumper-lanes view <mode> [--width N] [--depth N]")
 	}
 
-	return hooks.View(sessionID, mode)
+	optsStr := strings.Join(opts, " ")
+	return hooks.View(sessionID, mode, optsStr)
 }
 
 func cmdConfig(args []string) error {

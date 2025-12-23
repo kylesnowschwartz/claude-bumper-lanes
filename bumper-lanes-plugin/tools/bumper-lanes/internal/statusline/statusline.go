@@ -121,14 +121,13 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 		// Add bumper status to parts
 		parts = append(parts, formatBumperStatus(stateStr, score, limit, percentage))
 
-		// Get diff tree visualization
-		if stateStr != "paused" {
-			viewMode := sess.GetViewMode()
-			if viewMode == "" {
-				viewMode = config.LoadViewMode()
-			}
-			diffTree = getDiffTree(viewMode)
+		// Get diff tree visualization (show even when paused)
+		viewMode := sess.GetViewMode()
+		if viewMode == "" {
+			viewMode = config.LoadViewMode()
 		}
+		viewOpts := sess.GetViewOpts()
+		diffTree = getDiffTree(viewMode, viewOpts)
 	}
 
 	return &StatusOutput{
@@ -203,7 +202,8 @@ func calculateScore(baselineTree string) int {
 }
 
 // getDiffTree runs diff-viz to get the tree visualization.
-func getDiffTree(viewMode string) string {
+// viewOpts contains additional flags like "--width 100 --depth 3".
+func getDiffTree(viewMode, viewOpts string) string {
 	binPath := findDiffVizBinary()
 	if binPath == "" {
 		return ""
@@ -213,7 +213,16 @@ func getDiffTree(viewMode string) string {
 		viewMode = "tree"
 	}
 
-	cmd := exec.Command(binPath, "--mode="+viewMode)
+	// Build args: mode + any additional options
+	args := []string{"--mode=" + viewMode}
+	if viewOpts != "" {
+		// Split opts string into individual args
+		for _, opt := range strings.Fields(viewOpts) {
+			args = append(args, opt)
+		}
+	}
+
+	cmd := exec.Command(binPath, args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
