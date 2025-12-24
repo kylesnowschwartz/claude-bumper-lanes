@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes session-start"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-binaries.sh && ${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes session-start"
           }
         ]
       }

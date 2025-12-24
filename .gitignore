@@ -11,10 +11,9 @@ __pycache__/
 # Spec Kitty temporary files
 .kittify/.dashboard
 
-# Go binaries
-bumper-lanes-plugin/bin/git-diff-tree-go
+# Go binaries (built on first run via ensure-binaries.sh)
 bumper-lanes-plugin/bin/bumper-lanes
-bumper-lanes-plugin/tools/diff-viz/git-diff-tree
+bumper-lanes-plugin/bin/git-diff-tree
 *.exe
 
 # Override global .claude/ ignore for specific files

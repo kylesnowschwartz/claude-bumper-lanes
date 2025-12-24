@@ -26,6 +26,8 @@ claude plugin marketplace add kylesnowschwartz/claude-bumper-lanes
 claude plugin install claude-bumper-lanes
 ```
 
+**Requirements:** Go 1.21+ (binaries are built automatically on first session start)
+
 ## Usage
 
 Work normally with Claude. When the threshold is exceeded:
@@ -73,6 +75,7 @@ Work normally with Claude. When the threshold is exceeded:
 
 ## Requirements
 
+- Go 1.21+ (for automatic binary compilation)
 - Git 2.x+
 - Claude Code with hooks support
 
@@ -80,12 +83,16 @@ Work normally with Claude. When the threshold is exceeded:
 
 ```
 bumper-lanes-plugin/
-├── bin/                    # Built binaries
-│   ├── bumper-lanes        # Hook handler (Go)
-│   └── git-diff-tree-go    # Diff visualization (Go)
+├── bin/                    # Built binaries (auto-generated)
+│   ├── bumper-lanes        # Hook handler
+│   └── git-diff-tree       # Diff visualization (from diff-viz)
+├── scripts/
+│   └── ensure-binaries.sh  # Auto-builds on first run
 ├── tools/
-│   ├── bumper-lanes/       # Hook handler source
-│   └── diff-viz/           # Diff visualization source
+│   └── bumper-lanes/       # Hook handler source (Go)
 ├── commands/               # Slash command definitions
-└── hooks.json              # Hook configuration
+└── hooks/
+    └── hooks.json          # Hook configuration
 ```
+
+Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz).
