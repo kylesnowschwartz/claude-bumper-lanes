@@ -4,23 +4,18 @@ Vibe coding too much? Losing discipline and track of your changes? Add bumper la
 
 ## What It Does
 
-Put simply, Bumper-Lanes keeps track of how much code Claude has written or edited, and prevents further edits when a
-threshold of changes has been recahed. 400 points corresponds roughly to 300-500 lines of code changed, depending on the
-mix of new files vs edits.
+Bumper-Lanes tracks how much code Claude has written or edited, blocking further edits when a threshold is exceeded. 400 points corresponds roughly to 300-500 lines of code changed, depending on the mix of new files vs edits.
 
-Bumper-Lanes generates its weighted diff threshold with working tree snapshots  via `git write-tree`, and the diff calculation is performed
-via `git diff-tree`. When the threshold is exceeded:
+When the threshold is exceeded:
 
-1. **PostToolUse hook** shows escalating fuel gauge warnings after each Write/Edit
+1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (50% → 75% → 90%)
 2. **Stop hook** blocks Claude from finishing when threshold exceeded
-3. **Reset command** (`/bumper-reset`) restores the budget after review
+3. **Reset command** (`/bumper-reset`) restores the budget after you review
 
 ### Weighted Scoring
 
-Uses weighted scoring instead of simple line counts to better reflect review difficulty:
-
-- **New file additions**: 1.0× weight
-- **Edits to existing files**: 1.3× weight (harder to review)
+- **New file additions**: 1.0x weight
+- **Edits to existing files**: 1.3x weight (harder to review)
 - **Scatter penalty**: Extra points when touching many files
 - **Deletions**: Not counted (removing code is good)
 
@@ -29,44 +24,45 @@ Uses weighted scoring instead of simple line counts to better reflect review dif
 ```bash
 claude plugin marketplace add kylesnowschwartz/claude-bumper-lanes
 claude plugin install claude-bumper-lanes
-
-# Update
-claude plugin marketplace update claude-bumper-lanes
 ```
 
 ## Usage
 
 Work normally with Claude. When the threshold is exceeded:
 
-1. Claude will inform you that changes exceed the limit
-2. Review changes: `git diff` or `git status` etc.
+1. Claude will be blocked from continuing
+2. Review changes: `git diff` or `git status`
 3. Optionally commit: `git add -u && git commit -m "message"`
-4. Reset baseline: `/claude-bumper-lanes:bumper-reset`
+4. Reset baseline: `/bumper-reset`
 5. Continue working with restored budget
 
-## Status Line
+## Commands
 
-Bumper-Lanes can't add a status line for your, but it provides an example status line you can use to modify your own or
-use directly.
+| Command | Description |
+|---------|-------------|
+| `/bumper-reset` | Reset baseline after reviewing changes |
+| `/bumper-pause` | Pause threshold enforcement |
+| `/bumper-resume` | Resume threshold enforcement |
+| `/bumper-config` | Show current configuration |
+| `/bumper-config set <n>` | Set repo threshold (50-2000) |
+| `/bumper-config personal <n>` | Set personal threshold |
 
-**Display format**: `bumper-lanes active (145/400 · 36%)` or `bumper-lanes tripped (425/400 · 106%)`
+### View Modes
 
-- **Green** when active (under threshold)
-- **Red** when tripped (exceeded threshold)
-- Shows both absolute points and percentage in real-time
-
-Requires `jq` and `awk`. Your script must read status line JSON into `$input`. See `status-lines/simple-status-line.sh` for full example.
+| Command | Description |
+|---------|-------------|
+| `/bumper-tree` | Tree view with file hierarchy |
+| `/bumper-collapsed` | Single-line grouped by directory |
+| `/bumper-icicle` | Flame chart showing hierarchy by width |
+| `/bumper-topn` | Top N files by change size |
+| `/bumper-pathstrip` | Abbreviated paths |
 
 ## Configuration
 
-Configure bumper-lanes via JSON config files. Personal config takes precedence over repo config.
-
 | File | Tracked | Purpose |
 |------|---------|---------|
-| `.git/bumper-config.json` | No | Personal overrides (in .git dir) |
+| `.git/bumper-config.json` | No | Personal overrides |
 | `.bumper-lanes.json` | Yes | Shared team defaults |
-
-### Config Schema
 
 ```json
 {
@@ -75,53 +71,21 @@ Configure bumper-lanes via JSON config files. Personal config takes precedence o
 }
 ```
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `threshold` | 400 | Points budget before blocking (50-2000) |
-| `default_view_mode` | "tree" | Diff visualization: tree, collapsed, smart, topn, pathstrip, icicle |
+## Requirements
 
-### Config Commands
-
-- `/bumper-config` - Show current configuration
-- `/bumper-config set 300` - Set repo threshold
-- `/bumper-config personal 500` - Set personal threshold
-- `/bumper-view <mode>` - Set visualization mode for current session
-
-## How It Works
-
-- Fuel gauge warnings (PostToolUse) + enforcement blocking (Stop hook)
-- Escalating alerts: 50% NOTICE → 75% WARNING → 90% CRITICAL
-- Tracks cumulative diff per session using Git snapshots
-- Explicit user manual reset required to continue
-
-See [docs/bumper-lanes-threshold-flow.mmd](docs/bumper-lanes-threshold-flow.mmd) for architecture details.
+- Git 2.x+
+- Claude Code with hooks support
 
 ## Project Structure
 
 ```
 bumper-lanes-plugin/
-├── commands/
-│   └── bumper-reset.md       # Slash command metadata
-└── hooks/
-    ├── bin/                      # Utility scripts
-    │   ├── pause-baseline.sh     # Pause threshold enforcement
-    │   ├── reset-baseline.sh     # Reset diff baseline
-    │   └── resume-baseline.sh    # Resume threshold enforcement
-    ├── entrypoints/              # Hook entry points
-    │   ├── post-tool-use-feedback.sh # Fuel gauge warnings
-    │   ├── stop.sh               # Block Claude when threshold exceeded
-    │   ├── user-prompt-submit.sh # Intercept /bumper-reset command
-    │   └── session-start.sh      # Initialize session state
-    ├── lib/                      # Shared utilities
-    │   ├── git-state.sh          # Git tree snapshots
-    │   ├── state-manager.sh      # Session state persistence
-    │   └── threshold-calculator.sh # Weighted threshold calculation
-    └── hooks.json                # Hook configuration
+├── bin/                    # Built binaries
+│   ├── bumper-lanes        # Hook handler (Go)
+│   └── git-diff-tree-go    # Diff visualization (Go)
+├── tools/
+│   ├── bumper-lanes/       # Hook handler source
+│   └── diff-viz/           # Diff visualization source
+├── commands/               # Slash command definitions
+└── hooks.json              # Hook configuration
 ```
-
-## Requirements
-
-- Bash 4.0+
-- Git 2.x+
-- jq (JSON parsing)
-- Claude Code with hooks support
