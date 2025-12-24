@@ -67,41 +67,55 @@ func TestFormatBumperStatus(t *testing.T) {
 		score      int
 		limit      int
 		percentage int
+		viewMode   string
 		wantColor  string
 		wantText   string
 	}{
 		{
-			name:       "active state shows green",
+			name:       "active state shows green with mode",
 			state:      "active",
 			score:      100,
 			limit:      400,
 			percentage: 25,
+			viewMode:   "tree",
 			wantColor:  colorGreen,
 			wantText:   "active (100/400 - 25%)",
 		},
 		{
-			name:       "tripped state shows red",
+			name:       "tripped state shows red with mode",
 			state:      "tripped",
 			score:      450,
 			limit:      400,
 			percentage: 112,
+			viewMode:   "icicle",
 			wantColor:  colorRed,
 			wantText:   "tripped (450/400 - 112%)",
 		},
 		{
-			name:       "paused state shows yellow with command hint",
+			name:       "paused state shows yellow with mode",
 			state:      "paused",
 			score:      0, // score/limit ignored for paused
 			limit:      0,
 			percentage: 0,
+			viewMode:   "collapsed",
 			wantColor:  colorYellow,
-			wantText:   "Paused: /bumper-resume",
+			wantText:   "Paused",
+		},
+		{
+			name:       "empty viewMode defaults to tree",
+			state:      "active",
+			score:      50,
+			limit:      400,
+			percentage: 12,
+			viewMode:   "",
+			wantColor:  colorGreen,
+			wantText:   "[tree]",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatBumperStatus(tt.state, tt.score, tt.limit, tt.percentage)
+			got := formatBumperStatus(tt.state, tt.score, tt.limit, tt.percentage, tt.viewMode)
 
 			if !strings.Contains(got, tt.wantColor) {
 				t.Errorf("formatBumperStatus() missing color %q in: %s", tt.wantColor, got)
@@ -109,8 +123,13 @@ func TestFormatBumperStatus(t *testing.T) {
 			if !strings.Contains(got, tt.wantText) {
 				t.Errorf("formatBumperStatus() missing text %q in: %s", tt.wantText, got)
 			}
-			if !strings.HasSuffix(got, colorReset) {
-				t.Errorf("formatBumperStatus() should end with color reset")
+			// Should end with [mode]
+			expectedMode := tt.viewMode
+			if expectedMode == "" {
+				expectedMode = "tree"
+			}
+			if !strings.HasSuffix(got, "["+expectedMode+"]") {
+				t.Errorf("formatBumperStatus() should end with [%s], got: %s", expectedMode, got)
 			}
 		})
 	}

@@ -40,6 +40,19 @@ All slash commands use the "hook-intercept-block" pattern for instant execution 
 
 See the **hook-intercept-block** skill for full documentation on implementing new commands.
 
+### Known Limitation: Statusline Refresh with Arguments
+
+**Bug**: Claude Code only triggers immediate statusline refresh for blocked commands **without arguments**.
+
+| Command | Statusline Refresh |
+|---------|-------------------|
+| `/bumper-pause` (no arg) | Immediate (~20ms) |
+| `/bumper-view tree` (with arg) | Delayed until user interaction |
+
+**Workaround**: Use separate no-arg commands for each option (e.g., `/bumper-tree`, `/bumper-icicle`) instead of a single command with arguments (`/bumper-view <mode>`).
+
+**Tracked**: [anthropics/claude-code#15275](https://github.com/anthropics/claude-code/issues/15275)
+
 ## Configuration
 
 Threshold is configurable via JSON files (priority order):

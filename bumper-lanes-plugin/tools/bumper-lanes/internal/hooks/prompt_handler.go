@@ -16,11 +16,18 @@ import (
 
 // Command patterns - match both /bumper-X and /claude-bumper-lanes:bumper-X
 var (
-	resetCmdPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-reset\s*$`)
-	pauseCmdPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-pause\s*$`)
-	resumeCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-resume\s*$`)
-	viewCmdPattern   = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
-	configCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
+	resetCmdPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-reset\s*$`)
+	pauseCmdPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-pause\s*$`)
+	resumeCmdPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-resume\s*$`)
+	viewCmdPattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
+	configCmdPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
+	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
+	viewTreePattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-tree\s*$`)
+	viewIciclePattern   = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-icicle\s*$`)
+	viewCollapsedPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-collapsed\s*$`)
+	viewSmartPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-smart\s*$`)
+	viewTopnPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-topn\s*$`)
+	viewBracketsPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-brackets\s*$`)
 )
 
 // UserPromptResponse is the JSON structure for UserPromptSubmit hook output.
@@ -56,6 +63,25 @@ func HandlePrompt(input *HookInput) int {
 	}
 	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
 		return handleConfig(strings.TrimSpace(m[1]))
+	}
+	// Per-mode commands (no-arg = immediate statusline refresh)
+	if viewTreePattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "tree")
+	}
+	if viewIciclePattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "icicle")
+	}
+	if viewCollapsedPattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "collapsed")
+	}
+	if viewSmartPattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "smart")
+	}
+	if viewTopnPattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "topn")
+	}
+	if viewBracketsPattern.MatchString(prompt) {
+		return handleViewMode(sessionID, "brackets")
 	}
 
 	// No match - let it through
@@ -117,6 +143,8 @@ func handleResume(sessionID string) int {
 }
 
 // handleView sets or shows the visualization mode.
+// Note: /bumper-view <mode> won't trigger immediate statusline refresh due to Claude Code bug.
+// Use per-mode commands (/bumper-tree, /bumper-icicle, etc.) for instant updates.
 func handleView(sessionID, mode string) int {
 	if mode == "" {
 		// Show current mode + hint
@@ -149,10 +177,28 @@ func handleView(sessionID, mode string) int {
 		return 0
 	}
 
-	// Persist to config (uses existing function from view.go)
+	// Persist to config for future sessions
 	_ = persistViewModeToConfig(mode)
 
 	blockPrompt(fmt.Sprintf("View mode set to: %s", mode))
+	return 0
+}
+
+// handleViewMode sets view mode via no-arg command (triggers immediate statusline refresh).
+// This exists because Claude Code only refreshes statusline for no-arg commands.
+func handleViewMode(sessionID, mode string) int {
+	sess := loadSessionOrBlock(sessionID)
+	if sess == nil {
+		return 0
+	}
+
+	sess.SetViewMode(mode)
+	if !saveOrBlock(sess) {
+		return 0
+	}
+
+	_ = persistViewModeToConfig(mode)
+	blockPrompt(fmt.Sprintf("View: %s", mode))
 	return 0
 }
 

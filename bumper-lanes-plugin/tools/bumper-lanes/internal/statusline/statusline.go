@@ -121,15 +121,18 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 			stateStr = "active"
 		}
 
-		// Format bumper indicator (capture for both full line and standalone use)
-		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage)
-		parts = append(parts, bumperIndicator)
-
-		// Get diff tree visualization (show even when paused)
+		// Get view mode (needed for both indicator and diff tree)
 		viewMode := sess.GetViewMode()
 		if viewMode == "" {
 			viewMode = config.LoadViewMode()
 		}
+
+		// Format bumper indicator (capture for both full line and standalone use)
+		// viewMode included to force status line refresh when mode changes
+		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage, viewMode)
+		parts = append(parts, bumperIndicator)
+
+		// Get diff tree visualization (show even when paused)
 		viewOpts := sess.GetViewOpts()
 		diffTree = getDiffTree(viewMode, viewOpts)
 	}
@@ -163,16 +166,20 @@ func isGitDirty() bool {
 }
 
 // formatBumperStatus produces the colored bumper-lanes status text.
-func formatBumperStatus(stateStr string, score, limit, percentage int) string {
+// viewMode is included to force status line refresh when mode changes.
+func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string) string {
+	if viewMode == "" {
+		viewMode = "tree"
+	}
 	switch stateStr {
 	case "paused":
-		return fmt.Sprintf("%sPaused: /bumper-resume%s", colorYellow, colorReset)
+		return fmt.Sprintf("%sPaused%s [%s]", colorYellow, colorReset, viewMode)
 	case "tripped":
-		return fmt.Sprintf("%stripped (%d/%d - %d%%)%s",
-			colorRed, score, limit, percentage, colorReset)
+		return fmt.Sprintf("%stripped (%d/%d - %d%%)%s [%s]",
+			colorRed, score, limit, percentage, colorReset, viewMode)
 	default: // active
-		return fmt.Sprintf("%sactive (%d/%d - %d%%)%s",
-			colorGreen, score, limit, percentage, colorReset)
+		return fmt.Sprintf("%sactive (%d/%d - %d%%)%s [%s]",
+			colorGreen, score, limit, percentage, colorReset, viewMode)
 	}
 }
 
