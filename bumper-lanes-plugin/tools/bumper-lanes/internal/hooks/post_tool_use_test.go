@@ -304,7 +304,7 @@ func TestHandleBashCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		sess.AccumulatedScore = 100 // Some accumulated score
+		sess.Score = 100 // Some accumulated score
 		if err := sess.Save(); err != nil {
 			t.Fatalf("Failed to save session: %v", err)
 		}
@@ -342,9 +342,9 @@ func TestHandleBashCommit(t *testing.T) {
 			t.Errorf("BaselineTree = %q, want %q (HEAD^{tree})", reloaded.BaselineTree, expectedTree)
 		}
 
-		// AccumulatedScore should be reset to 0
-		if reloaded.AccumulatedScore != 0 {
-			t.Errorf("AccumulatedScore = %d, want 0 (reset)", reloaded.AccumulatedScore)
+		// Score should be reset to 0
+		if reloaded.Score != 0 {
+			t.Errorf("Score = %d, want 0 (reset)", reloaded.Score)
 		}
 	})
 
@@ -361,7 +361,7 @@ func TestHandleBashCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		sess.AccumulatedScore = 50
+		sess.Score = 50
 		sess.Save()
 
 		input := &HookInput{
@@ -381,8 +381,8 @@ func TestHandleBashCommit(t *testing.T) {
 		if reloaded.BaselineTree != "original-tree" {
 			t.Errorf("BaselineTree changed unexpectedly to %q", reloaded.BaselineTree)
 		}
-		if reloaded.AccumulatedScore != 50 {
-			t.Errorf("AccumulatedScore = %d, want 50 (unchanged)", reloaded.AccumulatedScore)
+		if reloaded.Score != 50 {
+			t.Errorf("Score = %d, want 50 (unchanged)", reloaded.Score)
 		}
 	})
 

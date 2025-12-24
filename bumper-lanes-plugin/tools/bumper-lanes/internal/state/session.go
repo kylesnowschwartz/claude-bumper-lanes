@@ -15,18 +15,17 @@ import (
 
 // SessionState represents the persisted state for a bumper-lanes session.
 type SessionState struct {
-	SessionID        string `json:"session_id"`
-	BaselineTree     string `json:"baseline_tree"`
-	BaselineBranch   string `json:"baseline_branch,omitempty"`
-	PreviousTree     string `json:"previous_tree"`
-	AccumulatedScore int    `json:"accumulated_score"`
-	CreatedAt        string `json:"created_at"`
-	ThresholdLimit   int    `json:"threshold_limit"`
-	RepoPath         string `json:"repo_path"`
-	StopTriggered    bool   `json:"stop_triggered"`
-	Paused           bool   `json:"paused,omitempty"`
-	ViewMode         string `json:"view_mode,omitempty"`
-	ViewOpts         string `json:"view_opts,omitempty"` // Additional flags like "--width 100"
+	SessionID      string `json:"session_id"`
+	BaselineTree   string `json:"baseline_tree"`
+	BaselineBranch string `json:"baseline_branch,omitempty"`
+	Score          int    `json:"score"` // Current score (fresh calculation from baseline)
+	CreatedAt      string `json:"created_at"`
+	ThresholdLimit int    `json:"threshold_limit"`
+	RepoPath       string `json:"repo_path"`
+	StopTriggered  bool   `json:"stop_triggered"`
+	Paused         bool   `json:"paused,omitempty"`
+	ViewMode       string `json:"view_mode,omitempty"`
+	ViewOpts       string `json:"view_opts,omitempty"` // Additional flags like "--width 100"
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -140,16 +139,15 @@ func New(sessionID, baselineTree, baselineBranch string, thresholdLimit int) (*S
 	}
 
 	return &SessionState{
-		SessionID:        sessionID,
-		BaselineTree:     baselineTree,
-		BaselineBranch:   baselineBranch,
-		PreviousTree:     baselineTree,
-		AccumulatedScore: 0,
-		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
-		ThresholdLimit:   thresholdLimit,
-		RepoPath:         repoPath,
-		StopTriggered:    false,
-		Paused:           false,
+		SessionID:      sessionID,
+		BaselineTree:   baselineTree,
+		BaselineBranch: baselineBranch,
+		Score:          0,
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		ThresholdLimit: thresholdLimit,
+		RepoPath:       repoPath,
+		StopTriggered:  false,
+		Paused:         false,
 	}, nil
 }
 
@@ -172,18 +170,16 @@ func (s *SessionState) SetPaused(paused bool) {
 	s.Paused = paused
 }
 
-// UpdateIncremental updates previous_tree and accumulated_score.
-func (s *SessionState) UpdateIncremental(previousTree string, accumulatedScore int) {
-	s.PreviousTree = previousTree
-	s.AccumulatedScore = accumulatedScore
+// SetScore updates the current score (fresh calculation from baseline).
+func (s *SessionState) SetScore(score int) {
+	s.Score = score
 }
 
 // ResetBaseline resets the baseline to a new tree SHA.
-// Clears accumulated_score and stop_triggered.
+// Clears score and stop_triggered.
 func (s *SessionState) ResetBaseline(newTree, newBranch string) {
 	s.BaselineTree = newTree
-	s.PreviousTree = newTree
-	s.AccumulatedScore = 0
+	s.Score = 0
 	s.StopTriggered = false
 	if newBranch != "" {
 		s.BaselineBranch = newBranch

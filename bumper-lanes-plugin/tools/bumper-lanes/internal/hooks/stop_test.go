@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -50,25 +51,15 @@ func TestStopCumulativeStats(t *testing.T) {
 		}
 		os.WriteFile(testFile, []byte(content), 0644)
 
-		// Capture the working tree with changes (CaptureTree handles untracked files)
-		// Don't use git add -A - CaptureTree handles untracked files via ls-files --others
-		currentTree, err := CaptureTree()
-		if err != nil {
-			t.Fatalf("CaptureTree failed: %v", err)
-		}
-
 		// Create session with:
 		// - BaselineTree = original (before changes)
-		// - PreviousTree = current (simulating PostToolUse having run)
-		// - AccumulatedScore over threshold
+		// - Score over threshold
 		sessionID := "test-stop-cumulative"
 		sess, err := state.New(sessionID, baselineTree, "main", 50) // Low threshold
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		// Simulate PostToolUse having already updated PreviousTree
-		sess.PreviousTree = currentTree
-		sess.AccumulatedScore = 100 // Already over 50 threshold
+		sess.Score = 100 // Already over 50 threshold
 		if err := sess.Save(); err != nil {
 			t.Fatalf("Failed to save session: %v", err)
 		}
@@ -116,7 +107,6 @@ func TestStopCumulativeStats(t *testing.T) {
 
 		// Verify cumulative stats are in the response
 		// Key check: total additions should be ~100 lines (from BaselineTree diff)
-		// If it used PreviousTree=currentTree diff, it would show 0 total additions
 		if resp.ThresholdData == nil {
 			t.Fatal("ThresholdData is nil")
 		}
@@ -164,7 +154,7 @@ func TestStopAllowsWhenUnderThreshold(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		sess.AccumulatedScore = 50 // Well under 1000
+		sess.Score = 50 // Well under 1000
 		sess.Save()
 
 		// Set up checkpoint dir
@@ -291,7 +281,7 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		// Create session with LOW threshold (easy to exceed)
 		sessionID := "test-e2e-block"
 		sess, _ := state.New(sessionID, baselineTree, "main", 30) // 30 pts = easy to exceed
-		sess.AccumulatedScore = 50                                 // Already over
+		sess.Score = 50                                 // Already over
 		sess.Save()
 
 		// Capture stdout
@@ -335,7 +325,7 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		// Session with HIGH threshold and LOW score
 		sessionID := "test-e2e-allow"
 		sess, _ := state.New(sessionID, currentTree, "main", 1000)
-		sess.AccumulatedScore = 10 // Way under 1000
+		sess.Score = 10 // Way under 1000
 		sess.Save()
 
 		input := &HookInput{
@@ -386,8 +376,7 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("state.Load() error = %v", err)
 		}
-		loaded.AccumulatedScore = 150
-		loaded.PreviousTree = "new-tree-sha"
+		loaded.SetScore(150)
 		loaded.SetViewMode("collapsed")
 		loaded.Save()
 
@@ -398,11 +387,8 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 		}
 
 		// Verify all fields survived
-		if reloaded.AccumulatedScore != 150 {
-			t.Errorf("AccumulatedScore = %d, want 150", reloaded.AccumulatedScore)
-		}
-		if reloaded.PreviousTree != "new-tree-sha" {
-			t.Errorf("PreviousTree = %q, want %q", reloaded.PreviousTree, "new-tree-sha")
+		if reloaded.Score != 150 {
+			t.Errorf("Score = %d, want 150", reloaded.Score)
 		}
 		if reloaded.GetViewMode() != "collapsed" {
 			t.Errorf("ViewMode = %q, want %q", reloaded.GetViewMode(), "collapsed")
@@ -439,4 +425,82 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestScoreDecreasesWhenFileDeleted verifies fresh-from-baseline scoring behavior.
+// Regression test: Score must decrease when user deletes a file, not stay constant.
+// This was a bug when using incremental accumulation instead of fresh calculation.
+func TestScoreDecreasesWhenFileDeleted(t *testing.T) {
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	// Set up plugin root for binary
+	pluginRoot := filepath.Join(origDir, "..", "..", "..", "..")
+	os.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
+	defer os.Unsetenv("CLAUDE_PLUGIN_ROOT")
+
+	binPath := GetGitDiffTreePath()
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		t.Skipf("Binary not found at %s - run 'just build-diff-viz' first", binPath)
+	}
+
+	// Get baseline tree SHA
+	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	output, _ := cmd.Output()
+	baselineTree := strings.TrimSpace(string(output))
+
+	// Create session
+	sessionID := "test-score-decrease"
+	sess, _ := state.New(sessionID, baselineTree, "main", 1000)
+	sess.Save()
+
+	// Create a file - score should increase
+	testFile := filepath.Join(tmpDir, "test-file.go")
+	content := "package main\n\n// This file adds 50 lines\n"
+	for i := 0; i < 47; i++ {
+		content += "// line\n"
+	}
+	os.WriteFile(testFile, []byte(content), 0644)
+
+	// Get stats and calculate score after adding file
+	stats := getStatsJSON(baselineTree)
+	if stats == nil {
+		t.Fatal("Failed to get stats after adding file")
+	}
+	scoreAfterAdd := scoring.Calculate(stats).Score
+	t.Logf("Score after adding file: %d", scoreAfterAdd)
+
+	if scoreAfterAdd == 0 {
+		t.Error("Score should be > 0 after adding file")
+	}
+
+	// Delete the file - score should decrease
+	os.Remove(testFile)
+
+	// Get stats and calculate score after deleting file
+	stats = getStatsJSON(baselineTree)
+	if stats == nil {
+		t.Fatal("Failed to get stats after deleting file")
+	}
+	scoreAfterDelete := scoring.Calculate(stats).Score
+	t.Logf("Score after deleting file: %d", scoreAfterDelete)
+
+	// Key assertion: Score MUST be lower after delete
+	if scoreAfterDelete >= scoreAfterAdd {
+		t.Errorf("Score should decrease after file deletion: before=%d, after=%d",
+			scoreAfterAdd, scoreAfterDelete)
+	}
+
+	// Score should return to 0 (or near 0) since we're back to baseline state
+	if scoreAfterDelete != 0 {
+		t.Errorf("Score should be 0 after deleting all added content, got %d", scoreAfterDelete)
+	}
 }

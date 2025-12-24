@@ -112,7 +112,7 @@ func handleResume(sessionID string) int {
 		return 0
 	}
 
-	blockPrompt(fmt.Sprintf("Enforcement resumed. Score: %d/%d", sess.AccumulatedScore, sess.ThresholdLimit))
+	blockPrompt(fmt.Sprintf("Enforcement resumed. Score: %d/%d", sess.Score, sess.ThresholdLimit))
 	return 0
 }
 

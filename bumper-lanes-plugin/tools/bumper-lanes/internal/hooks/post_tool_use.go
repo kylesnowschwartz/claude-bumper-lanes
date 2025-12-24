@@ -91,39 +91,34 @@ func handleWriteEdit(input *HookInput) int {
 		return 0
 	}
 
-	// Capture current tree
-	currentTree, err := CaptureTree()
-	if err != nil {
-		return 0
-	}
-
-	// Get diff stats
-	stats := getStatsJSON(sess.PreviousTree, currentTree)
+	// Get diff stats from baseline (fresh calculation, not incremental)
+	// This allows score to decrease when user manually deletes/reverts changes
+	stats := getStatsJSON(sess.BaselineTree)
 	if stats == nil {
 		return 0
 	}
 
-	// Calculate score
-	score := scoring.Calculate(stats)
-	newAccum := sess.AccumulatedScore + score.Score
+	// Calculate fresh score from baseline
+	result := scoring.Calculate(stats)
+	freshScore := result.Score
 
-	// Update incremental state
-	sess.UpdateIncremental(currentTree, newAccum)
+	// Update state with fresh score
+	sess.SetScore(freshScore)
 	sess.Save()
 
 	// Calculate percentage
-	pct := (newAccum * 100) / sess.ThresholdLimit
+	pct := (freshScore * 100) / sess.ThresholdLimit
 
 	// Output fuel gauge to stderr based on threshold tier
 	// Exit 2 ensures stderr reaches Claude (per docs)
 	if pct >= 90 {
-		fmt.Fprintf(os.Stderr, "CRITICAL: Review budget near critical (%d%%). %d/%d pts. STOP accepting work. Inform user checkpoint needed NOW.\n", pct, newAccum, sess.ThresholdLimit)
+		fmt.Fprintf(os.Stderr, "CRITICAL: Review budget near critical (%d%%). %d/%d pts. STOP accepting work. Inform user checkpoint needed NOW.\n", pct, freshScore, sess.ThresholdLimit)
 		return 2
 	} else if pct >= 75 {
-		fmt.Fprintf(os.Stderr, "WARNING: Review budget at %d%% (%d/%d pts). Complete current work, then ask user about checkpoint.\n", pct, newAccum, sess.ThresholdLimit)
+		fmt.Fprintf(os.Stderr, "WARNING: Review budget at %d%% (%d/%d pts). Complete current work, then ask user about checkpoint.\n", pct, freshScore, sess.ThresholdLimit)
 		return 2
 	} else if pct >= 50 {
-		fmt.Fprintf(os.Stderr, "NOTICE: %d%% budget used (%d/%d pts). Wrap up current task soon.\n", pct, newAccum, sess.ThresholdLimit)
+		fmt.Fprintf(os.Stderr, "NOTICE: %d%% budget used (%d/%d pts). Wrap up current task soon.\n", pct, freshScore, sess.ThresholdLimit)
 		return 2
 	}
 

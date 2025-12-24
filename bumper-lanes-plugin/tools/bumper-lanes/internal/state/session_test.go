@@ -15,16 +15,15 @@ func TestSessionState_SaveLoad(t *testing.T) {
 
 	// Create state
 	state := &SessionState{
-		SessionID:        "test-session-123",
-		BaselineTree:     "abc123def456",
-		BaselineBranch:   "main",
-		PreviousTree:     "abc123def456",
-		AccumulatedScore: 100,
-		CreatedAt:        "2025-01-01T00:00:00Z",
-		ThresholdLimit:   400,
-		RepoPath:         "/tmp/repo",
-		StopTriggered:    false,
-		Paused:           false,
+		SessionID:      "test-session-123",
+		BaselineTree:   "abc123def456",
+		BaselineBranch: "main",
+		Score:          100,
+		CreatedAt:      "2025-01-01T00:00:00Z",
+		ThresholdLimit: 400,
+		RepoPath:       "/tmp/repo",
+		StopTriggered:  false,
+		Paused:         false,
 	}
 
 	// Write to temp location
@@ -49,18 +48,17 @@ func TestSessionState_SaveLoad(t *testing.T) {
 	if loaded.BaselineTree != state.BaselineTree {
 		t.Errorf("BaselineTree = %q, want %q", loaded.BaselineTree, state.BaselineTree)
 	}
-	if loaded.AccumulatedScore != state.AccumulatedScore {
-		t.Errorf("AccumulatedScore = %d, want %d", loaded.AccumulatedScore, state.AccumulatedScore)
+	if loaded.Score != state.Score {
+		t.Errorf("Score = %d, want %d", loaded.Score, state.Score)
 	}
 }
 
 func TestSessionState_ResetBaseline(t *testing.T) {
 	state := &SessionState{
-		SessionID:        "test-123",
-		BaselineTree:     "old-tree",
-		PreviousTree:     "old-tree",
-		AccumulatedScore: 200,
-		StopTriggered:    true,
+		SessionID:     "test-123",
+		BaselineTree:  "old-tree",
+		Score:         200,
+		StopTriggered: true,
 	}
 
 	state.ResetBaseline("new-tree", "feature-branch")
@@ -68,11 +66,8 @@ func TestSessionState_ResetBaseline(t *testing.T) {
 	if state.BaselineTree != "new-tree" {
 		t.Errorf("BaselineTree = %q, want %q", state.BaselineTree, "new-tree")
 	}
-	if state.PreviousTree != "new-tree" {
-		t.Errorf("PreviousTree = %q, want %q", state.PreviousTree, "new-tree")
-	}
-	if state.AccumulatedScore != 0 {
-		t.Errorf("AccumulatedScore = %d, want 0", state.AccumulatedScore)
+	if state.Score != 0 {
+		t.Errorf("Score = %d, want 0", state.Score)
 	}
 	if state.StopTriggered {
 		t.Error("StopTriggered = true, want false")
@@ -82,19 +77,14 @@ func TestSessionState_ResetBaseline(t *testing.T) {
 	}
 }
 
-func TestSessionState_UpdateIncremental(t *testing.T) {
+func TestSessionState_SetScore(t *testing.T) {
 	state := &SessionState{
-		PreviousTree:     "old-tree",
-		AccumulatedScore: 100,
+		Score: 100,
 	}
 
-	state.UpdateIncremental("new-tree", 250)
+	state.SetScore(250)
 
-	if state.PreviousTree != "new-tree" {
-		t.Errorf("PreviousTree = %q, want %q", state.PreviousTree, "new-tree")
-	}
-	if state.AccumulatedScore != 250 {
-		t.Errorf("AccumulatedScore = %d, want 250", state.AccumulatedScore)
+	if state.Score != 250 {
+		t.Errorf("Score = %d, want 250", state.Score)
 	}
 }
-

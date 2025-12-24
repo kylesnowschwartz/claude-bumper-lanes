@@ -71,15 +71,12 @@ func Stop(input *HookInput) error {
 
 	// If paused, track changes but don't enforce
 	if sess.Paused {
-		currentTree, err := CaptureTree()
-		if err == nil {
-			stats := getStatsJSON(sess.PreviousTree, currentTree)
-			if stats != nil {
-				score := scoring.Calculate(stats)
-				newAccum := sess.AccumulatedScore + score.Score
-				sess.UpdateIncremental(currentTree, newAccum)
-				sess.Save()
-			}
+		// Use fresh score from baseline (not incremental accumulation)
+		stats := getStatsJSON(sess.BaselineTree)
+		if stats != nil {
+			result := scoring.Calculate(stats)
+			sess.SetScore(result.Score)
+			sess.Save()
 		}
 		return nil
 	}
@@ -105,42 +102,32 @@ func Stop(input *HookInput) error {
 		return WriteResponse(resp)
 	}
 
-	// Get diff stats from git-diff-tree
-	stats := getStatsJSON(sess.PreviousTree, currentTree)
+	// Get diff stats from baseline (fresh calculation, not incremental)
+	// This allows score to decrease when user manually deletes/reverts changes
+	stats := getStatsJSON(sess.BaselineTree)
 	if stats == nil {
 		return nil // Fail open
 	}
 
-	// Calculate score
-	score := scoring.Calculate(stats)
-	newAccum := sess.AccumulatedScore + score.Score
+	// Calculate fresh score from baseline
+	result := scoring.Calculate(stats)
+	freshScore := result.Score
 
 	// Check threshold
-	if newAccum <= sess.ThresholdLimit {
+	if freshScore <= sess.ThresholdLimit {
 		// Under threshold - update state and allow
-		sess.UpdateIncremental(currentTree, newAccum)
+		sess.SetScore(freshScore)
 		sess.Save()
 		return nil
 	}
 
 	// Over threshold - set stop_triggered and block
 	sess.SetStopTriggered(true)
-	sess.UpdateIncremental(currentTree, newAccum)
+	sess.SetScore(freshScore)
 	sess.Save()
 
-	// Get cumulative stats from baseline for accurate breakdown display
-	// (incremental stats from PreviousTree may be 0 if PostToolUse already updated it)
-	cumulativeStats := getStatsJSON(sess.BaselineTree, currentTree)
-	var cumulativeScore *scoring.WeightedScore
-	if cumulativeStats != nil {
-		cumulativeScore = scoring.Calculate(cumulativeStats)
-	} else {
-		// Fallback to incremental stats if baseline diff fails
-		cumulativeScore = score
-	}
-
-	// Format breakdown message with cumulative stats
-	pct := (newAccum * 100) / sess.ThresholdLimit
+	// Format breakdown message (stats are already from baseline)
+	pct := (freshScore * 100) / sess.ThresholdLimit
 	reason := fmt.Sprintf(`
 
 ⚠️  Bumper lanes: Diff threshold exceeded
@@ -155,7 +142,7 @@ Ask the User: Would you like to conduct a structured, manual review?
 
 This workflow ensures incremental code review at predictable checkpoints.
 
-`, newAccum, sess.ThresholdLimit, pct, cumulativeScore.NewAdditions, cumulativeScore.EditAdditions, cumulativeScore.FilesTouched, cumulativeScore.ScatterPenalty)
+`, freshScore, sess.ThresholdLimit, pct, result.NewAdditions, result.EditAdditions, result.FilesTouched, result.ScatterPenalty)
 
 	// Build response - see function doc comment for explanation of these confusing semantics
 	resp := StopResponse{
@@ -172,13 +159,13 @@ This workflow ensures incremental code review at predictable checkpoints.
 		// Reason is shown to the user explaining why we blocked the stop
 		Reason: reason,
 		ThresholdData: map[string]interface{}{
-			"score":                newAccum,
+			"score":                freshScore,
 			"threshold_limit":      sess.ThresholdLimit,
 			"threshold_percentage": pct,
-			"new_additions":        cumulativeScore.NewAdditions,
-			"edit_additions":       cumulativeScore.EditAdditions,
-			"files_touched":        cumulativeScore.FilesTouched,
-			"scatter_penalty":      cumulativeScore.ScatterPenalty,
+			"new_additions":        result.NewAdditions,
+			"edit_additions":       result.EditAdditions,
+			"files_touched":        result.FilesTouched,
+			"scatter_penalty":      result.ScatterPenalty,
 		},
 	}
 
@@ -186,7 +173,8 @@ This workflow ensures incremental code review at predictable checkpoints.
 }
 
 // getStatsJSON calls git-diff-tree --stats-json and returns parsed stats.
-func getStatsJSON(baselineTree, currentTree string) *scoring.StatsJSON {
+// Compares baselineTree to current working tree.
+func getStatsJSON(baselineTree string) *scoring.StatsJSON {
 	diffTreeBin := GetGitDiffTreePath()
 	cmd := exec.Command(diffTreeBin, "--stats-json", "--baseline", baselineTree)
 	output, err := cmd.Output()
