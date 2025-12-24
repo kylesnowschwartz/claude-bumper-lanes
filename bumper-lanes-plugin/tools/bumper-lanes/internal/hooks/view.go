@@ -118,7 +118,7 @@ func getValidModes() []string {
 	cmd := exec.Command(diffTreeBin, "--list-modes")
 	output, err := cmd.Output()
 	if err != nil {
-		// Fallback
+		fmt.Fprintf(os.Stderr, "warning: failed to query %s --list-modes: %v (using fallback)\n", diffTreeBin, err)
 		return []string{"tree", "collapsed", "smart", "topn", "icicle", "brackets"}
 	}
 	return strings.Fields(strings.TrimSpace(string(output)))
