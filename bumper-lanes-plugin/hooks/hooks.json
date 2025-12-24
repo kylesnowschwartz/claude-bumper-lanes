@@ -50,6 +50,16 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes validate-command"
+          }
+        ]
+      }
     ]
   }
 }

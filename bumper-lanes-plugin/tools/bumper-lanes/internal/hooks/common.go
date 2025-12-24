@@ -20,6 +20,16 @@ type HookInput struct {
 	ToolName       string     `json:"tool_name,omitempty"`
 	HookEventName  string     `json:"hook_event_name,omitempty"`
 	ToolInput      *ToolInput `json:"tool_input,omitempty"`
+	UserPrompt     string     `json:"user_prompt,omitempty"` // For UserPromptSubmit hooks
+	Prompt         string     `json:"prompt,omitempty"`      // Alternative field name
+}
+
+// GetPrompt returns the user prompt, checking both field names.
+func (h *HookInput) GetPrompt() string {
+	if h.UserPrompt != "" {
+		return h.UserPrompt
+	}
+	return h.Prompt
 }
 
 // ToolInput contains the input for a tool invocation.

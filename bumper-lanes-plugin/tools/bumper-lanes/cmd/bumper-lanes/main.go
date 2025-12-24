@@ -70,6 +70,8 @@ func main() {
 		err = cmdConfig(args)
 	case "status":
 		err = cmdStatus(args)
+	case "validate-command":
+		exitCode = cmdValidateCommand()
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -197,6 +199,16 @@ func cmdConfig(args []string) error {
 		return hooks.ConfigPersonal(args[1])
 	}
 	return fmt.Errorf("usage: bumper-lanes config [show|set <value>|personal <value>]")
+}
+
+// Validation hooks
+
+func cmdValidateCommand() int {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return 0 // Fail open
+	}
+	return hooks.ValidateCommand(input)
 }
 
 // Status line widget command

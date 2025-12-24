@@ -10,7 +10,8 @@
       "Bash(just test-unit:*)",
       "Bash(git cat-file:*)",
       "Bash(git diff-tree:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(just build:*)"
     ],
     "deny": [],
     "ask": []

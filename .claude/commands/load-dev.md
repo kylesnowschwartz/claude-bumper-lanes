@@ -19,7 +19,7 @@ Review the code structure:
 Then, invoke these skills to load their knowledge into context:
 - Skill(effective-go)
 - Skill(hud-first)
-- Skill(plugin-dev)
+- Skill(plugin-dev:plugin-dev-guide)
 
 Then:
 1. If there's an active epic in ready work, show its dependency tree with `bd dep tree <epic-id>`

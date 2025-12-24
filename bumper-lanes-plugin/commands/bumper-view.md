@@ -6,3 +6,5 @@ model: claude-haiku-4-5
 ---
 
 !`${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes view $ARGUMENTS`
+
+Done.
