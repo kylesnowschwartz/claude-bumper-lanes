@@ -34,88 +34,11 @@ Defense-in-depth hook system with three layers:
 
 ## Hook-Intercept-Block Pattern
 
-All slash commands (`/bumper-reset`, `/bumper-pause`, etc.) use the "hook-intercept-block" pattern for instant execution without Claude API calls.
+All slash commands use the "hook-intercept-block" pattern for instant execution without Claude API calls. This pattern intercepts user prompts via UserPromptSubmit hook, executes logic directly in Go, and returns `decision: "block"` with a `reason` message - bypassing the Claude API entirely.
 
-### Why This Pattern?
+**Key insight**: In Claude Code's hook API, `block` means "handled, don't call API" - not "rejected".
 
-- **No API cost**: Commands execute entirely in Go, no Claude API call
-- **Faster**: Direct execution vs markdown parsing + API round trip
-- **Deterministic**: No model variance in output - same input, same output
-
-### How It Works
-
-```
-User types: /bumper-reset
-    ↓
-UserPromptSubmit hook fires
-    ↓
-prompt_handler.go matches regex: ^/(?:claude-bumper-lanes:)?bumper-reset\s*$
-    ↓
-handleReset() executes Go logic (state.Load, CaptureTree, Save)
-    ↓
-Returns JSON to stdout: {"decision":"block","reason":"Baseline reset. Score: 0/400"}
-    ↓
-Claude Code shows "reason" to user, skips API call
-```
-
-### The Confusing Naming
-
-Claude Code's hook response API uses confusing terminology:
-
-| Response | What It Actually Means |
-|----------|----------------------|
-| `decision: "block"` | "I handled this, don't call Claude API" (NOT "blocked/rejected") |
-| `decision: "continue"` | "Let it through to Claude API" |
-| `reason: "..."` | Message shown to user (only with "block") |
-
-So `block` = "handled and done", not "rejected". The command succeeded.
-
-### Implementation
-
-- **Hook config**: `hooks.json` routes UserPromptSubmit to `bumper-lanes handle-prompt`
-- **Handler**: `internal/hooks/prompt_handler.go` - regex matching + dispatch
-- **Command stubs**: `commands/*.md` files MUST exist for `/help` discovery (body ignored)
-
-### Adding a New Command
-
-1. Add regex pattern in `prompt_handler.go`:
-   ```go
-   var newCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-foo\s*(.*)$`)
-   ```
-
-2. Add dispatch in `HandlePrompt()`:
-   ```go
-   if m := newCmdPattern.FindStringSubmatch(prompt); m != nil {
-       return handleFoo(sessionID, strings.TrimSpace(m[1]))
-   }
-   ```
-
-3. Implement handler using helpers:
-   ```go
-   func handleFoo(sessionID, args string) int {
-       sess := loadSessionOrBlock(sessionID)
-       if sess == nil {
-           return 0
-       }
-       // ... do stuff ...
-       if !saveOrBlock(sess) {
-           return 0
-       }
-       blockPrompt("Success message")
-       return 0
-   }
-   ```
-
-4. Create stub `commands/bumper-foo.md`:
-   ```markdown
-   ---
-   description: Does the foo thing
-   ---
-
-   This command is handled by the hook system.
-   ```
-
-5. Rebuild: `just build-bumper-lanes`
+See the **hook-intercept-block** skill for full documentation on implementing new commands.
 
 ## Configuration
 
