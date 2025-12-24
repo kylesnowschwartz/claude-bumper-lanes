@@ -248,21 +248,22 @@ func getDiffTree(viewMode, viewOpts string) string {
 	return result
 }
 
-// findDiffVizBinary locates the git-diff-tree-go binary.
+// findDiffVizBinary locates the git-diff-tree binary.
 // Looks in: same directory as this binary, then PATH.
+// Install via: go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
 func findDiffVizBinary() string {
 	// Try same directory as current executable
 	exe, err := os.Executable()
 	if err == nil {
 		binDir := filepath.Dir(exe)
-		candidate := filepath.Join(binDir, "git-diff-tree-go")
+		candidate := filepath.Join(binDir, "git-diff-tree")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
 	}
 
 	// Fall back to PATH
-	path, err := exec.LookPath("git-diff-tree-go")
+	path, err := exec.LookPath("git-diff-tree")
 	if err == nil {
 		return path
 	}

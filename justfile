@@ -6,14 +6,12 @@ default: test
 # Run all Go tests
 test: test-go
 
-# Run Go tests for all packages
+# Run Go tests for bumper-lanes
 test-go:
-    cd bumper-lanes-plugin/tools/diff-viz && go test ./...
     cd bumper-lanes-plugin/tools/bumper-lanes && go test ./...
 
 # Run tests with verbose output
 test-verbose:
-    cd bumper-lanes-plugin/tools/diff-viz && go test -v ./...
     cd bumper-lanes-plugin/tools/bumper-lanes && go test -v ./...
 
 # Run manual threshold trip test
@@ -41,49 +39,39 @@ version:
 # Go Build
 # ─────────────────────────────────────────────────────────────
 
-# Build all Go tools
-build: build-diff-viz build-bumper-lanes
+# Build bumper-lanes
+build: build-bumper-lanes
 
 # Build the bumper-lanes tool
 build-bumper-lanes:
     cd bumper-lanes-plugin/tools/bumper-lanes && go build -o ../../bin/bumper-lanes ./cmd/bumper-lanes
     @echo "Built: bumper-lanes-plugin/bin/bumper-lanes"
 
-# Build the diff-viz tool
-build-diff-viz:
-    cd bumper-lanes-plugin/tools/diff-viz && go build -o ../../bin/git-diff-tree-go ./cmd/git-diff-tree
-    @echo "Built: bumper-lanes-plugin/bin/git-diff-tree-go"
+# ─────────────────────────────────────────────────────────────
+# diff-viz (external dependency)
+# ─────────────────────────────────────────────────────────────
 
-# Run diff-viz directly (builds first)
-diff-viz *ARGS:
-    @just build-diff-viz
-    ./bumper-lanes-plugin/bin/git-diff-tree-go {{ARGS}}
-
-# Install diff-viz to ~/.local/bin (symlink)
+# Install diff-viz from GitHub
 install-diff-viz:
-    @just build-diff-viz
-    @mkdir -p ~/.local/bin
-    ln -sf "$(pwd)/bumper-lanes-plugin/bin/git-diff-tree-go" ~/.local/bin/git-diff-tree
-    @echo "Installed: ~/.local/bin/git-diff-tree"
+    go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
+    @echo "Installed: git-diff-tree (via go install)"
 
-# Uninstall diff-viz
-uninstall-diff-viz:
-    rm -f ~/.local/bin/git-diff-tree
-    @echo "Removed: ~/.local/bin/git-diff-tree"
+# Copy git-diff-tree to plugin bin directory (for bundled distribution)
+bundle-diff-viz:
+    @mkdir -p bumper-lanes-plugin/bin
+    cp $(shell which git-diff-tree) bumper-lanes-plugin/bin/git-diff-tree
+    @echo "Bundled: bumper-lanes-plugin/bin/git-diff-tree"
 
 # Clean Go build artifacts
 clean-go:
-    rm -f bumper-lanes-plugin/bin/git-diff-tree-go
     rm -f bumper-lanes-plugin/bin/bumper-lanes
-    rm -f bumper-lanes-plugin/tools/diff-viz/git-diff-tree
+    rm -f bumper-lanes-plugin/bin/git-diff-tree
     @echo "Cleaned Go binaries"
 
 # Format Go code
 fmt-go:
-    cd bumper-lanes-plugin/tools/diff-viz && go fmt ./...
     cd bumper-lanes-plugin/tools/bumper-lanes && go fmt ./...
 
 # Check Go code (vet + build)
 check-go:
-    cd bumper-lanes-plugin/tools/diff-viz && go vet ./... && go build ./...
     cd bumper-lanes-plugin/tools/bumper-lanes && go vet ./... && go build ./...

@@ -12,7 +12,8 @@ Defense-in-depth hook system with three layers:
 
 ## Technology Stack
 
-- **Go 1.21+**: Hook handler (`bumper-lanes`) and diff visualization (`git-diff-tree-go`)
+- **Go 1.21+**: Hook handler (`bumper-lanes`)
+- **[diff-viz](https://github.com/kylesnowschwartz/diff-viz)**: External dependency for diff visualization (`git-diff-tree`)
 - **Git 2.x+**: Working tree snapshots via `git write-tree`, diff calculation via `git diff-tree`
 - **Claude Code Hooks**: SessionStart, PostToolUse, Stop, UserPromptSubmit events
 
@@ -79,10 +80,9 @@ Threshold range: 50-2000 points. After changing config, run `/bumper-reset` to a
 
 ```
 bumper-lanes-plugin/
-├── bin/               # Built binaries (bumper-lanes, git-diff-tree-go)
+├── bin/               # Built binaries (bumper-lanes, git-diff-tree)
 ├── tools/
-│   ├── bumper-lanes/  # Hook handler and commands (Go)
-│   └── diff-viz/      # Diff visualization tool (Go)
+│   └── bumper-lanes/  # Hook handler and commands (Go)
 ├── commands/          # Slash command definitions
 └── hooks.json         # Hook configuration and matchers
 ```
@@ -136,49 +136,34 @@ type StatusOutput struct {
 }
 ```
 
-## Diff-Vizualization of diff scoring:
+## Diff Visualization
 
-We're actively developing a catalogue of visualization tools to illustrate how different code changes usig git. This will help users understand how their modifications contribute to the overall score and encourage more incremental reviews.
+Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), a standalone tool.
 
-### Diff-Viz Resources
+### Installation
 
-@.agent-history/2025-12-22-diff-visualization-catalog.md
-@.agent-history/2025-12-22-library-reference-map.md
+```bash
+# Install diff-viz
+just install-diff-viz
+# or: go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
 
-### Go Diff-Viz Development
+# Bundle into plugin bin/ for distribution
+just bundle-diff-viz
+```
 
-When modifying the diff-viz tool:
+### Available Modes
 
-1. Make changes in `bumper-lanes-plugin/tools/diff-viz/`
-2. Run `just check-go` to verify compilation
-3. Run `just test-go` to run unit tests
-4. Run `just build-diff-viz` to build the binary
-5. Test visually: `./bumper-lanes-plugin/bin/git-diff-tree-go -m <mode>`
+Run `git-diff-tree --list-modes` for available visualization modes:
+- `tree` - Indented file tree with +/- stats (default)
+- `collapsed` - Single-line per directory
+- `smart` - Depth-2 aggregated sparkline
+- `topn` - Top 5 files by change size
+- `icicle` - Horizontal area chart
+- `brackets` - Nested `[dir file]` single-line
 
-The binary at `bumper-lanes-plugin/bin/git-diff-tree-go` is what the status line hooks use.
+### Development
 
-### Adding a New Renderer
-
-Each renderer in `internal/render/` follows this pattern:
-
-- Constructor: `NewXxxRenderer(w io.Writer, useColor bool) *XxxRenderer`
-- Must implement: `Render(stats *diff.DiffStats)`
-- Use shared tree utilities from `path.go`: `BuildTreeFromFiles()`, `CalcTotals()`, `CollapseSingleChildPaths()`
-- Color constants: `ColorAdd`, `ColorDel`, `ColorDir`, `ColorReset`
-
-When adding CLI flags for a renderer (e.g., `--width`, `--depth`), update `getRenderer()` in main.go to pass them.
-
-### Adding New View Modes
-
-When adding a new diff visualization mode, update ALL of these:
-
-1. `tools/diff-viz/cmd/git-diff-tree/main.go` - `validModes` slice + `getRenderer()` switch case
-2. `hooks/lib/state-manager.sh` - fallback mode list in `set_view_mode()`
-3. `hooks/bin/set-view-mode.sh` - fallback mode list for display
-4. `commands/bumper-view.md` - `argument-hint` in frontmatter
-5. **Rebuild the binary**: `just build-diff-viz`
-
-The binary's `--list-modes` flag is the source of truth, but fallbacks exist when binary isn't in PATH.
+For diff-viz development, see https://github.com/kylesnowschwartz/diff-viz
 
 ## Just Commands
 
