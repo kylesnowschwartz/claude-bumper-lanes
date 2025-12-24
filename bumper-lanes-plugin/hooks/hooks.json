@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes validate-command"
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes handle-prompt"
           }
         ]
       }
