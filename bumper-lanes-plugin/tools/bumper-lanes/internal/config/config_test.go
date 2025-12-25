@@ -277,3 +277,77 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 	}
 }
 
+// TestStatusLinePrompted verifies the one-time prompt flag persistence.
+func TestStatusLinePrompted(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	gitDir := filepath.Join(tmpDir, ".git")
+	personalPath := filepath.Join(gitDir, "bumper-config.json")
+
+	t.Run("returns false when no config exists", func(t *testing.T) {
+		os.Remove(personalPath)
+
+		if LoadStatusLinePrompted() {
+			t.Error("LoadStatusLinePrompted() = true, want false when no config")
+		}
+	})
+
+	t.Run("returns false when config exists but field not set", func(t *testing.T) {
+		os.WriteFile(personalPath, []byte(`{"threshold": 300}`), 0644)
+		defer os.Remove(personalPath)
+
+		if LoadStatusLinePrompted() {
+			t.Error("LoadStatusLinePrompted() = true, want false when field not set")
+		}
+	})
+
+	t.Run("returns true when field is set", func(t *testing.T) {
+		os.WriteFile(personalPath, []byte(`{"status_line_prompted": true}`), 0644)
+		defer os.Remove(personalPath)
+
+		if !LoadStatusLinePrompted() {
+			t.Error("LoadStatusLinePrompted() = false, want true")
+		}
+	})
+
+	t.Run("SaveStatusLinePrompted creates config if missing", func(t *testing.T) {
+		os.Remove(personalPath)
+
+		if err := SaveStatusLinePrompted(); err != nil {
+			t.Fatalf("SaveStatusLinePrompted() error = %v", err)
+		}
+
+		if !LoadStatusLinePrompted() {
+			t.Error("After SaveStatusLinePrompted(), LoadStatusLinePrompted() = false")
+		}
+	})
+
+	t.Run("SaveStatusLinePrompted preserves existing config values", func(t *testing.T) {
+		os.WriteFile(personalPath, []byte(`{"threshold": 500, "default_view_mode": "icicle"}`), 0644)
+		defer os.Remove(personalPath)
+
+		if err := SaveStatusLinePrompted(); err != nil {
+			t.Fatalf("SaveStatusLinePrompted() error = %v", err)
+		}
+
+		// Verify status_line_prompted is set
+		if !LoadStatusLinePrompted() {
+			t.Error("status_line_prompted not set after save")
+		}
+
+		// Verify threshold was preserved
+		if got := LoadThreshold(); got != 500 {
+			t.Errorf("Threshold = %d, want 500 (should be preserved)", got)
+		}
+
+		// Verify view mode was preserved
+		if got := LoadViewMode(); got != "icicle" {
+			t.Errorf("ViewMode = %q, want icicle (should be preserved)", got)
+		}
+	})
+}

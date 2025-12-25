@@ -59,6 +59,38 @@ Work normally with Claude. When the threshold is exceeded:
 | `/bumper-topn` | Top N files by change size |
 | `/bumper-pathstrip` | Abbreviated paths |
 
+## Status Line Setup
+
+To see the diff tree visualization in your Claude Code status line:
+
+**Option 1: Use the addon script** (no existing status line)
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "command": "/path/to/bumper-lanes-plugin/status-lines/bumper-lanes-addon.sh"
+  }
+}
+```
+
+**Option 2: Add to existing status line**
+
+Claude Code status lines can be multi-line: line 1 is the compact status bar, additional lines are widgets.
+
+Add to the **end** of your status line script (after your main output):
+
+```bash
+# Bumper-lanes widgets (requires input=$(cat) at script start)
+bumper_indicator=$(echo "$input" | bumper-lanes status --widget=indicator)
+diff_tree=$(echo "$input" | bumper-lanes status --widget=diff-tree)
+[[ -n "$bumper_indicator" ]] && echo "$bumper_indicator"
+[[ -n "$diff_tree" ]] && echo "$diff_tree"
+```
+
+Run `/bumper-setup-statusline` for setup instructions.
+
 ## Configuration
 
 | File | Tracked | Purpose |

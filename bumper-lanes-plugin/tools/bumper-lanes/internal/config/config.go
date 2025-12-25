@@ -24,8 +24,9 @@ const (
 
 // Config represents bumper-lanes configuration.
 type Config struct {
-	Threshold       int    `json:"threshold,omitempty"`
-	DefaultViewMode string `json:"default_view_mode,omitempty"`
+	Threshold          int    `json:"threshold,omitempty"`
+	DefaultViewMode    string `json:"default_view_mode,omitempty"`
+	StatusLinePrompted bool   `json:"status_line_prompted,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -168,4 +169,44 @@ func SavePersonalConfig(threshold int) error {
 
 	path := filepath.Join(gitDir, "bumper-config.json")
 	return os.WriteFile(path, data, 0644)
+}
+
+// LoadStatusLinePrompted checks if user has been prompted about status line.
+// This is stored in personal config (untracked).
+func LoadStatusLinePrompted() bool {
+	gitDir, err := getGitDir()
+	if err != nil {
+		return true // Fail open - don't prompt if we can't check
+	}
+
+	personalPath := filepath.Join(gitDir, "bumper-config.json")
+	if cfg, err := loadConfigFile(personalPath); err == nil {
+		return cfg.StatusLinePrompted
+	}
+	return false
+}
+
+// SaveStatusLinePrompted marks that user has been prompted.
+// Preserves existing config values.
+func SaveStatusLinePrompted() error {
+	gitDir, err := getGitDir()
+	if err != nil {
+		return err
+	}
+
+	personalPath := filepath.Join(gitDir, "bumper-config.json")
+
+	// Load existing config or create new
+	cfg, _ := loadConfigFile(personalPath)
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	cfg.StatusLinePrompted = true
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(personalPath, data, 0644)
 }

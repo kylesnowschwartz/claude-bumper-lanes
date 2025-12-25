@@ -6,6 +6,8 @@ package hooks
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,18 +18,19 @@ import (
 
 // Command patterns - match both /bumper-X and /claude-bumper-lanes:bumper-X
 var (
-	resetCmdPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-reset\s*$`)
-	pauseCmdPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-pause\s*$`)
-	resumeCmdPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-resume\s*$`)
-	viewCmdPattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
-	configCmdPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
+	resetCmdPattern           = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-reset\s*$`)
+	pauseCmdPattern           = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-pause\s*$`)
+	resumeCmdPattern          = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-resume\s*$`)
+	viewCmdPattern            = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
+	configCmdPattern          = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
+	setupStatuslineCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-setup-statusline\s*$`)
 	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
-	viewTreePattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-tree\s*$`)
-	viewIciclePattern   = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-icicle\s*$`)
+	viewTreePattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-tree\s*$`)
+	viewIciclePattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-icicle\s*$`)
 	viewCollapsedPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-collapsed\s*$`)
-	viewSmartPattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-smart\s*$`)
-	viewTopnPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-topn\s*$`)
-	viewBracketsPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-brackets\s*$`)
+	viewSmartPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-smart\s*$`)
+	viewTopnPattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-topn\s*$`)
+	viewBracketsPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-brackets\s*$`)
 )
 
 // UserPromptResponse is the JSON structure for UserPromptSubmit hook output.
@@ -63,6 +66,9 @@ func HandlePrompt(input *HookInput) int {
 	}
 	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
 		return handleConfig(strings.TrimSpace(m[1]))
+	}
+	if setupStatuslineCmdPattern.MatchString(prompt) {
+		return handleSetupStatusline()
 	}
 	// Per-mode commands (no-arg = immediate statusline refresh)
 	if viewTreePattern.MatchString(prompt) {
@@ -293,3 +299,68 @@ func saveOrBlock(sess *state.SessionState) bool {
 	}
 	return true
 }
+
+// handleSetupStatusline shows status line setup instructions.
+// If no status line configured: shows install path
+// If existing status line: shows manual integration snippet
+func handleSetupStatusline() int {
+	// Get the plugin bin directory from current executable path
+	binPath := getBumperLanesBinPath()
+
+	if hasStatusLineConfigured() {
+		// Show manual integration snippet for existing status line
+		blockPrompt(fmt.Sprintf(`Custom status line detected.
+
+To add bumper-lanes diff tree, append to the END of your script:
+
+  # Bumper-lanes widgets (add after your main status line output)
+  BUMPER_LANES="%s"
+  bumper_indicator=$(echo "$input" | $BUMPER_LANES status --widget=indicator)
+  diff_tree=$(echo "$input" | $BUMPER_LANES status --widget=diff-tree)
+  [[ -n "$bumper_indicator" ]] && echo "$bumper_indicator"
+  [[ -n "$diff_tree" ]] && echo "$diff_tree"
+
+Note: Your script must capture input=$(cat) at the start.
+Status lines can be multi-line: line 1 = status bar, additional lines = widgets.`, binPath))
+		return 0
+	}
+
+	// No status line - show install instructions
+	addonPath := getAddonScriptPath()
+	blockPrompt(fmt.Sprintf(`No status line configured.
+
+Option 1: Use the bumper-lanes addon script
+Add to ~/.claude/settings.json:
+
+  "statusLine": {
+    "command": "%s"
+  }
+
+Option 2: Create a custom status line
+See: https://github.com/kylesnowschwartz/claude-bumper-lanes#status-line`, addonPath))
+	return 0
+}
+
+// getBumperLanesBinPath returns the path to the bumper-lanes binary.
+func getBumperLanesBinPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "bumper-lanes" // fallback to PATH
+	}
+	return exe
+}
+
+// getAddonScriptPath returns the path to the addon status line script.
+func getAddonScriptPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "/path/to/bumper-lanes-plugin/status-lines/bumper-lanes-addon.sh"
+	}
+	// exe is .../bin/bumper-lanes, addon is .../status-lines/bumper-lanes-addon.sh
+	binDir := filepath.Dir(exe)
+	pluginDir := filepath.Dir(binDir)
+	return filepath.Join(pluginDir, "status-lines", "bumper-lanes-addon.sh")
+}
+
+// hasStatusLineConfigured is also used by session_start.go
+// (imported from session_start.go)

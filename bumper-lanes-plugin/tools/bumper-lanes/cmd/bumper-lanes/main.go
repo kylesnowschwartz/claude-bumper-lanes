@@ -51,7 +51,7 @@ func main() {
 
 	switch cmd {
 	case "session-start":
-		err = cmdSessionStart()
+		exitCode = cmdSessionStart()
 	case "post-tool-use":
 		exitCode = cmdPostToolUse()
 	case "stop":
@@ -92,10 +92,10 @@ func main() {
 
 // Hook command implementations
 
-func cmdSessionStart() error {
+func cmdSessionStart() int {
 	input, err := hooks.ReadInput()
 	if err != nil {
-		return nil // Fail open
+		return 0 // Fail open
 	}
 	return hooks.SessionStart(input)
 }

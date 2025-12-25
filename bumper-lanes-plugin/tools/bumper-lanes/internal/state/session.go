@@ -15,17 +15,18 @@ import (
 
 // SessionState represents the persisted state for a bumper-lanes session.
 type SessionState struct {
-	SessionID      string `json:"session_id"`
-	BaselineTree   string `json:"baseline_tree"`
-	BaselineBranch string `json:"baseline_branch,omitempty"`
-	Score          int    `json:"score"` // Current score (fresh calculation from baseline)
-	CreatedAt      string `json:"created_at"`
-	ThresholdLimit int    `json:"threshold_limit"`
-	RepoPath       string `json:"repo_path"`
-	StopTriggered  bool   `json:"stop_triggered"`
-	Paused         bool   `json:"paused,omitempty"`
-	ViewMode       string `json:"view_mode,omitempty"`
-	ViewOpts       string `json:"view_opts,omitempty"` // Additional flags like "--width 100"
+	SessionID          string `json:"session_id"`
+	BaselineTree       string `json:"baseline_tree"`
+	BaselineBranch     string `json:"baseline_branch,omitempty"`
+	Score              int    `json:"score"` // Current score (fresh calculation from baseline)
+	CreatedAt          string `json:"created_at"`
+	ThresholdLimit     int    `json:"threshold_limit"`
+	RepoPath           string `json:"repo_path"`
+	StopTriggered      bool   `json:"stop_triggered"`
+	Paused             bool   `json:"paused,omitempty"`
+	ViewMode           string `json:"view_mode,omitempty"`
+	ViewOpts           string `json:"view_opts,omitempty"`            // Additional flags like "--width 100"
+	StatusLinePrompted bool   `json:"status_line_prompted,omitempty"` // True if user has been prompted about status line setup
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -204,4 +205,9 @@ func (s *SessionState) SetViewOpts(opts string) {
 // GetViewOpts returns current view options, or empty string if not set.
 func (s *SessionState) GetViewOpts() string {
 	return s.ViewOpts
+}
+
+// SetStatusLinePrompted marks whether user has been prompted about status line setup.
+func (s *SessionState) SetStatusLinePrompted(prompted bool) {
+	s.StatusLinePrompted = prompted
 }
