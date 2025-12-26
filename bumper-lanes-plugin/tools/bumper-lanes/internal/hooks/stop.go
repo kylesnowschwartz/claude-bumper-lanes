@@ -20,12 +20,16 @@ import (
 // The Stop hook fires when Claude tries to finish a turn. The response JSON has:
 //
 //   - "continue": Controls whether Claude keeps working after the hook
-//     - true:  Claude can continue (talk, read files, use tools)
-//     - false: Claude stops entirely (can't even explain what happened)
+//
+//   - true:  Claude can continue (talk, read files, use tools)
+//
+//   - false: Claude stops entirely (can't even explain what happened)
 //
 //   - "decision": Only meaningful for Stop hooks, controls stopping behavior
-//     - "block": Prevents Claude from STOPPING (counterintuitively keeps Claude working)
-//     - omitted: Normal behavior
+//
+//   - "block": Prevents Claude from STOPPING (counterintuitively keeps Claude working)
+//
+//   - omitted: Normal behavior
 //
 // The naming is confusing because "block" doesn't block Claude - it blocks the STOP.
 // Per Claude Code docs: "continue: false takes precedence over decision: block"
@@ -61,6 +65,7 @@ func Stop(input *HookInput) error {
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session state: %v (failing open)\n", err)
 		return nil // No baseline - fail open
 	}
 
@@ -84,6 +89,7 @@ func Stop(input *HookInput) error {
 	// Capture current working tree
 	currentTree, err := CaptureTree()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to capture current tree: %v (failing open)\n", err)
 		return nil // Fail open
 	}
 
@@ -106,6 +112,7 @@ func Stop(input *HookInput) error {
 	// This allows score to decrease when user manually deletes/reverts changes
 	stats := getStatsJSON(sess.BaselineTree)
 	if stats == nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get diff stats (failing open)\n")
 		return nil // Fail open
 	}
 

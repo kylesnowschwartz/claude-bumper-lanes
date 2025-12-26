@@ -20,7 +20,7 @@ Defense-in-depth hook system with three layers:
 ## Design Principles
 
 - **Stateful enforcement**: Track cumulative diff per session against baseline snapshot
-- **Fail-open**: Errors allow operations (availability over strictness)
+- **Fail-open with visibility**: Errors allow operations (availability over strictness), but log warnings to stderr with prefix `bumper-lanes: warning:` for operator visibility
 - **Explicit approval**: User must manually reset after reviewing changes
 - **Transparent feedback**: Both user and Claude see threshold status and reasons
 

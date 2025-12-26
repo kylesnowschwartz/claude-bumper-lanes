@@ -53,6 +53,7 @@ func handleBashCommit(input *HookInput) int {
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session (bash commit): %v (failing open)\n", err)
 		return 0 // No session - fail open
 	}
 
@@ -60,6 +61,7 @@ func handleBashCommit(input *HookInput) int {
 	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
 	output, err := cmd.Output()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get tree from HEAD: %v (failing open)\n", err)
 		return 0 // Failed to get tree - fail open
 	}
 	currentTree := strings.TrimSpace(string(output))
@@ -79,10 +81,10 @@ func handleBashCommit(input *HookInput) int {
 
 // handleWriteEdit provides fuel gauge warnings after file modifications.
 func handleWriteEdit(input *HookInput) int {
-
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session (write/edit): %v (failing open)\n", err)
 		return 0 // Fail open
 	}
 
