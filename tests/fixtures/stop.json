@@ -1,8 +1,0 @@
-{
-  "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "transcript_path": "/tmp/test-transcript.json",
-  "cwd": "/tmp/test-workspace",
-  "permission_mode": "auto_approve_read_only",
-  "hook_event_name": "Stop",
-  "stop_hook_active": true
-}

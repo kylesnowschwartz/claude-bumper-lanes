@@ -1,1 +1,0 @@
-Testing auto-reset on commit
