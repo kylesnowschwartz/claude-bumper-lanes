@@ -15,18 +15,22 @@ sequenceDiagram
     User->>CLI: plugin install claude-bumper-lanes
     CLI-->>User: plugin installed
 
-    %% Phase 2: First Session (builds binaries)
+    %% Phase 2: First Session (auto-setup)
     User->>CC: start session in git repo
     CC->>CC: version check (plugin.json vs .build-version)
     CC->>CC: (builds Go binaries ~15s if new/updated)
-    CC-->>User: stderr: Run /bumper-setup-statusline...
 
-    %% Phase 3: Status Line Setup
-    User->>CC: /bumper-setup-statusline
-    CC-->>User: addon script path OR widget snippet
+    %% Auto-setup status line
+    alt No existing status line
+        CC->>FS: set statusLine.command to addon script (via jq)
+        CC-->>User: stderr: Status line configured! Restart session.
+    else Existing status line
+        CC->>FS: generate wrapper at ~/.claude/bumper-lanes-statusline-wrapper.sh
+        CC->>FS: update statusLine.command to wrapper (via jq)
+        CC-->>User: stderr: Wrapped your status line. Restart session.
+    end
 
-    %% Phase 4: Manual Configuration
-    User->>FS: edit settings.json (add statusLine.command)
+    %% Phase 3: Working
     User->>CC: restart session
     CC-->>User: diff tree visible in status line
 
@@ -34,13 +38,16 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - Plugin install: README.md:24-27
-%% - Version sentinel: scripts/ensure-binaries.sh (compares plugin.json vs bin/.build-version)
-%% - Setup prompt: internal/hooks/session_start.go:44-48
-%% - Setup command: internal/hooks/prompt_handler.go:306-342
+%% - Version sentinel: scripts/ensure-binaries.sh
+%% - Auto-setup: internal/hooks/session_start.go:setupStatusLineWrapper()
+%% - Wrapper generation: internal/hooks/session_start.go:generateWrapper()
+%% - Settings update: internal/hooks/session_start.go:updateSettingsWithJq()
 %%
-%% PAIN POINTS (5 friction sources)
-%% 1. Two CLI commands required (marketplace add + install)
-%% 2. 10-15s compile delay on first session start
-%% 3. One-time stderr prompt easy to miss in output noise
-%% 4. Manual JSON editing required for status line
-%% 5. Session restart required to see diff tree
+%% RESOLVED PAIN POINTS (v2.1.0)
+%% 1. Two CLI commands required - UNCHANGED (Claude Code limitation)
+%% 2. 10-15s compile delay - UNCHANGED (Go build required)
+%% 3. One-time stderr prompt easy to miss - NOW: auto-setup, no action needed
+%% 4. Manual JSON editing required - NOW: auto via jq
+%% 5. Session restart required - UNCHANGED (Claude Code limitation)
+%%
+%% OPT-OUT: Set "auto_statusline": false in .git/bumper-config.json

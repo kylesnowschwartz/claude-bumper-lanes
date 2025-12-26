@@ -169,6 +169,8 @@ For diff-viz development, see https://github.com/kylesnowschwartz/diff-viz
 
 **CRITICAL**: Bump `version` in `.claude-plugin/plugin.json` for ANY user-facing changes.
 
+**CRITICAL**: Update sequence diagrams in `docs/*.mmd` when changing flows. These diagrams document the system behavior and are referenced for validation.
+
 The version sentinel (`scripts/ensure-binaries.sh`) compares `plugin.json` version against `bin/.build-version`. If they differ, binaries are rebuilt on next session start. Without a version bump:
 - Users won't rebuild binaries with your changes
 - Plugin marketplace won't detect updates
