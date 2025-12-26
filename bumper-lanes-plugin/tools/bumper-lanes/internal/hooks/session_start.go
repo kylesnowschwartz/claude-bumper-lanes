@@ -117,7 +117,32 @@ func setupStatusLineWrapper() string {
 
 	// Check if already using our wrapper
 	if isOurWrapper(currentCmd, homeDir) {
-		return "" // Already set up
+		// Check if wrapper needs regeneration (plugin updated, path changed)
+		if !isWrapperStale(currentCmd) {
+			return "" // Already set up and current
+		}
+		// Stale wrapper - regenerate with updated binary path
+		originalCmd := getOriginalCommand(currentCmd)
+		if originalCmd == "" {
+			return "" // Can't determine original, leave as-is
+		}
+		if err := generateWrapper(currentCmd, originalCmd, homeDir); err != nil {
+			return "" // Fail open - old wrapper still works
+		}
+		return "[bumper-lanes] Updated status line wrapper for new plugin version. Restart session to activate."
+	}
+
+	// Check if already using our addon script (no custom status line case)
+	if isOurAddon(currentCmd) {
+		if !isAddonStale(currentCmd) {
+			return "" // Already set up and current
+		}
+		// Stale addon - update settings.json to point to new path
+		newAddonPath := getAddonScriptPath()
+		if err := updateSettingsWithJq(homeDir, newAddonPath); err != nil {
+			return "" // Fail open - old addon might still work
+		}
+		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
 	}
 
 	// Check if setup was already offered and declined/completed
@@ -177,6 +202,9 @@ func getStatusLineCommand(homeDir string) string {
 	return cmd
 }
 
+// addonFileName is the pre-built status line addon script name.
+const addonFileName = "bumper-lanes-addon.sh"
+
 // isOurWrapper checks if the given command is already our generated wrapper.
 // Detects by filename match or by marker in file content.
 func isOurWrapper(cmd, homeDir string) bool {
@@ -198,6 +226,65 @@ func isOurWrapper(cmd, homeDir string) bool {
 	return strings.Contains(string(data), wrapperMarker)
 }
 
+// isOurAddon checks if the given command is our pre-built addon script.
+func isOurAddon(cmd string) bool {
+	if cmd == "" {
+		return false
+	}
+	return filepath.Base(cmd) == addonFileName
+}
+
+// isAddonStale checks if the addon script path is stale (plugin updated).
+// Returns true if the path doesn't match the current plugin's addon path.
+func isAddonStale(cmd string) bool {
+	currentAddonPath := getAddonScriptPath()
+	return cmd != currentAddonPath
+}
+
+// getWrapperBinaryPath extracts the BUMPER_BIN path from a wrapper script.
+// Returns empty string if not found or on error.
+func getWrapperBinaryPath(wrapperPath string) string {
+	data, err := os.ReadFile(wrapperPath)
+	if err != nil {
+		return ""
+	}
+	const prefix = "# BUMPER_BIN: "
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
+		}
+	}
+	return ""
+}
+
+// isWrapperStale checks if the wrapper's embedded binary path differs from current.
+// Returns true if wrapper should be regenerated.
+func isWrapperStale(wrapperPath string) bool {
+	embeddedPath := getWrapperBinaryPath(wrapperPath)
+	if embeddedPath == "" {
+		// No marker found (old wrapper format) - regenerate to add marker
+		return true
+	}
+	currentPath := getBumperLanesBinPath()
+	return embeddedPath != currentPath
+}
+
+// getOriginalCommand extracts the original status line command from a wrapper script.
+// Returns empty string if not found or on error.
+func getOriginalCommand(wrapperPath string) string {
+	data, err := os.ReadFile(wrapperPath)
+	if err != nil {
+		return ""
+	}
+	const prefix = "# Original command: "
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
+		}
+	}
+	return ""
+}
+
 // generateWrapper creates the wrapper script at the given path.
 func generateWrapper(wrapperPath, originalCmd, homeDir string) error {
 	// Ensure .claude directory exists
@@ -210,8 +297,10 @@ func generateWrapper(wrapperPath, originalCmd, homeDir string) error {
 	bumperBin := getBumperLanesBinPath()
 
 	// Generate wrapper content
+	// BUMPER_BIN marker enables staleness detection for auto-regeneration on plugin updates
 	content := fmt.Sprintf(`#!/bin/bash
 %s - DO NOT EDIT
+# BUMPER_BIN: %s
 # Wraps your status line to add bumper-lanes diff tree visualization.
 # Original command: %s
 # To remove: restore statusLine.command in ~/.claude/settings.json
@@ -230,7 +319,7 @@ diff_tree=$(echo "$input" | "%s" status --widget=diff-tree 2>/dev/null || true)
 [[ -n "$diff_tree" ]] && echo "$diff_tree"
 
 exit 0
-`, wrapperMarker, originalCmd, originalCmd, bumperBin, bumperBin)
+`, wrapperMarker, bumperBin, originalCmd, originalCmd, bumperBin, bumperBin)
 
 	// Write and make executable
 	if err := os.WriteFile(wrapperPath, []byte(content), 0755); err != nil {

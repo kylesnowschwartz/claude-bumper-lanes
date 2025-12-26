@@ -5,11 +5,11 @@
     "email": "kyle.snowschwartz@gmail.com"
   },
   "description": "Local marketplace for Bumper Lanes plugin development",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "plugins": [
     {
       "name": "claude-bumper-lanes",
-      "version": "2.0.0",
+      "version": "2.2.0",
       "source": "./bumper-lanes-plugin",
       "description": "Git diff threshold enforcement for disciplined vibe coding"
     }

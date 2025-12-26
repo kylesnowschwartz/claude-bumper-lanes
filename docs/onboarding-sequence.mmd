@@ -24,10 +24,15 @@ sequenceDiagram
     alt No existing status line
         CC->>FS: set statusLine.command to addon script (via jq)
         CC-->>User: stderr: Status line configured! Restart session.
-    else Existing status line
+    else Existing status line (first time)
         CC->>FS: generate wrapper at ~/.claude/bumper-lanes-statusline-wrapper.sh
+        Note over FS: Wrapper includes BUMPER_BIN marker for staleness detection
         CC->>FS: update statusLine.command to wrapper (via jq)
         CC-->>User: stderr: Wrapped your status line. Restart session.
+    else Existing wrapper (plugin updated)
+        CC->>FS: check BUMPER_BIN marker vs current binary path
+        CC->>FS: regenerate wrapper with new binary path
+        CC-->>User: stderr: Updated wrapper for new version. Restart session.
     end
 
     %% Phase 3: Working
@@ -41,13 +46,16 @@ sequenceDiagram
 %% - Version sentinel: scripts/ensure-binaries.sh
 %% - Auto-setup: internal/hooks/session_start.go:setupStatusLineWrapper()
 %% - Wrapper generation: internal/hooks/session_start.go:generateWrapper()
+%% - Staleness check: internal/hooks/session_start.go:isWrapperStale()
+%% - Binary path extraction: internal/hooks/session_start.go:getWrapperBinaryPath()
 %% - Settings update: internal/hooks/session_start.go:updateSettingsWithJq()
 %%
-%% RESOLVED PAIN POINTS (v2.1.0)
+%% RESOLVED PAIN POINTS (v2.1.0+)
 %% 1. Two CLI commands required - UNCHANGED (Claude Code limitation)
 %% 2. 10-15s compile delay - UNCHANGED (Go build required)
 %% 3. One-time stderr prompt easy to miss - NOW: auto-setup, no action needed
 %% 4. Manual JSON editing required - NOW: auto via jq
 %% 5. Session restart required - UNCHANGED (Claude Code limitation)
+%% 6. Wrapper stale after plugin update - NOW: auto-regenerate via BUMPER_BIN marker
 %%
 %% OPT-OUT: Set "auto_statusline": false in .git/bumper-config.json
