@@ -165,6 +165,22 @@ Run `git-diff-tree --list-modes` for available visualization modes:
 
 For diff-viz development, see https://github.com/kylesnowschwartz/diff-viz
 
+## Release Process
+
+**CRITICAL**: Bump `version` in `.claude-plugin/plugin.json` for ANY user-facing changes.
+
+The version sentinel (`scripts/ensure-binaries.sh`) compares `plugin.json` version against `bin/.build-version`. If they differ, binaries are rebuilt on next session start. Without a version bump:
+- Users won't rebuild binaries with your changes
+- Plugin marketplace won't detect updates
+
+```bash
+# After committing changes, bump version
+jq '.version = "X.Y.Z"' bumper-lanes-plugin/.claude-plugin/plugin.json | sponge bumper-lanes-plugin/.claude-plugin/plugin.json
+git add -u && git commit -m "chore: bump version to X.Y.Z"
+```
+
+Use semver: major (breaking), minor (features), patch (fixes).
+
 ## Just Commands
 
 read the @justfile or use the just-mcp to run just commands instead of bash scripts directly.
