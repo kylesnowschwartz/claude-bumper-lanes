@@ -37,10 +37,9 @@ sequenceDiagram
     Hook->>FS: rename to session-{id}
     FS-->>Hook: state saved
 
-    %% One-time auto-setup check
-    Hook->>Cfg: check status_line_configured
-    Cfg-->>Hook: false (first time)
-    Hook-->>CC: auto-configure statusLine in settings.json
+    %% Idempotent auto-setup check
+    Hook->>Hook: setupStatusLineWrapper()
+    Hook-->>CC: (configure/wrap statusLine if needed)
 
     %% === DURING SESSION (each hook call) ===
     CC->>Hook: PostToolUse / Stop
@@ -61,13 +60,14 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - ensure-binaries.sh: scripts/ensure-binaries.sh (version sentinel)
-%% - SessionStart: internal/hooks/session_start.go:16-52
-%% - State New(): internal/state/session.go:135-153
-%% - State Save(): internal/state/session.go:90-133 (atomic write)
-%% - State Load(): internal/state/session.go:66-88
-%% - State Delete(): internal/state/session.go:155-162
+%% - SessionStart: internal/hooks/session_start.go:28-67
+%% - setupStatusLineWrapper: internal/hooks/session_start.go:112-182
+%% - State New(): internal/state/session.go:135-152
+%% - State Save(): internal/state/session.go:91-132 (atomic write)
+%% - State Load(): internal/state/session.go:67-87
+%% - State Delete(): internal/state/session.go:155-161
 %% - SessionEnd: internal/hooks/session_end.go:9-13
-%% - Checkpoint dir: internal/state/session.go:35-45
+%% - Checkpoint dir: internal/state/session.go:36-44
 %%
 %% STATE FILE LOCATION
 %% Path: {git-dir}/bumper-checkpoints/session-{session_id}

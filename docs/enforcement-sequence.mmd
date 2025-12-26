@@ -14,23 +14,18 @@ sequenceDiagram
     Claude->>Claude: Write file.ts
     PTU->>Sess: calculate score from baseline
     Sess-->>PTU: 150/400 (37%)
-    PTU->>PTU: (under 50% - silent)
+    PTU->>PTU: (under 70% - silent)
 
     %% === FUEL GAUGE WARNINGS ===
     Claude->>Claude: Edit another.ts
     PTU->>Sess: calculate score
-    Sess-->>PTU: 220/400 (55%)
-    PTU-->>Claude: stderr: NOTICE 55% used
+    Sess-->>PTU: 280/400 (70%)
+    PTU-->>Claude: stderr: NOTICE 70% - wrap up soon
 
     Claude->>Claude: Write more.ts
     PTU->>Sess: calculate score
-    Sess-->>PTU: 320/400 (80%)
-    PTU-->>Claude: stderr: WARNING 80% - wrap up
-
-    Claude->>Claude: Edit final.ts
-    PTU->>Sess: calculate score
-    Sess-->>PTU: 380/400 (95%)
-    PTU-->>Claude: stderr: CRITICAL 95% - STOP NOW
+    Sess-->>PTU: 360/400 (90%)
+    PTU-->>Claude: stderr: WARNING 90% - complete work
 
     %% === THRESHOLD EXCEEDED ===
     Claude->>Stop: (tries to finish turn)
@@ -77,17 +72,16 @@ sequenceDiagram
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - PostToolUse tiers: internal/hooks/post_tool_use.go:114-126
+%% - PostToolUse tiers: internal/hooks/post_tool_use.go:114-121
 %% - Stop blocking: internal/hooks/stop.go:117-173
-%% - Reset: internal/hooks/prompt_handler.go:98-117
-%% - Pause: internal/hooks/prompt_handler.go:119-133
-%% - Resume: internal/hooks/prompt_handler.go:135-149
+%% - Reset: internal/hooks/prompt_handler.go:96-115
+%% - Pause: internal/hooks/prompt_handler.go:118-131
+%% - Resume: internal/hooks/prompt_handler.go:134-147
 %%
 %% FUEL GAUGE TIERS
-%% - <50%: Silent
-%% - 50%: NOTICE - wrap up current task
-%% - 75%: WARNING - complete work, ask about checkpoint
-%% - 90%: CRITICAL - stop accepting work NOW
+%% - <70%: Silent
+%% - 70%: NOTICE - wrap up current task
+%% - 90%: WARNING - complete work, ask about checkpoint
 %%
 %% PAIN POINTS
 %% 1. Warnings visible but muted - status line could surface escalation better
@@ -99,8 +93,7 @@ sequenceDiagram
 %% IMPROVEMENT OPPORTUNITY
 %% Status line currently: green until trip, then suddenly red
 %% Could match fuel gauge tiers to give user same visibility as Claude:
-%% - 0-49%:  green  "active"
-%% - 50-74%: yellow "NOTICE"   (currently stays green)
-%% - 75-89%: orange "WARNING"  (currently stays green)
-%% - 90-99%: red    "CRITICAL" (currently stays green)
+%% - 0-69%:  green  "active"
+%% - 70-89%: yellow "NOTICE"   (currently stays green)
+%% - 90-99%: orange "WARNING"  (currently stays green)
 %% - 100%+: red    "TRIPPED"

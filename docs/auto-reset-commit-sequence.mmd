@@ -33,13 +33,13 @@ sequenceDiagram
     Claude->>Claude: Write newfile.ts
     PTU->>Sess: calculate score
     Sess-->>PTU: 50/400 (12%)
-    PTU->>PTU: (under 50% - silent)
+    PTU->>PTU: (under 70% - silent)
 
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - Commit detection: internal/hooks/post_tool_use.go:18 (regex)
-%% - Tree capture: internal/hooks/post_tool_use.go:59-65
+%% - Tree capture: internal/hooks/post_tool_use.go:60-65
 %% - Reset call: internal/hooks/post_tool_use.go:67-72
 %% - Feedback: internal/hooks/post_tool_use.go:75-77
 %%

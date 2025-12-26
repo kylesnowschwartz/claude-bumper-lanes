@@ -21,8 +21,11 @@ sequenceDiagram
     CC->>CC: (builds Go binaries ~15s if new/updated)
 
     %% Auto-setup status line
-    alt No existing status line
-        CC->>FS: set statusLine.command to addon script (via jq)
+    alt Script contains # BUMPER_HANDS_OFF
+        Note over CC: User opted out - skip all auto-setup
+        CC-->>CC: (silent - no modification)
+    else No existing status line
+        CC->>FS: set statusLine.command to binary path (via jq)
         CC-->>User: stderr: Status line configured! Restart session.
     else Existing status line (first time)
         CC->>FS: generate wrapper at ~/.claude/bumper-lanes-statusline-wrapper.sh
@@ -44,6 +47,7 @@ sequenceDiagram
 %% ============================================================
 %% - Plugin install: README.md:24-27
 %% - Version sentinel: scripts/ensure-binaries.sh
+%% - Hands-off check: internal/hooks/session_start.go:isHandsOff()
 %% - Auto-setup: internal/hooks/session_start.go:setupStatusLineWrapper()
 %% - Wrapper generation: internal/hooks/session_start.go:generateWrapper()
 %% - Staleness check: internal/hooks/session_start.go:isWrapperStale()
@@ -57,5 +61,6 @@ sequenceDiagram
 %% 4. Manual JSON editing required - NOW: auto via jq
 %% 5. Session restart required - UNCHANGED (Claude Code limitation)
 %% 6. Wrapper stale after plugin update - NOW: auto-regenerate via BUMPER_BIN marker
+%% 7. Auto-setup modifies user scripts - NOW: # BUMPER_HANDS_OFF escape hatch
 %%
 %% Status line auto-setup is now idempotent (checks actual state each session)
