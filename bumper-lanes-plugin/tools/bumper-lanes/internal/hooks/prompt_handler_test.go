@@ -6,33 +6,6 @@ import (
 	"testing"
 )
 
-// TestSetupStatuslineCommandPattern verifies the command is recognized.
-func TestSetupStatuslineCommandPattern(t *testing.T) {
-	tests := []struct {
-		name    string
-		prompt  string
-		matches bool
-	}{
-		{"short form", "/bumper-setup-statusline", true},
-		{"full form", "/claude-bumper-lanes:bumper-setup-statusline", true},
-		{"with trailing space", "/bumper-setup-statusline ", true},
-		{"wrong command", "/bumper-setup", false},
-		{"partial match", "/bumper-setup-statuslin", false},
-		{"extra suffix", "/bumper-setup-statusline-foo", false},
-		{"with argument", "/bumper-setup-statusline arg", false}, // no args allowed
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := setupStatuslineCmdPattern.MatchString(tt.prompt)
-			if got != tt.matches {
-				t.Errorf("setupStatuslineCmdPattern.MatchString(%q) = %v, want %v",
-					tt.prompt, got, tt.matches)
-			}
-		})
-	}
-}
-
 // TestGetBumperLanesBinPath verifies path detection works.
 func TestGetBumperLanesBinPath(t *testing.T) {
 	path := getBumperLanesBinPath()

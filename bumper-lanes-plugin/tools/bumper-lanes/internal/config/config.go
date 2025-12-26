@@ -27,6 +27,7 @@ type Config struct {
 	Threshold          int    `json:"threshold,omitempty"`
 	DefaultViewMode    string `json:"default_view_mode,omitempty"`
 	StatusLinePrompted bool   `json:"status_line_prompted,omitempty"`
+	AutoStatusLine     *bool  `json:"auto_statusline,omitempty"` // nil = default (true), false = disabled
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -209,4 +210,20 @@ func SaveStatusLinePrompted() error {
 	}
 
 	return os.WriteFile(personalPath, data, 0644)
+}
+
+// LoadAutoStatusLine checks if auto status line setup is enabled.
+// Returns true by default. Only returns false if explicitly disabled in personal config.
+// Repo config is not checked - this is a personal preference.
+func LoadAutoStatusLine() bool {
+	gitDir, err := getGitDir()
+	if err != nil {
+		return true // Default to enabled
+	}
+
+	personalPath := filepath.Join(gitDir, "bumper-config.json")
+	if cfg, err := loadConfigFile(personalPath); err == nil && cfg.AutoStatusLine != nil {
+		return *cfg.AutoStatusLine
+	}
+	return true // Default to enabled
 }
