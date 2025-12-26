@@ -4,13 +4,24 @@
 
 sequenceDiagram
     participant CC as Claude Code
+    participant Bin as ensure-binaries.sh
     participant Hook as Hooks
     participant Git
     participant FS as .git/bumper-checkpoints/
     participant Cfg as Config Files
 
+    %% === BINARY VERSION CHECK (ensure-binaries.sh) ===
+    CC->>Bin: SessionStart (first)
+    Bin->>Cfg: read plugin.json version
+    Cfg-->>Bin: "2.0.2"
+    Bin->>FS: read bin/.build-version
+    FS-->>Bin: "2.0.1" (or missing)
+    Bin->>Bin: go build (version mismatch)
+    Bin->>FS: write "2.0.2" to .build-version
+    Bin-->>CC: stderr: ready v2.0.2
+
     %% === SESSION START ===
-    CC->>Hook: SessionStart
+    CC->>Hook: bumper-lanes session-start
     Hook->>Git: git rev-parse --absolute-git-dir
     Git-->>Hook: /path/to/.git
     Hook->>Git: git write-tree
@@ -49,6 +60,7 @@ sequenceDiagram
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
+%% - ensure-binaries.sh: scripts/ensure-binaries.sh (version sentinel)
 %% - SessionStart: internal/hooks/session_start.go:16-52
 %% - State New(): internal/state/session.go:135-153
 %% - State Save(): internal/state/session.go:90-133 (atomic write)
@@ -81,6 +93,13 @@ sequenceDiagram
 %% 1. Write to session-{id}.tmp
 %% 2. Rename to session-{id}
 %% Prevents race conditions between parallel hooks
+%%
+%% VERSION SENTINEL
+%% Path: bin/.build-version
+%% - Contains plugin version that binaries were built for
+%% - Compared against .claude-plugin/plugin.json on SessionStart
+%% - Triggers rebuild on version mismatch (plugin update scenario)
+%% - Fast path (~33ms) when version matches and binaries exist
 %%
 %% PAIN POINTS
 %% 1. State read/write on every hook call (I/O overhead)

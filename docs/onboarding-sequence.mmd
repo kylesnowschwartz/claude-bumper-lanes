@@ -15,9 +15,10 @@ sequenceDiagram
     User->>CLI: plugin install claude-bumper-lanes
     CLI-->>User: plugin installed
 
-    %% Phase 2: First Session (one-time setup)
+    %% Phase 2: First Session (builds binaries)
     User->>CC: start session in git repo
-    CC->>CC: (builds Go binaries ~15s)
+    CC->>CC: version check (plugin.json vs .build-version)
+    CC->>CC: (builds Go binaries ~15s if new/updated)
     CC-->>User: stderr: Run /bumper-setup-statusline...
 
     %% Phase 3: Status Line Setup
@@ -33,7 +34,7 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - Plugin install: README.md:24-27
-%% - Binary build: scripts/ensure-binaries.sh:9-31
+%% - Version sentinel: scripts/ensure-binaries.sh (compares plugin.json vs bin/.build-version)
 %% - Setup prompt: internal/hooks/session_start.go:44-48
 %% - Setup command: internal/hooks/prompt_handler.go:306-342
 %%

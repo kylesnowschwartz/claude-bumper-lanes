@@ -14,6 +14,7 @@ __pycache__/
 # Go binaries (built on first run via ensure-binaries.sh)
 bumper-lanes-plugin/bin/bumper-lanes
 bumper-lanes-plugin/bin/git-diff-tree
+bumper-lanes-plugin/bin/.build-version
 *.exe
 
 # Override global .claude/ ignore for specific files
