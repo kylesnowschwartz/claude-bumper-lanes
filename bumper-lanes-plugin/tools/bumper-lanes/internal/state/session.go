@@ -205,3 +205,51 @@ func (s *SessionState) SetViewOpts(opts string) {
 func (s *SessionState) GetViewOpts() string {
 	return s.ViewOpts
 }
+
+// CleanupOrphaned removes session files that don't match the current session.
+// This cleans up orphaned checkpoints from crashed sessions.
+// Fails open - errors are logged to stderr but don't block execution.
+func CleanupOrphaned(currentSessionID string) {
+	checkpointDir, err := GetCheckpointDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get checkpoint dir for cleanup: %v (failing open)\n", err)
+		return // Fail open
+	}
+
+	entries, err := os.ReadDir(checkpointDir)
+	if err != nil {
+		// Directory may not exist yet - this is expected, don't log
+		return // Fail open
+	}
+
+	currentFileName := "session-" + currentSessionID
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		// Skip if it's the current session
+		if name == currentFileName {
+			continue
+		}
+
+		// Only clean up session files (session-*), skip .tmp files and others
+		if !strings.HasPrefix(name, "session-") {
+			continue
+		}
+
+		// Skip temp files - they may be in-progress atomic writes
+		if strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+
+		// Remove orphaned session file
+		orphanPath := filepath.Join(checkpointDir, name)
+		if err := os.Remove(orphanPath); err != nil {
+			fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to clean orphaned checkpoint %s: %v (failing open)\n", name, err)
+			continue
+		}
+
+		// Log successful cleanup
+		fmt.Fprintf(os.Stderr, "bumper-lanes: cleaned orphaned checkpoint: %s\n", name)
+	}
+}

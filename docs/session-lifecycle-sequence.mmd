@@ -37,6 +37,13 @@ sequenceDiagram
     Hook->>FS: rename to session-{id}
     FS-->>Hook: state saved
 
+    %% Cleanup orphaned checkpoints from crashed sessions
+    Hook->>FS: ReadDir bumper-checkpoints/
+    FS-->>Hook: list of session-* files
+    Hook->>Hook: filter: skip current session, skip .tmp
+    Hook->>FS: delete orphaned session files
+    FS-->>Hook: (log to stderr, ignore errors)
+
     %% Idempotent auto-setup check
     Hook->>Hook: setupStatusLineWrapper()
     Hook-->>CC: (configure/wrap statusLine if needed)
@@ -60,12 +67,13 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - ensure-binaries.sh: scripts/ensure-binaries.sh (version sentinel)
-%% - SessionStart: internal/hooks/session_start.go:28-67
-%% - setupStatusLineWrapper: internal/hooks/session_start.go:112-182
+%% - SessionStart: internal/hooks/session_start.go:28-70
+%% - setupStatusLineWrapper: internal/hooks/session_start.go:115-185
 %% - State New(): internal/state/session.go:135-152
 %% - State Save(): internal/state/session.go:91-132 (atomic write)
 %% - State Load(): internal/state/session.go:67-87
 %% - State Delete(): internal/state/session.go:155-161
+%% - CleanupOrphaned(): internal/state/session.go:209-254
 %% - SessionEnd: internal/hooks/session_end.go:9-13
 %% - Checkpoint dir: internal/state/session.go:36-44
 %%
@@ -103,6 +111,6 @@ sequenceDiagram
 %%
 %% PAIN POINTS
 %% 1. State read/write on every hook call (I/O overhead)
-%% 2. No cleanup of orphaned checkpoints if session crashes
-%% 3. Checkpoint dir accumulates lock files on crashes
+%% 2. [RESOLVED] Orphaned checkpoints cleaned on SessionStart (CleanupOrphaned)
+%% 3. [RESOLVED] Temp files skipped during cleanup (may be in-progress writes)
 %% 4. No state versioning - schema changes break old files
