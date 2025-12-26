@@ -13,6 +13,7 @@ import (
 func TestFuelGaugeTier(t *testing.T) {
 	threshold := 400
 
+	// Tiers: <70% silent, 70-89% NOTICE, 90%+ WARNING
 	tests := []struct {
 		name      string
 		score     int
@@ -32,63 +33,45 @@ func TestFuelGaugeTier(t *testing.T) {
 			wantQuiet: true,
 		},
 		{
-			name:      "49% - silent",
-			score:     196,
+			name:      "69% - silent",
+			score:     276,
 			wantTier:  "",
 			wantQuiet: true,
 		},
 		{
-			name:      "50% - notice",
-			score:     200,
+			name:      "70% - notice",
+			score:     280,
 			wantTier:  "NOTICE",
 			wantQuiet: false,
 		},
 		{
-			name:      "60% - notice",
-			score:     240,
+			name:      "80% - notice",
+			score:     320,
 			wantTier:  "NOTICE",
 			wantQuiet: false,
 		},
 		{
-			name:      "74% - notice",
-			score:     296,
-			wantTier:  "NOTICE",
-			wantQuiet: false,
-		},
-		{
-			name:      "75% - warning",
-			score:     300,
-			wantTier:  "WARNING",
-			wantQuiet: false,
-		},
-		{
-			name:      "85% - warning",
-			score:     340,
-			wantTier:  "WARNING",
-			wantQuiet: false,
-		},
-		{
-			name:      "89% - warning",
+			name:      "89% - notice",
 			score:     356,
+			wantTier:  "NOTICE",
+			wantQuiet: false,
+		},
+		{
+			name:      "90% - warning",
+			score:     360,
 			wantTier:  "WARNING",
 			wantQuiet: false,
 		},
 		{
-			name:      "90% - critical",
-			score:     360,
-			wantTier:  "CRITICAL",
-			wantQuiet: false,
-		},
-		{
-			name:      "100% - critical",
+			name:      "100% - warning",
 			score:     400,
-			wantTier:  "CRITICAL",
+			wantTier:  "WARNING",
 			wantQuiet: false,
 		},
 		{
-			name:      "150% - critical",
+			name:      "150% - warning",
 			score:     600,
-			wantTier:  "CRITICAL",
+			wantTier:  "WARNING",
 			wantQuiet: false,
 		},
 	}
@@ -132,6 +115,7 @@ func TestFuelGaugeMessage(t *testing.T) {
 }
 
 // getFuelGaugeTier calculates the warning tier based on score vs threshold
+// Tiers: 70% NOTICE, 90% WARNING
 func getFuelGaugeTier(score, threshold int) (tier string, quiet bool) {
 	if threshold <= 0 {
 		return "", true
@@ -141,10 +125,8 @@ func getFuelGaugeTier(score, threshold int) (tier string, quiet bool) {
 
 	switch {
 	case percent >= 90:
-		return "CRITICAL", false
-	case percent >= 75:
 		return "WARNING", false
-	case percent >= 50:
+	case percent >= 70:
 		return "NOTICE", false
 	default:
 		return "", true

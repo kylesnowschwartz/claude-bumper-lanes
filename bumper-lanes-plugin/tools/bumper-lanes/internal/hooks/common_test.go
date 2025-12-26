@@ -18,7 +18,7 @@ func TestGetGitDiffTreePath(t *testing.T) {
 		if err := os.MkdirAll(binDir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		fakeBin := filepath.Join(binDir, "git-diff-tree-go")
+		fakeBin := filepath.Join(binDir, "git-diff-tree")
 		if err := os.WriteFile(fakeBin, []byte("fake"), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +39,7 @@ func TestGetGitDiffTreePath(t *testing.T) {
 
 		got := GetGitDiffTreePath()
 		// Should NOT return the tmpDir path since binary doesn't exist
-		if got == filepath.Join(tmpDir, "bin", "git-diff-tree-go") {
+		if got == filepath.Join(tmpDir, "bin", "git-diff-tree") {
 			t.Errorf("GetGitDiffTreePath() returned non-existent path: %q", got)
 		}
 	})
@@ -65,9 +65,9 @@ func TestGetGitDiffTreePath(t *testing.T) {
 		// From internal/hooks/ need to go up 5 levels to reach project root
 		// This is fragile but tests real development scenario
 		for i := 0; i < 6; i++ {
-			if _, err := os.Stat("bumper-lanes-plugin/bin/git-diff-tree-go"); err == nil {
+			if _, err := os.Stat("bumper-lanes-plugin/bin/git-diff-tree"); err == nil {
 				got := GetGitDiffTreePath()
-				if got != "bumper-lanes-plugin/bin/git-diff-tree-go" {
+				if got != "bumper-lanes-plugin/bin/git-diff-tree" {
 					t.Logf("Found via different path: %s", got)
 				}
 				return

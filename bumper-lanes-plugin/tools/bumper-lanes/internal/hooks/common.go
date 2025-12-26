@@ -46,8 +46,8 @@ type ToolInput struct {
 //
 // See stop.go for detailed explanation of these semantics.
 type StopResponse struct {
-	Continue       bool        `json:"continue"`          // true=Claude continues, false=Claude stops
-	SystemMessage  string      `json:"systemMessage,omitempty"` // Injected into Claude's context
+	Continue       bool        `json:"continue"`                 // true=Claude continues, false=Claude stops
+	SystemMessage  string      `json:"systemMessage,omitempty"`  // Injected into Claude's context
 	SuppressOutput bool        `json:"suppressOutput,omitempty"` // Hide Claude's pending output
 	Decision       string      `json:"decision,omitempty"`       // "block" = block the stop (not Claude!)
 	Reason         string      `json:"reason,omitempty"`         // Shown to user when blocking
@@ -157,32 +157,32 @@ func GetCurrentBranch() string {
 	return branch
 }
 
-// GetGitDiffTreePath returns the path to the git-diff-tree-go binary.
+// GetGitDiffTreePath returns the path to the git-diff-tree binary.
 // Looks in common locations, prioritizing CLAUDE_PLUGIN_ROOT.
 func GetGitDiffTreePath() string {
 	// First check CLAUDE_PLUGIN_ROOT (set by Claude Code when running hooks)
 	if pluginRoot := os.Getenv("CLAUDE_PLUGIN_ROOT"); pluginRoot != "" {
-		binPath := filepath.Join(pluginRoot, "bin", "git-diff-tree-go")
+		binPath := filepath.Join(pluginRoot, "bin", "git-diff-tree")
 		if _, err := os.Stat(binPath); err == nil {
 			return binPath
 		}
 	}
 
 	// Check if in PATH
-	if path, err := exec.LookPath("git-diff-tree-go"); err == nil {
+	if path, err := exec.LookPath("git-diff-tree"); err == nil {
 		return path
 	}
 
 	// Check relative to current working directory (for development)
 	candidates := []string{
-		"bumper-lanes-plugin/bin/git-diff-tree-go",
-		"./bin/git-diff-tree-go",
-		"/usr/local/bin/git-diff-tree-go",
+		"bumper-lanes-plugin/bin/git-diff-tree",
+		"./bin/git-diff-tree",
+		"/usr/local/bin/git-diff-tree",
 	}
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	return "git-diff-tree-go" // Fall back to PATH lookup
+	return "git-diff-tree" // Fall back to PATH lookup
 }

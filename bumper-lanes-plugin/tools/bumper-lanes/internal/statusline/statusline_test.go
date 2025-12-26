@@ -69,36 +69,58 @@ func TestFormatBumperStatus(t *testing.T) {
 		percentage int
 		viewMode   string
 		wantColor  string
+		wantBar    bool // true if expecting traffic light bar
 		wantText   string
 	}{
 		{
-			name:       "active state shows green with mode",
+			name:       "active state <70% shows green bar",
 			state:      "active",
 			score:      100,
 			limit:      400,
 			percentage: 25,
 			viewMode:   "tree",
 			wantColor:  colorGreen,
-			wantText:   "active (100/400 - 25%)",
+			wantBar:    true,
 		},
 		{
-			name:       "tripped state shows red with mode",
+			name:       "active state 70-90% shows yellow bar",
+			state:      "active",
+			score:      320,
+			limit:      400,
+			percentage: 80,
+			viewMode:   "tree",
+			wantColor:  colorYellow,
+			wantBar:    true,
+		},
+		{
+			name:       "active state >90% shows red bar",
+			state:      "active",
+			score:      380,
+			limit:      400,
+			percentage: 95,
+			viewMode:   "tree",
+			wantColor:  colorRed,
+			wantBar:    true,
+		},
+		{
+			name:       "tripped state shows red bar",
 			state:      "tripped",
 			score:      450,
 			limit:      400,
 			percentage: 112,
 			viewMode:   "icicle",
 			wantColor:  colorRed,
-			wantText:   "tripped (450/400 - 112%)",
+			wantBar:    true,
 		},
 		{
-			name:       "paused state shows yellow with mode",
+			name:       "paused state shows yellow text",
 			state:      "paused",
 			score:      0, // score/limit ignored for paused
 			limit:      0,
 			percentage: 0,
 			viewMode:   "collapsed",
 			wantColor:  colorYellow,
+			wantBar:    false,
 			wantText:   "Paused",
 		},
 		{
@@ -109,7 +131,7 @@ func TestFormatBumperStatus(t *testing.T) {
 			percentage: 12,
 			viewMode:   "",
 			wantColor:  colorGreen,
-			wantText:   "[tree]",
+			wantBar:    true,
 		},
 	}
 
@@ -120,7 +142,13 @@ func TestFormatBumperStatus(t *testing.T) {
 			if !strings.Contains(got, tt.wantColor) {
 				t.Errorf("formatBumperStatus() missing color %q in: %s", tt.wantColor, got)
 			}
-			if !strings.Contains(got, tt.wantText) {
+			if tt.wantBar {
+				// Traffic light bar uses █ (filled) and ░ (empty)
+				if !strings.Contains(got, "█") && !strings.Contains(got, "░") {
+					t.Errorf("formatBumperStatus() missing bar chars in: %s", got)
+				}
+			}
+			if tt.wantText != "" && !strings.Contains(got, tt.wantText) {
 				t.Errorf("formatBumperStatus() missing text %q in: %s", tt.wantText, got)
 			}
 			// Should end with [mode]
@@ -139,7 +167,7 @@ func TestFormatOutput(t *testing.T) {
 	t.Run("widget=all formats full output", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project | main | $1.23",
-			BumperIndicator: "active (100/400 - 25%)",
+			BumperIndicator: "█░░░░ [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
@@ -154,16 +182,16 @@ func TestFormatOutput(t *testing.T) {
 
 	t.Run("widget=indicator returns only bumper indicator", func(t *testing.T) {
 		out := &StatusOutput{
-			StatusLine:      "[Sonnet] | project | main | $1.23 | active (100/400 - 25%)",
-			BumperIndicator: "active (100/400 - 25%)",
+			StatusLine:      "[Sonnet] | project | main | $1.23 | █░░░░ [tree]",
+			BumperIndicator: "█░░░░ [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
 		got := FormatOutput(out, WidgetIndicator)
 
-		// Should have indicator
-		if !strings.Contains(got, "active (100/400 - 25%)") {
-			t.Errorf("FormatOutput(indicator) missing indicator, got: %q", got)
+		// Should have indicator with bar chars
+		if !strings.Contains(got, "█") {
+			t.Errorf("FormatOutput(indicator) missing bar char, got: %q", got)
 		}
 		// Should NOT have full status line parts
 		if strings.Contains(got, "Sonnet") {
@@ -177,7 +205,7 @@ func TestFormatOutput(t *testing.T) {
 	t.Run("widget=diff-tree returns only visualization", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project",
-			BumperIndicator: "active (100/400 - 25%)",
+			BumperIndicator: "█░░░░ [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
@@ -191,7 +219,8 @@ func TestFormatOutput(t *testing.T) {
 		if strings.Contains(got, "Sonnet") {
 			t.Errorf("FormatOutput(diff-tree) should not include model name")
 		}
-		if strings.Contains(got, "active (100/400") {
+		// Should NOT have bar indicator
+		if strings.Contains(got, "[tree]") {
 			t.Errorf("FormatOutput(diff-tree) should not include indicator")
 		}
 	})
@@ -243,4 +272,3 @@ func TestFormatOutput(t *testing.T) {
 		}
 	})
 }
-

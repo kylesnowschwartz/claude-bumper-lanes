@@ -111,17 +111,15 @@ func handleWriteEdit(input *HookInput) int {
 
 	// Output fuel gauge to stderr based on threshold tier
 	// Exit 2 ensures stderr reaches Claude (per docs)
+	// Tiers: 70% NOTICE, 90% WARNING
 	if pct >= 90 {
-		fmt.Fprintf(os.Stderr, "CRITICAL: Review budget near critical (%d%%). %d/%d pts. STOP accepting work. Inform user checkpoint needed NOW.\n", pct, freshScore, sess.ThresholdLimit)
-		return 2
-	} else if pct >= 75 {
 		fmt.Fprintf(os.Stderr, "WARNING: Review budget at %d%% (%d/%d pts). Complete current work, then ask user about checkpoint.\n", pct, freshScore, sess.ThresholdLimit)
 		return 2
-	} else if pct >= 50 {
+	} else if pct >= 70 {
 		fmt.Fprintf(os.Stderr, "NOTICE: %d%% budget used (%d/%d pts). Wrap up current task soon.\n", pct, freshScore, sess.ThresholdLimit)
 		return 2
 	}
 
-	// Under 50% - silent
+	// Under 70% - silent
 	return 0
 }

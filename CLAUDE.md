@@ -29,7 +29,7 @@ Defense-in-depth hook system with three layers:
 - Default threshold: 400 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
-- PostToolUse fuel gauge tiers: 50% NOTICE, 75% WARNING, 90% CRITICAL
+- PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
