@@ -8,27 +8,27 @@ on:
 
 jobs:
   test:
-    name: Test Library Functions
+    name: Go Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code with submodules
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          submodules: recursive
+          go-version: '1.21'
+          cache-dependency-path: bumper-lanes-plugin/tools/bumper-lanes/go.sum
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+      - name: Run tests
+        working-directory: bumper-lanes-plugin/tools/bumper-lanes
+        run: go test ./...
 
-      - name: Make test helpers executable
-        run: |
-          chmod +x tests/bats/bin/bats
-          chmod +x tests/manual/*.sh
+      - name: Run vet
+        working-directory: bumper-lanes-plugin/tools/bumper-lanes
+        run: go vet ./...
 
-      - name: Run unit tests
-        run: tests/bats/bin/bats tests/unit/*.bats
-
-      - name: Run integration tests
-        run: tests/bats/bin/bats tests/integration/*.bats
+      - name: Build
+        working-directory: bumper-lanes-plugin/tools/bumper-lanes
+        run: go build -o ../../bin/bumper-lanes ./cmd/bumper-lanes
