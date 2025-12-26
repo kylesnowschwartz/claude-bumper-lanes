@@ -94,6 +94,16 @@ diff_tree=$(echo "$input" | bumper-lanes status --widget=diff-tree)
 
 Run `/bumper-setup-statusline` for setup instructions.
 
+### Opting Out of Auto-Setup
+
+To prevent bumper-lanes from modifying your statusline script, add this comment anywhere in your script:
+
+```bash
+# BUMPER_HANDS_OFF
+```
+
+This tells bumper-lanes to leave your configuration alone. The plugin will not wrap, update, or regenerate any script containing this marker.
+
 ## Configuration
 
 Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't want to track it.

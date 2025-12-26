@@ -28,12 +28,18 @@ func TestIsOurWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a fake binary that contains the marker (simulates the compiled Go binary)
-	// This should NOT match because it doesn't start with a shebang
+	// Create a fake binary named "bumper-lanes" that contains the marker
+	// (simulates the compiled Go binary containing marker as string constant)
 	binaryWithMarker := filepath.Join(tmpDir, "bumper-lanes")
 	binaryContent := []byte{0x7f, 'E', 'L', 'F'} // ELF magic number
 	binaryContent = append(binaryContent, []byte("garbage"+wrapperMarker+"more garbage")...)
 	if err := os.WriteFile(binaryWithMarker, binaryContent, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a non-shebang script with marker (e.g., TypeScript statusline)
+	nonShebangScript := filepath.Join(tmpDir, "statusline.ts")
+	if err := os.WriteFile(nonShebangScript, []byte("// TypeScript\n"+wrapperMarker+"\nconsole.log('hi')"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,7 +54,8 @@ func TestIsOurWrapper(t *testing.T) {
 		{"file without marker", noMarkerFile, false},
 		{"wrapper filename match", wrapperFile, true},
 		{"wrapper filename in different dir", filepath.Join("/some/other/path", wrapperFileName), true}, // filename match, file doesn't need to exist
-		{"binary with marker embedded", binaryWithMarker, false},                                        // binary contains marker but no shebang
+		{"bumper-lanes binary with marker", binaryWithMarker, false},                                    // our binary contains marker, must not false-positive
+		{"non-shebang script with marker", nonShebangScript, true},                                      // TypeScript etc. should still match
 	}
 
 	for _, tt := range tests {
@@ -233,6 +240,67 @@ echo hello`
 
 		if isWrapperStale(wrapperPath) {
 			t.Errorf("isWrapperStale() = true, want false when BUMPER_BIN matches current (%s)", currentBin)
+		}
+	})
+}
+
+func TestIsHandsOff(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("returns true for script with marker", func(t *testing.T) {
+		withMarker := filepath.Join(tmpDir, "with-marker.sh")
+		if err := os.WriteFile(withMarker, []byte("#!/bin/bash\n# BUMPER_HANDS_OFF\necho hi"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if !isHandsOff(withMarker) {
+			t.Error("isHandsOff() = false, want true for script with marker")
+		}
+	})
+
+	t.Run("returns false for script without marker", func(t *testing.T) {
+		withoutMarker := filepath.Join(tmpDir, "without-marker.sh")
+		if err := os.WriteFile(withoutMarker, []byte("#!/bin/bash\necho hi"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if isHandsOff(withoutMarker) {
+			t.Error("isHandsOff() = true, want false for script without marker")
+		}
+	})
+
+	t.Run("returns false for non-existent file", func(t *testing.T) {
+		if isHandsOff("/nonexistent/path") {
+			t.Error("isHandsOff() = true, want false for non-existent file")
+		}
+	})
+
+	t.Run("returns false for empty path", func(t *testing.T) {
+		if isHandsOff("") {
+			t.Error("isHandsOff() = true, want false for empty path")
+		}
+	})
+
+	t.Run("returns false for bumper-lanes binary", func(t *testing.T) {
+		// The compiled bumper-lanes binary contains the marker as a string constant.
+		// isHandsOff must not false-positive match on our own binary.
+		binaryPath := filepath.Join(tmpDir, "bumper-lanes")
+		binaryContent := []byte{0x7f, 'E', 'L', 'F'} // ELF magic number
+		binaryContent = append(binaryContent, []byte("garbage"+handsOffMarker+"more garbage")...)
+		if err := os.WriteFile(binaryPath, binaryContent, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if isHandsOff(binaryPath) {
+			t.Error("isHandsOff() = true, want false for bumper-lanes binary")
+		}
+	})
+
+	t.Run("returns true for non-shebang script with marker", func(t *testing.T) {
+		// TypeScript, Node.js, etc. may not have shebangs
+		tsScript := filepath.Join(tmpDir, "statusline.ts")
+		if err := os.WriteFile(tsScript, []byte("// TypeScript statusline\n// # BUMPER_HANDS_OFF\nconsole.log('hi')"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if !isHandsOff(tsScript) {
+			t.Error("isHandsOff() = false, want true for non-shebang script with marker")
 		}
 	})
 }
