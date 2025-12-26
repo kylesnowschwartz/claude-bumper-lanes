@@ -277,8 +277,8 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 	}
 }
 
-// TestStatusLinePrompted verifies the one-time prompt flag persistence.
-func TestStatusLinePrompted(t *testing.T) {
+// TestStatusLineConfigured verifies the one-time setup flag persistence.
+func TestStatusLineConfigured(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -292,8 +292,8 @@ func TestStatusLinePrompted(t *testing.T) {
 	t.Run("returns false when no config exists", func(t *testing.T) {
 		os.Remove(personalPath)
 
-		if LoadStatusLinePrompted() {
-			t.Error("LoadStatusLinePrompted() = true, want false when no config")
+		if LoadStatusLineConfigured() {
+			t.Error("LoadStatusLineConfigured() = true, want false when no config")
 		}
 	})
 
@@ -301,43 +301,43 @@ func TestStatusLinePrompted(t *testing.T) {
 		os.WriteFile(personalPath, []byte(`{"threshold": 300}`), 0644)
 		defer os.Remove(personalPath)
 
-		if LoadStatusLinePrompted() {
-			t.Error("LoadStatusLinePrompted() = true, want false when field not set")
+		if LoadStatusLineConfigured() {
+			t.Error("LoadStatusLineConfigured() = true, want false when field not set")
 		}
 	})
 
 	t.Run("returns true when field is set", func(t *testing.T) {
-		os.WriteFile(personalPath, []byte(`{"status_line_prompted": true}`), 0644)
+		os.WriteFile(personalPath, []byte(`{"status_line_configured": true}`), 0644)
 		defer os.Remove(personalPath)
 
-		if !LoadStatusLinePrompted() {
-			t.Error("LoadStatusLinePrompted() = false, want true")
+		if !LoadStatusLineConfigured() {
+			t.Error("LoadStatusLineConfigured() = false, want true")
 		}
 	})
 
-	t.Run("SaveStatusLinePrompted creates config if missing", func(t *testing.T) {
+	t.Run("SaveStatusLineConfigured creates config if missing", func(t *testing.T) {
 		os.Remove(personalPath)
 
-		if err := SaveStatusLinePrompted(); err != nil {
-			t.Fatalf("SaveStatusLinePrompted() error = %v", err)
+		if err := SaveStatusLineConfigured(); err != nil {
+			t.Fatalf("SaveStatusLineConfigured() error = %v", err)
 		}
 
-		if !LoadStatusLinePrompted() {
-			t.Error("After SaveStatusLinePrompted(), LoadStatusLinePrompted() = false")
+		if !LoadStatusLineConfigured() {
+			t.Error("After SaveStatusLineConfigured(), LoadStatusLineConfigured() = false")
 		}
 	})
 
-	t.Run("SaveStatusLinePrompted preserves existing config values", func(t *testing.T) {
+	t.Run("SaveStatusLineConfigured preserves existing config values", func(t *testing.T) {
 		os.WriteFile(personalPath, []byte(`{"threshold": 500, "default_view_mode": "icicle"}`), 0644)
 		defer os.Remove(personalPath)
 
-		if err := SaveStatusLinePrompted(); err != nil {
-			t.Fatalf("SaveStatusLinePrompted() error = %v", err)
+		if err := SaveStatusLineConfigured(); err != nil {
+			t.Fatalf("SaveStatusLineConfigured() error = %v", err)
 		}
 
-		// Verify status_line_prompted is set
-		if !LoadStatusLinePrompted() {
-			t.Error("status_line_prompted not set after save")
+		// Verify status_line_configured is set
+		if !LoadStatusLineConfigured() {
+			t.Error("status_line_configured not set after save")
 		}
 
 		// Verify threshold was preserved

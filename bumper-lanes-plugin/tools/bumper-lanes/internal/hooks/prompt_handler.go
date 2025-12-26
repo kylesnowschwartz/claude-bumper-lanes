@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -303,18 +302,6 @@ func getBumperLanesBinPath() string {
 		return "bumper-lanes" // fallback to PATH
 	}
 	return exe
-}
-
-// getAddonScriptPath returns the path to the addon status line script.
-func getAddonScriptPath() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "/path/to/bumper-lanes-plugin/status-lines/bumper-lanes-addon.sh"
-	}
-	// exe is .../bin/bumper-lanes, addon is .../status-lines/bumper-lanes-addon.sh
-	binDir := filepath.Dir(exe)
-	pluginDir := filepath.Dir(binDir)
-	return filepath.Join(pluginDir, "status-lines", "bumper-lanes-addon.sh")
 }
 
 // hasStatusLineConfigured is also used by session_start.go

@@ -61,16 +61,19 @@ Work normally with Claude. When the threshold is exceeded:
 
 ## Status Line Setup
 
-To see the diff tree visualization in your Claude Code status line:
+Status line is **auto-configured** on first session. No manual setup needed.
 
-**Option 1: Use the addon script** (no existing status line)
+If you need to configure manually:
+
+**Option 1: Use the binary directly** (no existing status line)
 
 Add to `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
-    "command": "/path/to/bumper-lanes-plugin/status-lines/bumper-lanes-addon.sh"
+    "type": "command",
+    "command": "/path/to/bumper-lanes-plugin/bin/bumper-lanes"
   }
 }
 ```

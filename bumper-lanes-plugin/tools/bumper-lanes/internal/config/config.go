@@ -24,10 +24,10 @@ const (
 
 // Config represents bumper-lanes configuration.
 type Config struct {
-	Threshold          int    `json:"threshold,omitempty"`
-	DefaultViewMode    string `json:"default_view_mode,omitempty"`
-	StatusLinePrompted bool   `json:"status_line_prompted,omitempty"`
-	AutoStatusLine     *bool  `json:"auto_statusline,omitempty"` // nil = default (true), false = disabled
+	Threshold            int    `json:"threshold,omitempty"`
+	DefaultViewMode      string `json:"default_view_mode,omitempty"`
+	StatusLineConfigured bool   `json:"status_line_configured,omitempty"`
+	AutoStatusLine       *bool  `json:"auto_statusline,omitempty"` // nil = default (true), false = disabled
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -172,24 +172,24 @@ func SavePersonalConfig(threshold int) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// LoadStatusLinePrompted checks if user has been prompted about status line.
+// LoadStatusLineConfigured checks if status line has been auto-configured.
 // This is stored in personal config (untracked).
-func LoadStatusLinePrompted() bool {
+func LoadStatusLineConfigured() bool {
 	gitDir, err := getGitDir()
 	if err != nil {
-		return true // Fail open - don't prompt if we can't check
+		return true // Fail open - don't reconfigure if we can't check
 	}
 
 	personalPath := filepath.Join(gitDir, "bumper-config.json")
 	if cfg, err := loadConfigFile(personalPath); err == nil {
-		return cfg.StatusLinePrompted
+		return cfg.StatusLineConfigured
 	}
 	return false
 }
 
-// SaveStatusLinePrompted marks that user has been prompted.
+// SaveStatusLineConfigured marks that status line has been configured.
 // Preserves existing config values.
-func SaveStatusLinePrompted() error {
+func SaveStatusLineConfigured() error {
 	gitDir, err := getGitDir()
 	if err != nil {
 		return err
@@ -202,7 +202,7 @@ func SaveStatusLinePrompted() error {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	cfg.StatusLinePrompted = true
+	cfg.StatusLineConfigured = true
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

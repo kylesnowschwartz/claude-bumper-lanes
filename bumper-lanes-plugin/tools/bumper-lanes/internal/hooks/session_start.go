@@ -132,48 +132,68 @@ func setupStatusLineWrapper() string {
 		return "[bumper-lanes] Updated status line wrapper for new plugin version."
 	}
 
-	// Check if already using our addon script (no custom status line case)
-	if isOurAddon(currentCmd) {
-		if !isAddonStale(currentCmd) {
+	// Check if already using our binary directly (no custom status line case)
+	if isOurBinary(currentCmd) {
+		if !isBinaryStale(currentCmd) {
 			return "" // Already set up and current
 		}
-		// Stale addon - update settings.json to point to new path
-		newAddonPath := getAddonScriptPath()
-		if err := updateSettingsWithJq(homeDir, newAddonPath); err != nil {
-			return "" // Fail open - old addon might still work
+		// Stale binary path - update settings.json to point to new path
+		newBinaryPath, err := os.Executable()
+		if err != nil {
+			return "" // Fail open
+		}
+		if err := updateSettingsWithJq(homeDir, newBinaryPath); err != nil {
+			return "" // Fail open - old binary might still work
 		}
 		return "[bumper-lanes] Updated status line for new plugin version."
 	}
 
+	// Check if already using our addon script (legacy, migrate to binary)
+	if isOurAddon(currentCmd) {
+		// Migrate from addon script to binary
+		newBinaryPath, err := os.Executable()
+		if err != nil {
+			return "" // Fail open
+		}
+		if err := updateSettingsWithJq(homeDir, newBinaryPath); err != nil {
+			return "" // Fail open - old addon still works
+		}
+		return "[bumper-lanes] Migrated status line to binary."
+	}
+
 	// Check if setup was already offered and declined/completed
-	if config.LoadStatusLinePrompted() {
+	if config.LoadStatusLineConfigured() {
 		return "" // Don't re-prompt
 	}
 
-	// No existing status line - install addon directly (no wrapper needed)
+	// No existing status line - point directly at binary (outputs full status line)
 	if currentCmd == "" {
-		addonPath := getAddonScriptPath()
-		if err := updateSettingsWithJq(homeDir, addonPath); err != nil {
-			_ = config.SaveStatusLinePrompted()
+		binaryPath, err := os.Executable()
+		if err != nil {
+			_ = config.SaveStatusLineConfigured()
+			return fmt.Sprintf("[bumper-lanes] Couldn't find binary path: %v", err)
+		}
+		if err := updateSettingsWithJq(homeDir, binaryPath); err != nil {
+			_ = config.SaveStatusLineConfigured()
 			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", err)
 		}
-		_ = config.SaveStatusLinePrompted()
+		_ = config.SaveStatusLineConfigured()
 		return "[bumper-lanes] Status line configured!"
 	}
 
 	// Existing status line - generate wrapper to preserve + extend it
 	wrapperPath := filepath.Join(homeDir, ".claude", wrapperFileName)
 	if err := generateWrapper(wrapperPath, currentCmd, homeDir); err != nil {
-		_ = config.SaveStatusLinePrompted()
+		_ = config.SaveStatusLineConfigured()
 		return fmt.Sprintf("[bumper-lanes] Failed to create wrapper: %v\nRun /bumper-setup-statusline for manual setup.", err)
 	}
 
 	if err := updateSettingsWithJq(homeDir, wrapperPath); err != nil {
-		_ = config.SaveStatusLinePrompted()
+		_ = config.SaveStatusLineConfigured()
 		return fmt.Sprintf("[bumper-lanes] Wrapper created at %s\nCouldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", wrapperPath, err)
 	}
 
-	_ = config.SaveStatusLinePrompted()
+	_ = config.SaveStatusLineConfigured()
 	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree.\nOriginal: %s", currentCmd)
 }
 
@@ -234,11 +254,25 @@ func isOurAddon(cmd string) bool {
 	return filepath.Base(cmd) == addonFileName
 }
 
-// isAddonStale checks if the addon script path is stale (plugin updated).
-// Returns true if the path doesn't match the current plugin's addon path.
-func isAddonStale(cmd string) bool {
-	currentAddonPath := getAddonScriptPath()
-	return cmd != currentAddonPath
+// binaryFileName is the bumper-lanes binary name.
+const binaryFileName = "bumper-lanes"
+
+// isOurBinary checks if the given command is our binary directly.
+func isOurBinary(cmd string) bool {
+	if cmd == "" {
+		return false
+	}
+	return filepath.Base(cmd) == binaryFileName
+}
+
+// isBinaryStale checks if the binary path is stale (plugin updated).
+// Returns true if the path doesn't match the current executable.
+func isBinaryStale(cmd string) bool {
+	currentBinaryPath, err := os.Executable()
+	if err != nil {
+		return false // Can't determine - assume not stale
+	}
+	return cmd != currentBinaryPath
 }
 
 // getWrapperBinaryPath extracts the BUMPER_BIN path from a wrapper script.
@@ -346,9 +380,8 @@ func updateSettingsWithJq(homeDir, wrapperPath string) error {
 		}
 	}
 
-	// Use jq to update settings
-	// jq '.statusLine.command = "path"' file > tmp && mv tmp file
-	jqExpr := fmt.Sprintf(`.statusLine.command = %q`, wrapperPath)
+	// Use jq to update settings - must set both type and command
+	jqExpr := fmt.Sprintf(`.statusLine.type = "command" | .statusLine.command = %q`, wrapperPath)
 	cmd := exec.Command("jq", jqExpr, settingsPath)
 	output, err := cmd.Output()
 	if err != nil {

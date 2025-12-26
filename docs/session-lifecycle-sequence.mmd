@@ -37,10 +37,10 @@ sequenceDiagram
     Hook->>FS: rename to session-{id}
     FS-->>Hook: state saved
 
-    %% One-time prompt check
-    Hook->>Cfg: check status_line_prompted
+    %% One-time auto-setup check
+    Hook->>Cfg: check status_line_configured
     Cfg-->>Hook: false (first time)
-    Hook-->>CC: stderr: Run /bumper-setup-statusline...
+    Hook-->>CC: auto-configure statusLine in settings.json
 
     %% === DURING SESSION (each hook call) ===
     CC->>Hook: PostToolUse / Stop

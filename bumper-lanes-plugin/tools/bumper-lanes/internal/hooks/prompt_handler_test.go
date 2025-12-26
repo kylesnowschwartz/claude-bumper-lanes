@@ -21,26 +21,6 @@ func TestGetBumperLanesBinPath(t *testing.T) {
 	}
 }
 
-// TestGetAddonScriptPath verifies addon script path detection.
-func TestGetAddonScriptPath(t *testing.T) {
-	path := getAddonScriptPath()
-
-	// Should return non-empty string
-	if path == "" {
-		t.Error("getAddonScriptPath() returned empty string")
-	}
-
-	// Should end with the expected filename
-	if filepath.Base(path) != "bumper-lanes-addon.sh" {
-		t.Errorf("getAddonScriptPath() = %q, want path ending with 'bumper-lanes-addon.sh'", path)
-	}
-
-	// Should contain status-lines directory
-	if filepath.Base(filepath.Dir(path)) != "status-lines" {
-		t.Errorf("getAddonScriptPath() = %q, want path containing 'status-lines' directory", path)
-	}
-}
-
 // TestHasStatusLineConfigured tests status line detection.
 // Uses temp HOME to avoid affecting real user settings.
 func TestHasStatusLineConfigured(t *testing.T) {

@@ -38,9 +38,13 @@ Status Line Widget:
 `
 
 func main() {
+	// No args: default to status command (for statusLine.command usage)
 	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(1)
+		if err := cmdStatus(nil); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	cmd := os.Args[1]
