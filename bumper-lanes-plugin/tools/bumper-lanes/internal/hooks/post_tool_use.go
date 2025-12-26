@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -40,6 +41,8 @@ func PostToolUse(input *HookInput) (exitCode int) {
 
 // handleBashCommit detects git commits and auto-resets baseline.
 func handleBashCommit(input *HookInput) int {
+	log := logging.New(input.SessionID, "post_tool_use")
+
 	// Need command to check
 	if input.ToolInput == nil || input.ToolInput.Command == "" {
 		return 0
@@ -53,7 +56,7 @@ func handleBashCommit(input *HookInput) int {
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session (bash commit): %v (failing open)\n", err)
+		log.Warn("failed to load session (bash commit): %v (failing open)", err)
 		return 0 // No session - fail open
 	}
 
@@ -61,7 +64,7 @@ func handleBashCommit(input *HookInput) int {
 	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get tree from HEAD: %v (failing open)\n", err)
+		log.Warn("failed to get tree from HEAD: %v (failing open)", err)
 		return 0 // Failed to get tree - fail open
 	}
 	currentTree := strings.TrimSpace(string(output))
@@ -81,10 +84,12 @@ func handleBashCommit(input *HookInput) int {
 
 // handleWriteEdit provides fuel gauge warnings after file modifications.
 func handleWriteEdit(input *HookInput) int {
+	log := logging.New(input.SessionID, "post_tool_use")
+
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session (write/edit): %v (failing open)\n", err)
+		log.Warn("failed to load session (write/edit): %v (failing open)", err)
 		return 0 // Fail open
 	}
 

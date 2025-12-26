@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 )
 
 // SessionState represents the persisted state for a bumper-lanes session.
@@ -208,11 +210,11 @@ func (s *SessionState) GetViewOpts() string {
 
 // CleanupOrphaned removes session files that don't match the current session.
 // This cleans up orphaned checkpoints from crashed sessions.
-// Fails open - errors are logged to stderr but don't block execution.
-func CleanupOrphaned(currentSessionID string) {
+// Fails open - errors are logged but don't block execution.
+func CleanupOrphaned(currentSessionID string, log *logging.Logger) {
 	checkpointDir, err := GetCheckpointDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get checkpoint dir for cleanup: %v (failing open)\n", err)
+		log.Warn("failed to get checkpoint dir for cleanup: %v (failing open)", err)
 		return // Fail open
 	}
 
@@ -245,11 +247,11 @@ func CleanupOrphaned(currentSessionID string) {
 		// Remove orphaned session file
 		orphanPath := filepath.Join(checkpointDir, name)
 		if err := os.Remove(orphanPath); err != nil {
-			fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to clean orphaned checkpoint %s: %v (failing open)\n", name, err)
+			log.Warn("failed to clean orphaned checkpoint %s: %v (failing open)", name, err)
 			continue
 		}
 
 		// Log successful cleanup
-		fmt.Fprintf(os.Stderr, "bumper-lanes: cleaned orphaned checkpoint: %s\n", name)
+		log.Info("cleaned orphaned checkpoint: %s", name)
 	}
 }

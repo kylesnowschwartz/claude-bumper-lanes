@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -45,6 +46,9 @@ import (
 //
 // Reference: https://docs.anthropic.com/en/docs/claude-code/hooks
 func Stop(input *HookInput) error {
+	// Initialize logger for this session
+	log := logging.New(input.SessionID, "stop")
+
 	// Check if this is a git repository
 	if !IsGitRepo() {
 		return nil
@@ -65,7 +69,7 @@ func Stop(input *HookInput) error {
 	// Load session state
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to load session state: %v (failing open)\n", err)
+		log.Warn("failed to load session state: %v (failing open)", err)
 		return nil // No baseline - fail open
 	}
 
@@ -89,7 +93,7 @@ func Stop(input *HookInput) error {
 	// Capture current working tree
 	currentTree, err := CaptureTree()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to capture current tree: %v (failing open)\n", err)
+		log.Warn("failed to capture current tree: %v (failing open)", err)
 		return nil // Fail open
 	}
 
@@ -112,7 +116,7 @@ func Stop(input *HookInput) error {
 	// This allows score to decrease when user manually deletes/reverts changes
 	stats := getStatsJSON(sess.BaselineTree)
 	if stats == nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get diff stats (failing open)\n")
+		log.Warn("failed to get diff stats (failing open)")
 		return nil // Fail open
 	}
 

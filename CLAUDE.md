@@ -20,7 +20,7 @@ Defense-in-depth hook system with three layers:
 ## Design Principles
 
 - **Stateful enforcement**: Track cumulative diff per session against baseline snapshot
-- **Fail-open with visibility**: Errors allow operations (availability over strictness), but log warnings to stderr with prefix `bumper-lanes: warning:` for operator visibility
+- **Fail-open with visibility**: Errors allow operations (availability over strictness), logging warnings to session log files for operator debugging
 - **Explicit approval**: User must manually reset after reviewing changes
 - **Transparent feedback**: Both user and Claude see threshold status and reasons
 
@@ -32,6 +32,24 @@ Defense-in-depth hook system with three layers:
 - PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
+
+## Logging
+
+Session logs are written to `~/.claude/logs/bumper-lanes/session-{session_id}.log` for debugging fail-open errors and operational visibility.
+
+**Log format:**
+```
+[2025-12-27 09:56:28] [WARN] [session_start] failed to capture baseline tree: exit status 1 (failing open)
+[2025-12-27 09:56:28] [INFO] [session_start] cleaned orphaned checkpoint: session-old123
+```
+
+**Log levels:**
+- `DEBUG` - Verbose debugging (only with `BUMPER_LANES_DEBUG=1`)
+- `INFO` - Operational events (checkpoint cleanup, etc.)
+- `WARN` - Fail-open errors that allow operations but indicate problems
+- `ERROR` - Serious errors
+
+**Why file logging?** Claude Code's hook stderr handling is unreliable for exit code 0. Stderr only reaches Claude when exit code is 2 (blocking errors). File logging provides reliable debugging visibility.
 
 ## Hook-Intercept-Block Pattern
 

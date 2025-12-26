@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -26,6 +27,9 @@ const (
 // It captures the baseline tree and initializes session state.
 // Returns exit code: 0 = success, 1 = warning (shows stderr to user).
 func SessionStart(input *HookInput) int {
+	// Initialize logger for this session
+	log := logging.New(input.SessionID, "session_start")
+
 	// Check if this is a git repository
 	if !IsGitRepo() {
 		return 0 // Fail open - not a git repo
@@ -34,7 +38,7 @@ func SessionStart(input *HookInput) int {
 	// Capture baseline tree
 	baselineTree, err := CaptureTree()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to capture baseline tree: %v (failing open)\n", err)
+		log.Warn("failed to capture baseline tree: %v (failing open)", err)
 		return 0 // Fail open
 	}
 
@@ -47,7 +51,7 @@ func SessionStart(input *HookInput) int {
 	// Create and save session state
 	sess, err := state.New(input.SessionID, baselineTree, baselineBranch, threshold)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to create session state: %v (failing open)\n", err)
+		log.Warn("failed to create session state: %v (failing open)", err)
 		return 0 // Fail open
 	}
 
@@ -56,15 +60,15 @@ func SessionStart(input *HookInput) int {
 	sess.SetViewOpts(config.LoadViewOpts())
 
 	if err := sess.Save(); err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to save session state: %v (failing open)\n", err)
+		log.Warn("failed to save session state: %v (failing open)", err)
 		return 0 // Fail open
 	}
 
 	// Cleanup orphaned checkpoints from crashed sessions
-	state.CleanupOrphaned(input.SessionID)
+	state.CleanupOrphaned(input.SessionID, log)
 
 	// Auto-setup status line wrapper (once per user)
-	if msg := setupStatusLineWrapper(); msg != "" {
+	if msg := setupStatusLineWrapper(log); msg != "" {
 		fmt.Fprintln(os.Stderr, msg)
 		return 1 // Exit 1 shows stderr as warning
 	}
@@ -76,7 +80,6 @@ func SessionStart(input *HookInput) int {
 func hasStatusLineConfigured() bool {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get home dir: %v (failing open)\n", err)
 		return true // Assume configured on error (fail open)
 	}
 
@@ -88,7 +91,6 @@ func hasStatusLineConfigured() bool {
 
 	var settings map[string]interface{}
 	if err := json.Unmarshal(data, &settings); err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to parse settings.json: %v (failing open)\n", err)
 		return true // Invalid JSON - fail open
 	}
 
@@ -117,10 +119,10 @@ func hasStatusLineConfigured() bool {
 // setupStatusLineWrapper generates a wrapper script and updates settings.json.
 // Returns a message to show to user, or empty string if no action needed.
 // This is idempotent - checks actual state each time rather than caching.
-func setupStatusLineWrapper() string {
+func setupStatusLineWrapper(log *logging.Logger) string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get home dir for status line setup: %v (failing open)\n", err)
+		log.Warn("failed to get home dir for status line setup: %v (failing open)", err)
 		return "" // Fail open
 	}
 
@@ -144,7 +146,7 @@ func setupStatusLineWrapper() string {
 			return "" // Can't determine original, leave as-is
 		}
 		if err := generateWrapper(currentCmd, originalCmd, homeDir); err != nil {
-			fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to regenerate wrapper: %v (failing open)\n", err)
+			log.Warn("failed to regenerate wrapper: %v (failing open)", err)
 			return "" // Fail open - old wrapper still works
 		}
 		return "[bumper-lanes] Updated status line wrapper for new plugin version. Restart session to activate."
@@ -158,11 +160,11 @@ func setupStatusLineWrapper() string {
 		// Stale binary path - update settings.json to point to new path
 		newBinaryPath, err := os.Executable()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to get executable path: %v (failing open)\n", err)
+			log.Warn("failed to get executable path: %v (failing open)", err)
 			return "" // Fail open
 		}
 		if err := updateSettingsWithJq(homeDir, newBinaryPath); err != nil {
-			fmt.Fprintf(os.Stderr, "bumper-lanes: warning: failed to update settings.json: %v (failing open)\n", err)
+			log.Warn("failed to update settings.json: %v (failing open)", err)
 			return "" // Fail open - old binary might still work
 		}
 		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
