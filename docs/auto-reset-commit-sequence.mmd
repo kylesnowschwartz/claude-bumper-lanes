@@ -38,10 +38,10 @@ sequenceDiagram
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - Commit detection: internal/hooks/post_tool_use.go:18 (regex)
-%% - Tree capture: internal/hooks/post_tool_use.go:60-65
-%% - Reset call: internal/hooks/post_tool_use.go:67-72
-%% - Feedback: internal/hooks/post_tool_use.go:75-77
+%% - Commit detection: internal/hooks/post_tool_use.go:19 (regex)
+%% - Tree capture: internal/hooks/post_tool_use.go:64-70
+%% - Reset call: internal/hooks/post_tool_use.go:72-77
+%% - Feedback: internal/hooks/post_tool_use.go:79-82
 %%
 %% COMMIT PATTERN REGEX
 %% Matches: git commit, git -C /path commit, git --git-dir=/x commit
@@ -52,9 +52,7 @@ sequenceDiagram
 %% 2. Natural workflow: commit = checkpoint = fresh budget
 %% 3. Encourages atomic commits (commit often, stay under threshold)
 %%
-%% PAIN POINTS / EDGE CASES
-%% 1. Fires even if commit fails (regex matches command, not result)
-%% 2. User might not notice auto-reset happened (muted stderr)
-%% 3. Resets to HEAD^{tree} - if commit failed, baseline = old commit
-%% 4. No auto-reset for git commit --amend (same HEAD, tree may differ)
-%% 5. Branch switch also auto-resets (separate flow in Stop hook)
+%% EDGE CASES
+%% 1. User might not notice auto-reset happened (muted stderr)
+%% 2. No auto-reset for git commit --amend (same HEAD, tree may differ)
+%% 3. Branch switch also auto-resets (separate flow in Stop hook)

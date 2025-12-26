@@ -72,8 +72,8 @@ sequenceDiagram
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - PostToolUse tiers: internal/hooks/post_tool_use.go:114-121
-%% - Stop blocking: internal/hooks/stop.go:117-173
+%% - PostToolUse tiers: internal/hooks/post_tool_use.go:119-128
+%% - Stop blocking: internal/hooks/stop.go:127-184
 %% - Reset: internal/hooks/prompt_handler.go:96-115
 %% - Pause: internal/hooks/prompt_handler.go:118-131
 %% - Resume: internal/hooks/prompt_handler.go:134-147
@@ -90,10 +90,9 @@ sequenceDiagram
 %% 4. Auto-reset on commit not shown (separate flow)
 %% 5. Score can decrease if user reverts changes - not obvious
 %%
-%% IMPROVEMENT OPPORTUNITY
-%% Status line currently: green until trip, then suddenly red
-%% Could match fuel gauge tiers to give user same visibility as Claude:
+%% STATUS LINE TIERS (implemented)
+%% Status line now matches fuel gauge visibility:
 %% - 0-69%:  green  "active"
-%% - 70-89%: yellow "NOTICE"   (currently stays green)
-%% - 90-99%: orange "WARNING"  (currently stays green)
+%% - 70-89%: yellow "NOTICE"
+%% - 90-99%: orange "WARNING"
 %% - 100%+: red    "TRIPPED"

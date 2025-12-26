@@ -67,15 +67,15 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - ensure-binaries.sh: scripts/ensure-binaries.sh (version sentinel)
-%% - SessionStart: internal/hooks/session_start.go:28-70
-%% - setupStatusLineWrapper: internal/hooks/session_start.go:115-185
-%% - State New(): internal/state/session.go:135-152
-%% - State Save(): internal/state/session.go:91-132 (atomic write)
-%% - State Load(): internal/state/session.go:67-87
-%% - State Delete(): internal/state/session.go:155-161
-%% - CleanupOrphaned(): internal/state/session.go:209-254
+%% - SessionStart: internal/hooks/session_start.go:29-77
+%% - setupStatusLineWrapper: internal/hooks/session_start.go:122-196
+%% - State New(): internal/state/session.go:136-154
+%% - State Save(): internal/state/session.go:93-134 (atomic write)
+%% - State Load(): internal/state/session.go:69-89
+%% - State Delete(): internal/state/session.go:157-163
+%% - CleanupOrphaned(): internal/state/session.go:214-257
 %% - SessionEnd: internal/hooks/session_end.go:9-13
-%% - Checkpoint dir: internal/state/session.go:36-44
+%% - Checkpoint dir: internal/state/session.go:38-46
 %%
 %% STATE FILE LOCATION
 %% Path: {git-dir}/bumper-checkpoints/session-{session_id}
@@ -109,8 +109,8 @@ sequenceDiagram
 %% - Triggers rebuild on version mismatch (plugin update scenario)
 %% - Fast path (~33ms) when version matches and binaries exist
 %%
-%% PAIN POINTS
-%% 1. State read/write on every hook call (I/O overhead)
-%% 2. [RESOLVED] Orphaned checkpoints cleaned on SessionStart (CleanupOrphaned)
-%% 3. [RESOLVED] Temp files skipped during cleanup (may be in-progress writes)
-%% 4. No state versioning - schema changes break old files
+%% NOTES
+%% 1. State read/write on every hook call (I/O overhead - acceptable)
+%% 2. Orphaned checkpoints cleaned on SessionStart (CleanupOrphaned)
+%% 3. Temp files skipped during cleanup (may be in-progress writes)
+%% 4. No state versioning needed - sessions are ephemeral

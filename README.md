@@ -8,7 +8,7 @@ Bumper-Lanes tracks how much code Claude has written or edited, blocking further
 
 When the threshold is exceeded:
 
-1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (50% → 75% → 90%)
+1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (70% NOTICE → 90% WARNING)
 2. **Stop hook** blocks Claude from finishing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after you review
 
@@ -46,8 +46,7 @@ Work normally with Claude. When the threshold is exceeded:
 | `/bumper-pause` | Pause threshold enforcement |
 | `/bumper-resume` | Resume threshold enforcement |
 | `/bumper-config` | Show current configuration |
-| `/bumper-config set <n>` | Set repo threshold (50-2000) |
-| `/bumper-config personal <n>` | Set personal threshold |
+| `/bumper-config <n>` | Set repo threshold (50-2000) |
 
 ### View Modes
 
@@ -57,7 +56,8 @@ Work normally with Claude. When the threshold is exceeded:
 | `/bumper-collapsed` | Single-line grouped by directory |
 | `/bumper-icicle` | Flame chart showing hierarchy by width |
 | `/bumper-topn` | Top N files by change size |
-| `/bumper-pathstrip` | Abbreviated paths |
+| `/bumper-smart` | Depth-2 aggregated sparkline |
+| `/bumper-brackets` | Nested bracket notation |
 
 ## Status Line Setup
 
@@ -134,8 +134,7 @@ bumper-lanes-plugin/
 ├── tools/
 │   └── bumper-lanes/       # Hook handler source (Go)
 ├── commands/               # Slash command definitions
-└── hooks/
-    └── hooks.json          # Hook configuration
+└── hooks/hooks.json        # Hook configuration
 ```
 
 Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz).

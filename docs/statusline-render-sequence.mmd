@@ -71,9 +71,8 @@ sequenceDiagram
 %% - indicator: just "active (125/400 - 31%)"
 %% - diff-tree: just the ASCII visualization
 %%
-%% PAIN POINTS
-%% 1. Two subprocess calls to diff-viz per render (perf)
+%% NOTES
+%% 1. Two subprocess calls to diff-viz per render (acceptable latency)
 %% 2. Binary lookup fallback chain (plugin/bin → PATH)
-%% 3. Non-breaking space hack for Claude Code compatibility
-%% 4. Score calculated fresh each render (no caching)
-%% 5. Chdir to workspace for git ops (not thread-safe)
+%% 3. Non-breaking space for Claude Code empty-line handling
+%% 4. Score calculated fresh each render (ensures accuracy after manual changes)
