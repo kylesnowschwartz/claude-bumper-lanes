@@ -129,7 +129,7 @@ func setupStatusLineWrapper() string {
 		if err := generateWrapper(currentCmd, originalCmd, homeDir); err != nil {
 			return "" // Fail open - old wrapper still works
 		}
-		return "[bumper-lanes] Updated status line wrapper for new plugin version. Restart session to activate."
+		return "[bumper-lanes] Updated status line wrapper for new plugin version."
 	}
 
 	// Check if already using our addon script (no custom status line case)
@@ -142,7 +142,7 @@ func setupStatusLineWrapper() string {
 		if err := updateSettingsWithJq(homeDir, newAddonPath); err != nil {
 			return "" // Fail open - old addon might still work
 		}
-		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
+		return "[bumper-lanes] Updated status line for new plugin version."
 	}
 
 	// Check if setup was already offered and declined/completed
@@ -158,7 +158,7 @@ func setupStatusLineWrapper() string {
 			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", err)
 		}
 		_ = config.SaveStatusLinePrompted()
-		return "[bumper-lanes] Status line configured! Restart session to see diff tree."
+		return "[bumper-lanes] Status line configured!"
 	}
 
 	// Existing status line - generate wrapper to preserve + extend it
@@ -174,7 +174,7 @@ func setupStatusLineWrapper() string {
 	}
 
 	_ = config.SaveStatusLinePrompted()
-	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree. Restart session to activate.\nOriginal: %s", currentCmd)
+	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree.\nOriginal: %s", currentCmd)
 }
 
 // getStatusLineCommand reads the current statusLine.command from settings.json.
