@@ -46,6 +46,10 @@ func SessionStart(input *HookInput) int {
 		return 0 // Fail open
 	}
 
+	// Load persisted view settings from config
+	sess.SetViewMode(config.LoadViewMode())
+	sess.SetViewOpts(config.LoadViewOpts())
+
 	if err := sess.Save(); err != nil {
 		return 0 // Fail open
 	}
@@ -101,12 +105,8 @@ func hasStatusLineConfigured() bool {
 
 // setupStatusLineWrapper generates a wrapper script and updates settings.json.
 // Returns a message to show to user, or empty string if no action needed.
+// This is idempotent - checks actual state each time rather than caching.
 func setupStatusLineWrapper() string {
-	// Check if auto-setup is disabled via config
-	if !config.LoadAutoStatusLine() {
-		return "" // User opted out
-	}
-
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "" // Fail open
@@ -148,39 +148,28 @@ func setupStatusLineWrapper() string {
 		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
 	}
 
-	// Check if setup was already offered and declined/completed
-	if config.LoadStatusLineConfigured() {
-		return "" // Don't re-prompt
-	}
-
 	// No existing status line - point directly at binary (outputs full status line)
 	if currentCmd == "" {
 		binaryPath, err := os.Executable()
 		if err != nil {
-			_ = config.SaveStatusLineConfigured()
 			return fmt.Sprintf("[bumper-lanes] Couldn't find binary path: %v", err)
 		}
 		if err := updateSettingsWithJq(homeDir, binaryPath); err != nil {
-			_ = config.SaveStatusLineConfigured()
 			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", err)
 		}
-		_ = config.SaveStatusLineConfigured()
 		return "[bumper-lanes] Status line configured! Restart session to see diff tree."
 	}
 
 	// Existing status line - generate wrapper to preserve + extend it
 	wrapperPath := filepath.Join(homeDir, ".claude", wrapperFileName)
 	if err := generateWrapper(wrapperPath, currentCmd, homeDir); err != nil {
-		_ = config.SaveStatusLineConfigured()
 		return fmt.Sprintf("[bumper-lanes] Failed to create wrapper: %v\nRun /bumper-setup-statusline for manual setup.", err)
 	}
 
 	if err := updateSettingsWithJq(homeDir, wrapperPath); err != nil {
-		_ = config.SaveStatusLineConfigured()
 		return fmt.Sprintf("[bumper-lanes] Wrapper created at %s\nCouldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", wrapperPath, err)
 	}
 
-	_ = config.SaveStatusLineConfigured()
 	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree. Restart session to activate.\nOriginal: %s", currentCmd)
 }
 

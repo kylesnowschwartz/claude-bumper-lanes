@@ -15,21 +15,21 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
-// Command patterns - match both /bumper-X and /claude-bumper-lanes:bumper-X
+// Command patterns - regex only for commands that need capture groups.
+// Simple commands use matchCommand() with string matching for performance.
 var (
-	resetCmdPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-reset\s*$`)
-	pauseCmdPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-pause\s*$`)
-	resumeCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-resume\s*$`)
 	viewCmdPattern   = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
 	configCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
-	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
-	viewTreePattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-tree\s*$`)
-	viewIciclePattern    = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-icicle\s*$`)
-	viewCollapsedPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-collapsed\s*$`)
-	viewSmartPattern     = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-smart\s*$`)
-	viewTopnPattern      = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-topn\s*$`)
-	viewBracketsPattern  = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-brackets\s*$`)
 )
+
+// matchCommand checks if prompt matches a bumper-lanes command.
+// Handles both /bumper-X and /claude-bumper-lanes:bumper-X forms.
+// Returns true if the command matches (exact match, no trailing args).
+func matchCommand(prompt, cmdName string) bool {
+	shortForm := "/" + cmdName
+	longForm := "/claude-bumper-lanes:" + cmdName
+	return prompt == shortForm || prompt == longForm
+}
 
 // UserPromptResponse is the JSON structure for UserPromptSubmit hook output.
 // decision="block" + reason="message" shows output to user without API call.
@@ -49,39 +49,42 @@ func HandlePrompt(input *HookInput) int {
 
 	sessionID := input.SessionID
 
-	// Try each command pattern
-	if resetCmdPattern.MatchString(prompt) {
+	// Simple commands (no args) - use string matching for performance
+	if matchCommand(prompt, "bumper-reset") {
 		return handleReset(sessionID)
 	}
-	if pauseCmdPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-pause") {
 		return handlePause(sessionID)
 	}
-	if resumeCmdPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-resume") {
 		return handleResume(sessionID)
 	}
+
+	// Commands with capture groups - use regex
 	if m := viewCmdPattern.FindStringSubmatch(prompt); m != nil {
 		return handleView(sessionID, strings.TrimSpace(m[1]))
 	}
 	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
 		return handleConfig(strings.TrimSpace(m[1]))
 	}
-	// Per-mode commands (no-arg = immediate statusline refresh)
-	if viewTreePattern.MatchString(prompt) {
+
+	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
+	if matchCommand(prompt, "bumper-tree") {
 		return handleViewMode(sessionID, "tree")
 	}
-	if viewIciclePattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-icicle") {
 		return handleViewMode(sessionID, "icicle")
 	}
-	if viewCollapsedPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-collapsed") {
 		return handleViewMode(sessionID, "collapsed")
 	}
-	if viewSmartPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-smart") {
 		return handleViewMode(sessionID, "smart")
 	}
-	if viewTopnPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-topn") {
 		return handleViewMode(sessionID, "topn")
 	}
-	if viewBracketsPattern.MatchString(prompt) {
+	if matchCommand(prompt, "bumper-brackets") {
 		return handleViewMode(sessionID, "brackets")
 	}
 
@@ -179,7 +182,7 @@ func handleView(sessionID, mode string) int {
 	}
 
 	// Persist to config for future sessions
-	_ = persistViewModeToConfig(mode)
+	_ = config.SaveConfig(config.Config{DefaultViewMode: mode})
 
 	blockPrompt(fmt.Sprintf("View mode set to: %s", mode))
 	return 0
@@ -198,7 +201,7 @@ func handleViewMode(sessionID, mode string) int {
 		return 0
 	}
 
-	_ = persistViewModeToConfig(mode)
+	_ = config.SaveConfig(config.Config{DefaultViewMode: mode})
 	blockPrompt(fmt.Sprintf("View: %s", mode))
 	return 0
 }
@@ -217,19 +220,12 @@ func handleConfig(args string) int {
 		return 0
 	}
 
-	// Check for "personal <value>" syntax
-	if strings.HasPrefix(args, "personal ") {
-		valStr := strings.TrimPrefix(args, "personal ")
-		return setThreshold(valStr, true)
-	}
-
-	// Direct number sets repo config
-	return setThreshold(args, false)
+	// Direct number sets config
+	return setThreshold(args)
 }
 
-// setThreshold parses and saves threshold value.
-// personal=true saves to .git/bumper-config.json, false saves to .bumper-lanes.json
-func setThreshold(valStr string, personal bool) int {
+// setThreshold parses and saves threshold value to .bumper-lanes.json.
+func setThreshold(valStr string) int {
 	val, err := strconv.Atoi(strings.TrimSpace(valStr))
 	if err != nil {
 		blockPrompt(fmt.Sprintf("Invalid threshold: %s\nUse a number 50-2000", valStr))
@@ -241,22 +237,12 @@ func setThreshold(valStr string, personal bool) int {
 		return 0
 	}
 
-	var saveErr error
-	var location string
-	if personal {
-		saveErr = config.SavePersonalConfig(val)
-		location = "personal (.git/bumper-config.json)"
-	} else {
-		saveErr = config.SaveRepoConfig(val)
-		location = "repo (.bumper-lanes.json)"
-	}
-
-	if saveErr != nil {
-		blockPrompt(fmt.Sprintf("Error: Failed to save config: %v", saveErr))
+	if err := config.SaveRepoConfig(val); err != nil {
+		blockPrompt(fmt.Sprintf("Error: Failed to save config: %v", err))
 		return 0
 	}
 
-	blockPrompt(fmt.Sprintf("Threshold set to %d (%s).\nRun /bumper-reset to apply to current session.", val, location))
+	blockPrompt(fmt.Sprintf("Threshold set to %d (.bumper-lanes.json).\nRun /bumper-reset to apply to current session.", val))
 	return 0
 }
 

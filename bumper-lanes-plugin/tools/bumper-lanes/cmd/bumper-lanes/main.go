@@ -199,10 +199,7 @@ func cmdConfig(args []string) error {
 	if args[0] == "set" && len(args) >= 2 {
 		return hooks.ConfigSet(args[1])
 	}
-	if args[0] == "personal" && len(args) >= 2 {
-		return hooks.ConfigPersonal(args[1])
-	}
-	return fmt.Errorf("usage: bumper-lanes config [show|set <value>|personal <value>]")
+	return fmt.Errorf("usage: bumper-lanes config [show|set <value>]")
 }
 
 // Prompt handler (UserPromptSubmit hook)

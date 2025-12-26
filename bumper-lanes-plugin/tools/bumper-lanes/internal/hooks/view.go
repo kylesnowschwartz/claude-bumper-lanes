@@ -1,11 +1,9 @@
 package hooks
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
@@ -41,7 +39,7 @@ func ViewShow(sessionID string) error {
 }
 
 // View handles the view user command.
-// It sets the visualization mode for both session and personal config.
+// It sets the visualization mode for both session state and project config.
 // opts contains additional flags like "--width 100 --depth 3".
 func View(sessionID, mode, opts string) error {
 	sess, err := state.Load(sessionID)
@@ -62,8 +60,9 @@ func View(sessionID, mode, opts string) error {
 		return fmt.Errorf("failed to save state: %w", err)
 	}
 
-	// Persist to personal config (.git/bumper-config.json) for future sessions
-	if err := persistViewModeToConfig(mode); err != nil {
+	// Persist to project config (.bumper-lanes.json) for future sessions
+	cfg := config.Config{DefaultViewMode: mode, DefaultViewOpts: opts}
+	if err := config.SaveConfig(cfg); err != nil {
 		if opts != "" {
 			fmt.Printf("View mode set to: %s %s (session only - config save failed: %v)\n", mode, opts, err)
 		} else {
@@ -78,38 +77,6 @@ func View(sessionID, mode, opts string) error {
 		fmt.Printf("View mode set to: %s\n", mode)
 	}
 	return nil
-}
-
-// persistViewModeToConfig saves the view mode to personal config.
-func persistViewModeToConfig(mode string) error {
-	gitDir, err := config.GetGitDir()
-	if err != nil {
-		return err
-	}
-
-	personalConfig := filepath.Join(gitDir, "bumper-config.json")
-
-	// Read existing config or create new
-	var cfg map[string]interface{}
-	data, err := os.ReadFile(personalConfig)
-	if err == nil {
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			cfg = make(map[string]interface{})
-		}
-	} else {
-		cfg = make(map[string]interface{})
-	}
-
-	// Update view mode
-	cfg["default_view_mode"] = mode
-
-	// Write back
-	newData, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(personalConfig, newData, 0644)
 }
 
 // getValidModes queries git-diff-tree for valid modes.

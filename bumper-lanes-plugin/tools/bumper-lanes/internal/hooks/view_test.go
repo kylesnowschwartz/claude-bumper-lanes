@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -53,8 +54,7 @@ func TestView(t *testing.T) {
 		}
 
 		// Verify config file updated
-		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
-		configPath := filepath.Join(string(gitDir[:len(gitDir)-1]), "bumper-config.json")
+		configPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			t.Fatalf("Failed to read config: %v", err)
@@ -94,65 +94,40 @@ func TestView(t *testing.T) {
 	})
 }
 
-func TestPersistViewModeToConfig(t *testing.T) {
-	t.Run("creates config file if not exists", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+func TestSaveConfigPreservesExistingValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
 
-		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
 
-		err := persistViewModeToConfig("tree")
-		if err != nil {
-			t.Fatalf("persistViewModeToConfig() error = %v", err)
-		}
+	// Create existing config with threshold
+	configPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+	existingCfg := map[string]interface{}{
+		"threshold":         300,
+		"default_view_mode": "tree",
+	}
+	data, _ := json.Marshal(existingCfg)
+	os.WriteFile(configPath, data, 0644)
 
-		// Verify file was created
-		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
-		configPath := filepath.Join(string(gitDir[:len(gitDir)-1]), "bumper-config.json")
+	// Update view mode only
+	err := config.SaveConfig(config.Config{DefaultViewMode: "icicle"})
+	if err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
 
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			t.Error("Config file was not created")
-		}
-	})
+	// Verify threshold preserved, view mode updated
+	newData, _ := os.ReadFile(configPath)
+	var cfg map[string]interface{}
+	json.Unmarshal(newData, &cfg)
 
-	t.Run("preserves existing config values", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
-
-		origDir, _ := os.Getwd()
-		defer os.Chdir(origDir)
-		os.Chdir(tmpDir)
-
-		// Create existing config with other values
-		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
-		configPath := filepath.Join(string(gitDir[:len(gitDir)-1]), "bumper-config.json")
-		existingCfg := map[string]interface{}{
-			"threshold":         300,
-			"default_view_mode": "tree",
-		}
-		data, _ := json.Marshal(existingCfg)
-		os.WriteFile(configPath, data, 0644)
-
-		// Update view mode
-		err := persistViewModeToConfig("icicle")
-		if err != nil {
-			t.Fatalf("persistViewModeToConfig() error = %v", err)
-		}
-
-		// Verify threshold preserved, view mode updated
-		newData, _ := os.ReadFile(configPath)
-		var cfg map[string]interface{}
-		json.Unmarshal(newData, &cfg)
-
-		if cfg["threshold"].(float64) != 300 {
-			t.Errorf("threshold = %v, want 300", cfg["threshold"])
-		}
-		if cfg["default_view_mode"] != "icicle" {
-			t.Errorf("default_view_mode = %v, want icicle", cfg["default_view_mode"])
-		}
-	})
+	if cfg["threshold"].(float64) != 300 {
+		t.Errorf("threshold = %v, want 300", cfg["threshold"])
+	}
+	if cfg["default_view_mode"] != "icicle" {
+		t.Errorf("default_view_mode = %v, want icicle", cfg["default_view_mode"])
+	}
 }
 
 // setupTempGitRepo initializes a git repo in tmpDir

@@ -8,9 +8,8 @@ import (
 	"testing"
 )
 
-// TestConfigPriorityChain verifies Personal > Repo > Default precedence.
-// This is documented behavior that's easy to break during refactoring.
-func TestConfigPriorityChain(t *testing.T) {
+// TestConfigLoading verifies config loading from .bumper-lanes.json.
+func TestConfigLoading(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
@@ -19,13 +18,9 @@ func TestConfigPriorityChain(t *testing.T) {
 	defer os.Chdir(origDir)
 	os.Chdir(tmpDir)
 
-	gitDir := filepath.Join(tmpDir, ".git")
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
-	t.Run("default when no config files exist", func(t *testing.T) {
-		// Clean slate
-		os.Remove(personalPath)
+	t.Run("default when no config file exists", func(t *testing.T) {
 		os.Remove(repoPath)
 
 		got := LoadThreshold()
@@ -34,31 +29,17 @@ func TestConfigPriorityChain(t *testing.T) {
 		}
 	})
 
-	t.Run("repo config overrides default", func(t *testing.T) {
-		os.Remove(personalPath)
+	t.Run("config overrides default threshold", func(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644)
 		defer os.Remove(repoPath)
 
 		got := LoadThreshold()
 		if got != 200 {
-			t.Errorf("LoadThreshold() = %d, want 200 (repo config)", got)
+			t.Errorf("LoadThreshold() = %d, want 200 (config)", got)
 		}
 	})
 
-	t.Run("personal config overrides repo config", func(t *testing.T) {
-		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644)
-		os.WriteFile(personalPath, []byte(`{"threshold": 500}`), 0644)
-		defer os.Remove(repoPath)
-		defer os.Remove(personalPath)
-
-		got := LoadThreshold()
-		if got != 500 {
-			t.Errorf("LoadThreshold() = %d, want 500 (personal > repo)", got)
-		}
-	})
-
-	t.Run("view mode priority chain", func(t *testing.T) {
-		os.Remove(personalPath)
+	t.Run("view mode loading", func(t *testing.T) {
 		os.Remove(repoPath)
 
 		// Default
@@ -66,34 +47,42 @@ func TestConfigPriorityChain(t *testing.T) {
 			t.Errorf("LoadViewMode() = %q, want %q (default)", got, DefaultViewMode)
 		}
 
-		// Repo overrides default
+		// Config overrides default
 		os.WriteFile(repoPath, []byte(`{"default_view_mode": "collapsed"}`), 0644)
+		defer os.Remove(repoPath)
 		if got := LoadViewMode(); got != "collapsed" {
-			t.Errorf("LoadViewMode() = %q, want %q (repo)", got, "collapsed")
-		}
-
-		// Personal overrides repo
-		os.WriteFile(personalPath, []byte(`{"default_view_mode": "icicle"}`), 0644)
-		if got := LoadViewMode(); got != "icicle" {
-			t.Errorf("LoadViewMode() = %q, want %q (personal > repo)", got, "icicle")
+			t.Errorf("LoadViewMode() = %q, want %q (config)", got, "collapsed")
 		}
 	})
 
-	t.Run("invalid view mode falls through to next priority", func(t *testing.T) {
-		os.WriteFile(repoPath, []byte(`{"default_view_mode": "collapsed"}`), 0644)
-		os.WriteFile(personalPath, []byte(`{"default_view_mode": "INVALID"}`), 0644)
+	t.Run("invalid view mode falls through to default", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"default_view_mode": "INVALID"}`), 0644)
 		defer os.Remove(repoPath)
-		defer os.Remove(personalPath)
 
-		// Personal is invalid, should fall through to repo
 		got := LoadViewMode()
-		if got != "collapsed" {
-			t.Errorf("LoadViewMode() = %q, want %q (skip invalid personal)", got, "collapsed")
+		if got != DefaultViewMode {
+			t.Errorf("LoadViewMode() = %q, want %q (invalid should use default)", got, DefaultViewMode)
+		}
+	})
+
+	t.Run("view opts loading", func(t *testing.T) {
+		os.Remove(repoPath)
+
+		// Default is empty
+		if got := LoadViewOpts(); got != "" {
+			t.Errorf("LoadViewOpts() = %q, want empty (default)", got)
+		}
+
+		// Config provides opts
+		os.WriteFile(repoPath, []byte(`{"default_view_opts": "--width 80 --depth 3"}`), 0644)
+		defer os.Remove(repoPath)
+		if got := LoadViewOpts(); got != "--width 80 --depth 3" {
+			t.Errorf("LoadViewOpts() = %q, want '--width 80 --depth 3' (config)", got)
 		}
 	})
 }
 
-// TestGitWorktreeDetection verifies config works in worktrees.
+// TestGitWorktreeDetection verifies GetGitDir works in worktrees.
 // Worktrees have .git as a file pointing to the real git dir.
 func TestGitWorktreeDetection(t *testing.T) {
 	// Create main repo
@@ -123,25 +112,6 @@ func TestGitWorktreeDetection(t *testing.T) {
 		// Should be .git/worktrees/<name>, not .git
 		if !strings.Contains(gitDir, "worktrees") {
 			t.Errorf("GetGitDir() = %q, want path containing 'worktrees'", gitDir)
-		}
-	})
-
-	t.Run("personal config isolated per worktree", func(t *testing.T) {
-		gitDir, _ := GetGitDir()
-		personalPath := filepath.Join(gitDir, "bumper-config.json")
-		os.WriteFile(personalPath, []byte(`{"threshold": 999}`), 0644)
-		defer os.Remove(personalPath)
-
-		got := LoadThreshold()
-		if got != 999 {
-			t.Errorf("LoadThreshold() in worktree = %d, want 999", got)
-		}
-
-		// Main repo should NOT see this config
-		os.Chdir(mainRepo)
-		mainThreshold := LoadThreshold()
-		if mainThreshold == 999 {
-			t.Error("Main repo saw worktree's personal config - isolation broken")
 		}
 	})
 }
@@ -275,79 +245,4 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for invalid JSON, got nil")
 	}
-}
-
-// TestStatusLineConfigured verifies the one-time setup flag persistence.
-func TestStatusLineConfigured(t *testing.T) {
-	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
-
-	gitDir := filepath.Join(tmpDir, ".git")
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-
-	t.Run("returns false when no config exists", func(t *testing.T) {
-		os.Remove(personalPath)
-
-		if LoadStatusLineConfigured() {
-			t.Error("LoadStatusLineConfigured() = true, want false when no config")
-		}
-	})
-
-	t.Run("returns false when config exists but field not set", func(t *testing.T) {
-		os.WriteFile(personalPath, []byte(`{"threshold": 300}`), 0644)
-		defer os.Remove(personalPath)
-
-		if LoadStatusLineConfigured() {
-			t.Error("LoadStatusLineConfigured() = true, want false when field not set")
-		}
-	})
-
-	t.Run("returns true when field is set", func(t *testing.T) {
-		os.WriteFile(personalPath, []byte(`{"status_line_configured": true}`), 0644)
-		defer os.Remove(personalPath)
-
-		if !LoadStatusLineConfigured() {
-			t.Error("LoadStatusLineConfigured() = false, want true")
-		}
-	})
-
-	t.Run("SaveStatusLineConfigured creates config if missing", func(t *testing.T) {
-		os.Remove(personalPath)
-
-		if err := SaveStatusLineConfigured(); err != nil {
-			t.Fatalf("SaveStatusLineConfigured() error = %v", err)
-		}
-
-		if !LoadStatusLineConfigured() {
-			t.Error("After SaveStatusLineConfigured(), LoadStatusLineConfigured() = false")
-		}
-	})
-
-	t.Run("SaveStatusLineConfigured preserves existing config values", func(t *testing.T) {
-		os.WriteFile(personalPath, []byte(`{"threshold": 500, "default_view_mode": "icicle"}`), 0644)
-		defer os.Remove(personalPath)
-
-		if err := SaveStatusLineConfigured(); err != nil {
-			t.Fatalf("SaveStatusLineConfigured() error = %v", err)
-		}
-
-		// Verify status_line_configured is set
-		if !LoadStatusLineConfigured() {
-			t.Error("status_line_configured not set after save")
-		}
-
-		// Verify threshold was preserved
-		if got := LoadThreshold(); got != 500 {
-			t.Errorf("Threshold = %d, want 500 (should be preserved)", got)
-		}
-
-		// Verify view mode was preserved
-		if got := LoadViewMode(); got != "icicle" {
-			t.Errorf("ViewMode = %q, want icicle (should be preserved)", got)
-		}
-	})
 }

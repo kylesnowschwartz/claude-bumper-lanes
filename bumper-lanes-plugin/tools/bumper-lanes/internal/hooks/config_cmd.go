@@ -25,7 +25,7 @@ func ConfigShow() error {
 	return nil
 }
 
-// ConfigSet saves threshold to repo config (.bumper-lanes.json).
+// ConfigSet saves threshold to config (.bumper-lanes.json).
 func ConfigSet(value string) error {
 	threshold, err := strconv.Atoi(value)
 	if err != nil {
@@ -40,25 +40,6 @@ func ConfigSet(value string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("Repo threshold set to %d (saved to .bumper-lanes.json)\n", threshold)
-	return nil
-}
-
-// ConfigPersonal saves threshold to personal config (.git/bumper-config.json).
-func ConfigPersonal(value string) error {
-	threshold, err := strconv.Atoi(value)
-	if err != nil {
-		return fmt.Errorf("invalid threshold value: %s", value)
-	}
-
-	if threshold < 50 || threshold > 2000 {
-		return fmt.Errorf("threshold must be between 50 and 2000")
-	}
-
-	if err := config.SavePersonalConfig(threshold); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Personal threshold set to %d (saved to .git/bumper-config.json)\n", threshold)
+	fmt.Printf("Threshold set to %d (saved to .bumper-lanes.json)\n", threshold)
 	return nil
 }

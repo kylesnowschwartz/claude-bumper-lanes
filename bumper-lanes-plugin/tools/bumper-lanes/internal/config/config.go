@@ -1,5 +1,5 @@
 // Package config handles configuration loading for bumper-lanes.
-// Priority: Personal (.git/bumper-config.json) > Repo (.bumper-lanes.json) > Default
+// Config file: .bumper-lanes.json at repo root (users can gitignore if desired)
 package config
 
 import (
@@ -24,10 +24,9 @@ const (
 
 // Config represents bumper-lanes configuration.
 type Config struct {
-	Threshold            int    `json:"threshold,omitempty"`
-	DefaultViewMode      string `json:"default_view_mode,omitempty"`
-	StatusLineConfigured bool   `json:"status_line_configured,omitempty"`
-	AutoStatusLine       *bool  `json:"auto_statusline,omitempty"` // nil = default (true), false = disabled
+	Threshold       int    `json:"threshold,omitempty"`
+	DefaultViewMode string `json:"default_view_mode,omitempty"`
+	DefaultViewOpts string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -38,11 +37,6 @@ func GetGitDir() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
-}
-
-// getGitDir is an alias for internal use (backwards compat).
-func getGitDir() (string, error) {
-	return GetGitDir()
 }
 
 // getRepoRoot returns the repository root path.
@@ -69,54 +63,27 @@ func loadConfigFile(path string) (*Config, error) {
 }
 
 // LoadThreshold returns the configured threshold value.
-// Priority: Personal > Repo > Default
 func LoadThreshold() int {
-	gitDir, err := getGitDir()
-	if err != nil {
-		return DefaultThreshold
-	}
 	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return DefaultThreshold
 	}
 
-	// Priority 1: Personal config (untracked, in .git dir)
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-	if cfg, err := loadConfigFile(personalPath); err == nil && cfg.Threshold > 0 {
-		return cfg.Threshold
-	}
-
-	// Priority 2: Repo config (tracked, in repo root)
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
 	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.Threshold > 0 {
 		return cfg.Threshold
 	}
 
-	// Priority 3: Default
 	return DefaultThreshold
 }
 
 // LoadViewMode returns the configured default view mode.
-// Priority: Personal > Repo > Default
 func LoadViewMode() string {
-	gitDir, err := getGitDir()
-	if err != nil {
-		return DefaultViewMode
-	}
 	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return DefaultViewMode
 	}
 
-	// Priority 1: Personal config
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-	if cfg, err := loadConfigFile(personalPath); err == nil && cfg.DefaultViewMode != "" {
-		if isValidMode(cfg.DefaultViewMode) {
-			return cfg.DefaultViewMode
-		}
-	}
-
-	// Priority 2: Repo config
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
 	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.DefaultViewMode != "" {
 		if isValidMode(cfg.DefaultViewMode) {
@@ -124,8 +91,22 @@ func LoadViewMode() string {
 		}
 	}
 
-	// Priority 3: Default
 	return DefaultViewMode
+}
+
+// LoadViewOpts returns the configured default view options (e.g., "--width 80").
+func LoadViewOpts() string {
+	repoRoot, err := getRepoRoot()
+	if err != nil {
+		return ""
+	}
+
+	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
+	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.DefaultViewOpts != "" {
+		return cfg.DefaultViewOpts
+	}
+
+	return ""
 }
 
 // isValidMode checks if the mode is in the valid modes list.
@@ -155,75 +136,36 @@ func SaveRepoConfig(threshold int) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// SavePersonalConfig writes threshold to personal config file.
-func SavePersonalConfig(threshold int) error {
-	gitDir, err := getGitDir()
+// SaveConfig writes the full config to .bumper-lanes.json, preserving existing values.
+func SaveConfig(updates Config) error {
+	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return err
 	}
 
-	cfg := Config{Threshold: threshold}
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	path := filepath.Join(repoRoot, ".bumper-lanes.json")
+
+	// Load existing config to preserve other fields
+	existing, _ := loadConfigFile(path)
+	if existing == nil {
+		existing = &Config{}
+	}
+
+	// Apply updates (non-zero values override)
+	if updates.Threshold > 0 {
+		existing.Threshold = updates.Threshold
+	}
+	if updates.DefaultViewMode != "" {
+		existing.DefaultViewMode = updates.DefaultViewMode
+	}
+	if updates.DefaultViewOpts != "" {
+		existing.DefaultViewOpts = updates.DefaultViewOpts
+	}
+
+	data, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	path := filepath.Join(gitDir, "bumper-config.json")
 	return os.WriteFile(path, data, 0644)
-}
-
-// LoadStatusLineConfigured checks if status line has been auto-configured.
-// This is stored in personal config (untracked).
-func LoadStatusLineConfigured() bool {
-	gitDir, err := getGitDir()
-	if err != nil {
-		return true // Fail open - don't reconfigure if we can't check
-	}
-
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-	if cfg, err := loadConfigFile(personalPath); err == nil {
-		return cfg.StatusLineConfigured
-	}
-	return false
-}
-
-// SaveStatusLineConfigured marks that status line has been configured.
-// Preserves existing config values.
-func SaveStatusLineConfigured() error {
-	gitDir, err := getGitDir()
-	if err != nil {
-		return err
-	}
-
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-
-	// Load existing config or create new
-	cfg, _ := loadConfigFile(personalPath)
-	if cfg == nil {
-		cfg = &Config{}
-	}
-	cfg.StatusLineConfigured = true
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(personalPath, data, 0644)
-}
-
-// LoadAutoStatusLine checks if auto status line setup is enabled.
-// Returns true by default. Only returns false if explicitly disabled in personal config.
-// Repo config is not checked - this is a personal preference.
-func LoadAutoStatusLine() bool {
-	gitDir, err := getGitDir()
-	if err != nil {
-		return true // Default to enabled
-	}
-
-	personalPath := filepath.Join(gitDir, "bumper-config.json")
-	if cfg, err := loadConfigFile(personalPath); err == nil && cfg.AutoStatusLine != nil {
-		return *cfg.AutoStatusLine
-	}
-	return true // Default to enabled
 }

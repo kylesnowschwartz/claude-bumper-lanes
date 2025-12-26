@@ -96,15 +96,13 @@ Run `/bumper-setup-statusline` for setup instructions.
 
 ## Configuration
 
-| File | Tracked | Purpose |
-|------|---------|---------|
-| `.git/bumper-config.json` | No | Personal overrides |
-| `.bumper-lanes.json` | Yes | Shared team defaults |
+Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't want to track it.
 
 ```json
 {
   "threshold": 400,
-  "default_view_mode": "tree"
+  "default_view_mode": "tree",
+  "default_view_opts": "--width 80 --depth 3"
 }
 ```
 

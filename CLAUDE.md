@@ -56,22 +56,21 @@ See the **hook-intercept-block** skill for full documentation on implementing ne
 
 ## Configuration
 
-Threshold is configurable via JSON files (priority order):
-
-1. **Personal** (`.git/bumper-config.json`): Untracked, per-developer override
-2. **Repo** (`.bumper-lanes.json`): Tracked, shared team default
-3. **Default**: 400 points
+Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignore` if they don't want to track it.
 
 ### Config Commands
 
 - `/bumper-config` - Show current configuration
-- `/bumper-config 300` - Set repo threshold (creates `.bumper-lanes.json`)
-- `/bumper-config personal 500` - Set personal threshold (in `.git/`, untracked)
+- `/bumper-config 300` - Set threshold (creates `.bumper-lanes.json`)
 
 ### Config Schema
 
 ```json
-{"threshold": 300}
+{
+  "threshold": 300,
+  "default_view_mode": "tree",
+  "default_view_opts": "--width 80 --depth 3"
+}
 ```
 
 Threshold range: 50-2000 points. After changing config, run `/bumper-reset` to apply to current session.

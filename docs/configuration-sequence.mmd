@@ -6,49 +6,40 @@ sequenceDiagram
     participant User
     participant CC as Claude Code
     participant Sess as Session State
-    participant Personal as .git/bumper-config.json
-    participant Repo as .bumper-lanes.json
+    participant Config as .bumper-lanes.json
 
     %% === THRESHOLD CONFIGURATION ===
 
     %% Show current config
     User->>CC: /bumper-config
-    CC->>Personal: read threshold
-    Personal-->>CC: (may not exist)
-    CC->>Repo: read threshold
-    Repo-->>CC: (may not exist)
+    CC->>Config: read threshold
+    Config-->>CC: (may not exist)
     CC-->>User: Threshold: 400, Source: default
 
-    %% Set repo threshold (shared with team)
+    %% Set threshold
     User->>CC: /bumper-config 300
-    CC->>Repo: write threshold: 300
-    CC-->>User: Threshold set (repo). Run /bumper-reset
-
-    %% Set personal threshold (override)
-    User->>CC: /bumper-config personal 500
-    CC->>Personal: write threshold: 500
-    CC-->>User: Threshold set (personal). Run /bumper-reset
+    CC->>Config: write threshold: 300
+    CC-->>User: Threshold set. Run /bumper-reset
 
     %% Apply threshold change (manual step!)
     User->>CC: /bumper-reset
-    CC->>Personal: read threshold
-    Personal-->>CC: 500
-    CC->>Sess: update threshold_limit: 500
-    CC-->>User: Baseline reset. Score: 0/500
+    CC->>Config: read threshold
+    Config-->>CC: 300
+    CC->>Sess: update threshold_limit: 300
+    CC-->>User: Baseline reset. Score: 0/300
 
     %% === VIEW MODE CONFIGURATION ===
 
     %% Per-mode command (immediate, no opts)
     User->>CC: /bumper-tree
     CC->>Sess: set view_mode: tree
-    CC->>Personal: persist default_view_mode: tree
+    CC->>Config: persist default_view_mode: tree
     CC-->>User: View: tree
 
-    %% View command with opts (immediate, opts not persisted)
+    %% View command with opts (both persisted now)
     User->>CC: /bumper-view icicle --width 80
     CC->>Sess: set view_mode: icicle, view_opts: --width 80
-    CC->>Personal: persist default_view_mode: icicle
-    CC->>CC: (opts NOT persisted)
+    CC->>Config: persist view_mode + view_opts
     CC-->>User: View mode set to: icicle --width 80
 
     %% Show current view mode
@@ -60,21 +51,16 @@ sequenceDiagram
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - Config load priority: internal/config/config.go:70-96
-%% - Threshold set: internal/hooks/prompt_handler.go:235-266
-%% - View mode set: internal/hooks/prompt_handler.go:154-209
+%% - Config load: internal/config/config.go:67-111
+%% - Threshold set: internal/hooks/prompt_handler.go:227-246
+%% - View mode set: internal/hooks/prompt_handler.go:149-207
 %% - View opts storage: internal/state/session.go:28
-%% - Persist view mode: internal/hooks/view.go:83-113
+%% - Persist view: internal/hooks/view.go:65-81
 %%
 %% CONFIGURATION SURFACE AREA
 %% - Threshold: 50-2000 points (default 400)
 %% - View modes: tree, collapsed, smart, topn, icicle, brackets
-%% - View opts: --width N, --depth N (session-only)
+%% - View opts: --width N, --depth N (now persisted!)
 %%
-%% PAIN POINTS (6 friction sources)
-%% 1. Threshold change requires manual /bumper-reset to apply
-%% 2. View opts are ephemeral - lost on session restart
-%% 3. Per-mode commands (/bumper-tree) don't accept opts
-%% 4. Two config scopes (personal vs repo) with different paths
-%% 5. Priority resolution is implicit (personal > repo > default)
-%% 6. No way to set repo-level default view mode (only personal)
+%% Config file: .bumper-lanes.json at repo root
+%% Users can add to .gitignore if they don't want to track
