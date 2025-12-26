@@ -16,17 +16,11 @@ sequenceDiagram
     Config-->>CC: (may not exist)
     CC-->>User: Threshold: 400, Source: default
 
-    %% Set threshold
+    %% Set threshold (applies immediately)
     User->>CC: /bumper-config 300
     CC->>Config: write threshold: 300
-    CC-->>User: Threshold set. Run /bumper-reset
-
-    %% Apply threshold change (manual step!)
-    User->>CC: /bumper-reset
-    CC->>Config: read threshold
-    Config-->>CC: 300
     CC->>Sess: update threshold_limit: 300
-    CC-->>User: Baseline reset. Score: 0/300
+    CC-->>User: Threshold set to 300.
 
     %% === VIEW MODE CONFIGURATION ===
 
@@ -52,7 +46,7 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - Config load: internal/config/config.go:66-110
-%% - Threshold set: internal/hooks/prompt_handler.go:209-247
+%% - Threshold set: internal/hooks/prompt_handler.go:209-253
 %% - View mode set: internal/hooks/prompt_handler.go:152-207
 %% - View opts storage: internal/state/session.go:27-28
 %% - Persist view: internal/hooks/view.go:63-72

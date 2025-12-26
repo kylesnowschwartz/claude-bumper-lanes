@@ -65,7 +65,7 @@ func HandlePrompt(input *HookInput) int {
 		return handleView(sessionID, strings.TrimSpace(m[1]))
 	}
 	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
-		return handleConfig(strings.TrimSpace(m[1]))
+		return handleConfig(sessionID, strings.TrimSpace(m[1]))
 	}
 
 	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
@@ -207,7 +207,7 @@ func handleViewMode(sessionID, mode string) int {
 }
 
 // handleConfig shows or sets threshold configuration.
-func handleConfig(args string) int {
+func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
 		threshold := config.LoadThreshold()
@@ -221,11 +221,11 @@ func handleConfig(args string) int {
 	}
 
 	// Direct number sets config
-	return setThreshold(args)
+	return setThreshold(sessionID, args)
 }
 
 // setThreshold parses and saves threshold value to .bumper-lanes.json.
-func setThreshold(valStr string) int {
+func setThreshold(sessionID, valStr string) int {
 	val, err := strconv.Atoi(strings.TrimSpace(valStr))
 	if err != nil {
 		blockPrompt(fmt.Sprintf("Invalid threshold: %s\nUse a number 50-2000", valStr))
@@ -242,7 +242,13 @@ func setThreshold(valStr string) int {
 		return 0
 	}
 
-	blockPrompt(fmt.Sprintf("Threshold set to %d (.bumper-lanes.json).\nRun /bumper-reset to apply to current session.", val))
+	// Apply to current session immediately
+	if sess := loadSessionOrBlock(sessionID); sess != nil {
+		sess.ThresholdLimit = val
+		sess.Save()
+	}
+
+	blockPrompt(fmt.Sprintf("Threshold set to %d.", val))
 	return 0
 }
 
