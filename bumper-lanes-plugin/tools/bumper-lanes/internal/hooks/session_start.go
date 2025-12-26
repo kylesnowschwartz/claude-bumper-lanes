@@ -227,6 +227,8 @@ const addonFileName = "bumper-lanes-addon.sh"
 
 // isOurWrapper checks if the given command is already our generated wrapper.
 // Detects by filename match or by marker in file content.
+// IMPORTANT: Must verify file is a shell script, not a binary (the binary
+// contains the marker string in its compiled code, causing false positives).
 func isOurWrapper(cmd, homeDir string) bool {
 	if cmd == "" {
 		return false
@@ -237,13 +239,20 @@ func isOurWrapper(cmd, homeDir string) bool {
 		return true
 	}
 
-	// Check file content for marker
+	// Check file content for marker - but only if it's a shell script
 	data, err := os.ReadFile(cmd)
 	if err != nil {
 		return false
 	}
 
-	return strings.Contains(string(data), wrapperMarker)
+	content := string(data)
+
+	// Must start with shebang to be a shell script (not a binary)
+	if !strings.HasPrefix(content, "#!") {
+		return false
+	}
+
+	return strings.Contains(content, wrapperMarker)
 }
 
 // isOurAddon checks if the given command is our pre-built addon script.

@@ -28,6 +28,15 @@ func TestIsOurWrapper(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Create a fake binary that contains the marker (simulates the compiled Go binary)
+	// This should NOT match because it doesn't start with a shebang
+	binaryWithMarker := filepath.Join(tmpDir, "bumper-lanes")
+	binaryContent := []byte{0x7f, 'E', 'L', 'F'} // ELF magic number
+	binaryContent = append(binaryContent, []byte("garbage"+wrapperMarker+"more garbage")...)
+	if err := os.WriteFile(binaryWithMarker, binaryContent, 0755); err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name string
 		cmd  string
@@ -39,6 +48,7 @@ func TestIsOurWrapper(t *testing.T) {
 		{"file without marker", noMarkerFile, false},
 		{"wrapper filename match", wrapperFile, true},
 		{"wrapper filename in different dir", filepath.Join("/some/other/path", wrapperFileName), true}, // filename match, file doesn't need to exist
+		{"binary with marker embedded", binaryWithMarker, false},                                        // binary contains marker but no shebang
 	}
 
 	for _, tt := range tests {
