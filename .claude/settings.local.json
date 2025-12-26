@@ -21,10 +21,5 @@
     "additionalDirectories": [
       "/Users/kyle/Code/my-projects/diff-viz"
     ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "/Users/kyle/Code/my-projects/claude-bumper-lanes/bumper-lanes-plugin/bin/bumper-lanes status",
-    "padding": 0
   }
 }

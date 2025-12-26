@@ -129,7 +129,7 @@ func setupStatusLineWrapper() string {
 		if err := generateWrapper(currentCmd, originalCmd, homeDir); err != nil {
 			return "" // Fail open - old wrapper still works
 		}
-		return "[bumper-lanes] Updated status line wrapper for new plugin version."
+		return "[bumper-lanes] Updated status line wrapper for new plugin version. Restart session to activate."
 	}
 
 	// Check if already using our binary directly (no custom status line case)
@@ -145,20 +145,7 @@ func setupStatusLineWrapper() string {
 		if err := updateSettingsWithJq(homeDir, newBinaryPath); err != nil {
 			return "" // Fail open - old binary might still work
 		}
-		return "[bumper-lanes] Updated status line for new plugin version."
-	}
-
-	// Check if already using our addon script (legacy, migrate to binary)
-	if isOurAddon(currentCmd) {
-		// Migrate from addon script to binary
-		newBinaryPath, err := os.Executable()
-		if err != nil {
-			return "" // Fail open
-		}
-		if err := updateSettingsWithJq(homeDir, newBinaryPath); err != nil {
-			return "" // Fail open - old addon still works
-		}
-		return "[bumper-lanes] Migrated status line to binary."
+		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
 	}
 
 	// Check if setup was already offered and declined/completed
@@ -178,7 +165,7 @@ func setupStatusLineWrapper() string {
 			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", err)
 		}
 		_ = config.SaveStatusLineConfigured()
-		return "[bumper-lanes] Status line configured!"
+		return "[bumper-lanes] Status line configured! Restart session to see diff tree."
 	}
 
 	// Existing status line - generate wrapper to preserve + extend it
@@ -194,7 +181,7 @@ func setupStatusLineWrapper() string {
 	}
 
 	_ = config.SaveStatusLineConfigured()
-	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree.\nOriginal: %s", currentCmd)
+	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree. Restart session to activate.\nOriginal: %s", currentCmd)
 }
 
 // getStatusLineCommand reads the current statusLine.command from settings.json.
@@ -221,9 +208,6 @@ func getStatusLineCommand(homeDir string) string {
 	}
 	return cmd
 }
-
-// addonFileName is the pre-built status line addon script name.
-const addonFileName = "bumper-lanes-addon.sh"
 
 // isOurWrapper checks if the given command is already our generated wrapper.
 // Detects by filename match or by marker in file content.
@@ -253,14 +237,6 @@ func isOurWrapper(cmd, homeDir string) bool {
 	}
 
 	return strings.Contains(content, wrapperMarker)
-}
-
-// isOurAddon checks if the given command is our pre-built addon script.
-func isOurAddon(cmd string) bool {
-	if cmd == "" {
-		return false
-	}
-	return filepath.Base(cmd) == addonFileName
 }
 
 // binaryFileName is the bumper-lanes binary name.
