@@ -1,7 +1,7 @@
 ---
-name: test-diff-tree
 description: Generate nested test files to QA diff visualization modes (tree, sparkline, etc.)
 argument-hint: "[optional: file count, default 8]"
+model: haiku
 ---
 
 # Test git-diff-tree Visualizations

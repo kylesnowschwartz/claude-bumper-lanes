@@ -1,21 +1,15 @@
 ---
 description: Load the bumper-lanes development framework and skills into context for building
 allowed-tools: Bash(git log:*), Bash(bd:*), Bash(eza:*), Bash(git branch:*), Skill
+model: haiku
 ---
 
-Current branch:
 !`git branch --show-current`
-
-Check for ready work:
+!`git log -5 --oneline`
+!`eza --tree --level 5`
 !`bd ready`
 
-Review what was just accomplished:
-!`git log -5 --oneline`
-
-Review the codebase structure:
-!`eza --tree --level 5`
-
-Then, invoke these skills to load their knowledge into context:
+Invoke these skills to load their knowledge into context:
 - Skill(effective-go)
 - Skill(hud-first)
 - Skill(plugin-dev:plugin-dev-guide)
