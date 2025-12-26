@@ -1,0 +1,89 @@
+%% Session Lifecycle: Checkpoint creation, updates, and cleanup
+%% Render: cat session-lifecycle-sequence.mmd | mermaid-ascii -f -
+%% Focus: State persistence in .git/bumper-checkpoints/
+
+sequenceDiagram
+    participant CC as Claude Code
+    participant Hook as Hooks
+    participant Git
+    participant FS as .git/bumper-checkpoints/
+    participant Cfg as Config Files
+
+    %% === SESSION START ===
+    CC->>Hook: SessionStart
+    Hook->>Git: git rev-parse --absolute-git-dir
+    Git-->>Hook: /path/to/.git
+    Hook->>Git: git write-tree
+    Git-->>Hook: baseline tree SHA abc123
+    Hook->>Git: git branch --show-current
+    Git-->>Hook: main
+    Hook->>Cfg: load threshold
+    Cfg-->>Hook: 400 (default or config)
+
+    %% Create checkpoint directory and state file
+    Hook->>FS: mkdir bumper-checkpoints/
+    Hook->>FS: write session-{id}.tmp
+    Hook->>FS: rename to session-{id}
+    FS-->>Hook: state saved
+
+    %% One-time prompt check
+    Hook->>Cfg: check status_line_prompted
+    Cfg-->>Hook: false (first time)
+    Hook-->>CC: stderr: Run /bumper-setup-statusline...
+
+    %% === DURING SESSION (each hook call) ===
+    CC->>Hook: PostToolUse / Stop
+    Hook->>FS: read session-{id}
+    FS-->>Hook: SessionState JSON
+    Hook->>Hook: (update score, flags)
+    Hook->>FS: write session-{id}.tmp
+    Hook->>FS: rename to session-{id}
+    FS-->>Hook: atomic save complete
+
+    %% === SESSION END ===
+    CC->>Hook: SessionEnd
+    Hook->>FS: delete session-{id}
+    FS-->>Hook: (ignore errors)
+    Hook-->>CC: cleanup complete
+
+%% ============================================================
+%% VALIDATION REFERENCES
+%% ============================================================
+%% - SessionStart: internal/hooks/session_start.go:16-52
+%% - State New(): internal/state/session.go:135-153
+%% - State Save(): internal/state/session.go:90-133 (atomic write)
+%% - State Load(): internal/state/session.go:66-88
+%% - State Delete(): internal/state/session.go:155-162
+%% - SessionEnd: internal/hooks/session_end.go:9-13
+%% - Checkpoint dir: internal/state/session.go:35-45
+%%
+%% STATE FILE LOCATION
+%% Path: {git-dir}/bumper-checkpoints/session-{session_id}
+%% - Uses --absolute-git-dir for worktree support
+%% - Each worktree gets isolated checkpoints
+%%
+%% STATE FILE CONTENTS (JSON)
+%% {
+%%   "session_id": "abc123",
+%%   "baseline_tree": "def456",
+%%   "baseline_branch": "main",
+%%   "score": 125,
+%%   "threshold_limit": 400,
+%%   "stop_triggered": false,
+%%   "paused": false,
+%%   "view_mode": "tree",
+%%   "view_opts": "--width 80",
+%%   "created_at": "2024-01-15T10:30:00Z",
+%%   "repo_path": "/path/to/repo"
+%% }
+%%
+%% ATOMIC WRITES
+%% 1. Write to session-{id}.tmp
+%% 2. Rename to session-{id}
+%% Prevents race conditions between parallel hooks
+%%
+%% PAIN POINTS
+%% 1. State read/write on every hook call (I/O overhead)
+%% 2. No cleanup of orphaned checkpoints if session crashes
+%% 3. Checkpoint dir accumulates lock files on crashes
+%% 4. No state versioning - schema changes break old files

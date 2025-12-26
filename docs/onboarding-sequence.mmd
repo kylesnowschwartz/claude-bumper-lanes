@@ -1,0 +1,45 @@
+%% Onboarding Flow: Plugin install → working status line
+%% Render: cat onboarding-sequence.mmd | mermaid-ascii -f -
+%% Focus: User-facing steps only (internal details omitted)
+
+sequenceDiagram
+    participant User
+    participant CLI as Claude CLI
+    participant CC as Claude Code
+    participant FS as ~/.claude/
+
+    %% Phase 1: Plugin Installation (two commands)
+    User->>CLI: marketplace add kylesnowschwartz/claude-bumper-lanes
+    CLI-->>User: plugin added
+
+    User->>CLI: plugin install claude-bumper-lanes
+    CLI-->>User: plugin installed
+
+    %% Phase 2: First Session (one-time setup)
+    User->>CC: start session in git repo
+    CC->>CC: (builds Go binaries ~15s)
+    CC-->>User: stderr: Run /bumper-setup-statusline...
+
+    %% Phase 3: Status Line Setup
+    User->>CC: /bumper-setup-statusline
+    CC-->>User: addon script path OR widget snippet
+
+    %% Phase 4: Manual Configuration
+    User->>FS: edit settings.json (add statusLine.command)
+    User->>CC: restart session
+    CC-->>User: diff tree visible in status line
+
+%% ============================================================
+%% VALIDATION REFERENCES
+%% ============================================================
+%% - Plugin install: README.md:24-27
+%% - Binary build: scripts/ensure-binaries.sh:9-31
+%% - Setup prompt: internal/hooks/session_start.go:44-48
+%% - Setup command: internal/hooks/prompt_handler.go:306-342
+%%
+%% PAIN POINTS (5 friction sources)
+%% 1. Two CLI commands required (marketplace add + install)
+%% 2. 10-15s compile delay on first session start
+%% 3. One-time stderr prompt easy to miss in output noise
+%% 4. Manual JSON editing required for status line
+%% 5. Session restart required to see diff tree

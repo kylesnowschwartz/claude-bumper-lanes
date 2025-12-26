@@ -1,0 +1,106 @@
+%% Enforcement Flow: Fuel gauge → stop → reset/pause/resume cycle
+%% Render: cat enforcement-sequence.mmd | mermaid-ascii -f -
+%% Focus: The core loop that constrains Claude's work
+
+sequenceDiagram
+    participant User
+    participant Claude
+    participant PTU as PostToolUse
+    participant Stop as Stop Hook
+    participant Sess as Session
+
+    %% === NORMAL OPERATION (under threshold) ===
+    User->>Claude: implement feature X
+    Claude->>Claude: Write file.ts
+    PTU->>Sess: calculate score from baseline
+    Sess-->>PTU: 150/400 (37%)
+    PTU->>PTU: (under 50% - silent)
+
+    %% === FUEL GAUGE WARNINGS ===
+    Claude->>Claude: Edit another.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 220/400 (55%)
+    PTU-->>Claude: stderr: NOTICE 55% used
+
+    Claude->>Claude: Write more.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 320/400 (80%)
+    PTU-->>Claude: stderr: WARNING 80% - wrap up
+
+    Claude->>Claude: Edit final.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 380/400 (95%)
+    PTU-->>Claude: stderr: CRITICAL 95% - STOP NOW
+
+    %% === THRESHOLD EXCEEDED ===
+    Claude->>Stop: (tries to finish turn)
+    Stop->>Sess: check score vs threshold
+    Sess-->>Stop: 420/400 (105%)
+    Stop->>Sess: set stop_triggered: true
+    Stop-->>Claude: BLOCKED - threshold exceeded
+    Stop-->>User: score breakdown + review prompt
+
+    %% === USER REVIEW OPTIONS ===
+
+    %% Option A: Reset after review
+    User->>User: (reviews diff, commits)
+    User->>Claude: /bumper-reset
+    Claude->>Sess: capture new baseline
+    Claude->>Sess: score: 0, stop_triggered: false
+    Claude-->>User: Baseline reset. Score: 0/400
+
+    %% Option B: Pause enforcement
+    User->>Claude: /bumper-pause
+    Claude->>Sess: set paused: true
+    Claude-->>User: Enforcement paused. Changes tracked.
+
+    %% While paused - no blocking
+    Claude->>Claude: Write bigfile.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 600/400 (paused - no warning)
+    Claude->>Stop: (finish turn)
+    Stop->>Sess: check paused flag
+    Sess-->>Stop: paused: true
+    Stop->>Stop: (skip enforcement)
+
+    %% Resume enforcement
+    User->>Claude: /bumper-resume
+    Claude->>Sess: set paused: false
+    Claude-->>User: Enforcement resumed. Score: 600/400
+
+    %% Now blocked again
+    Claude->>Stop: (tries to finish)
+    Stop->>Sess: check score
+    Sess-->>Stop: 600/400 (150%)
+    Stop-->>Claude: BLOCKED
+
+%% ============================================================
+%% VALIDATION REFERENCES
+%% ============================================================
+%% - PostToolUse tiers: internal/hooks/post_tool_use.go:114-126
+%% - Stop blocking: internal/hooks/stop.go:117-173
+%% - Reset: internal/hooks/prompt_handler.go:98-117
+%% - Pause: internal/hooks/prompt_handler.go:119-133
+%% - Resume: internal/hooks/prompt_handler.go:135-149
+%%
+%% FUEL GAUGE TIERS
+%% - <50%: Silent
+%% - 50%: NOTICE - wrap up current task
+%% - 75%: WARNING - complete work, ask about checkpoint
+%% - 90%: CRITICAL - stop accepting work NOW
+%%
+%% PAIN POINTS
+%% 1. Warnings visible but muted - status line could surface escalation better
+%% 2. Pause accumulates unbounded score - can be huge on resume
+%% 3. No partial reset - it's all-or-nothing baseline capture
+%% 4. Auto-reset on commit not shown (separate flow)
+%% 5. Score can decrease if user reverts changes - not obvious
+%%
+%% IMPROVEMENT OPPORTUNITY
+%% Status line currently: green until trip, then suddenly red
+%% Could match fuel gauge tiers to give user same visibility as Claude:
+%% - 0-49%:  green  "active"
+%% - 50-74%: yellow "NOTICE"   (currently stays green)
+%% - 75-89%: orange "WARNING"  (currently stays green)
+%% - 90-99%: red    "CRITICAL" (currently stays green)
+%% - 100%+: red    "TRIPPED"

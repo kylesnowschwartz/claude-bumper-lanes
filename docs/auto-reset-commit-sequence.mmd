@@ -1,0 +1,60 @@
+%% Auto-Reset on Commit: Invisible baseline capture after git commit
+%% Render: cat auto-reset-commit-sequence.mmd | mermaid-ascii -f -
+%% Focus: The "magic" that resets budget when Claude commits
+
+sequenceDiagram
+    participant User
+    participant Claude
+    participant PTU as PostToolUse
+    participant Git
+    participant Sess as Session
+
+    %% Context: Claude is working, approaching threshold
+    User->>Claude: finish up and commit
+    Claude->>Claude: (score at 350/400)
+
+    %% Claude commits via Bash tool
+    Claude->>Git: git commit -m "feat: add feature"
+    Git-->>Claude: committed abc123
+
+    %% PostToolUse fires for Bash
+    PTU->>PTU: (regex matches git commit)
+    PTU->>Git: git rev-parse HEAD^{tree}
+    Git-->>PTU: tree SHA def456
+
+    %% Reset baseline to committed state
+    PTU->>Sess: baseline = def456
+    PTU->>Sess: score = 0
+    PTU-->>Claude: stderr: Auto-reset. Fresh budget: 400 pts.
+
+    %% Claude continues with fresh budget
+    Claude-->>User: Committed. I have fresh budget now.
+    User->>Claude: great, continue with next task
+    Claude->>Claude: Write newfile.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 50/400 (12%)
+    PTU->>PTU: (under 50% - silent)
+
+%% ============================================================
+%% VALIDATION REFERENCES
+%% ============================================================
+%% - Commit detection: internal/hooks/post_tool_use.go:18 (regex)
+%% - Tree capture: internal/hooks/post_tool_use.go:59-65
+%% - Reset call: internal/hooks/post_tool_use.go:67-72
+%% - Feedback: internal/hooks/post_tool_use.go:75-77
+%%
+%% COMMIT PATTERN REGEX
+%% Matches: git commit, git -C /path commit, git --git-dir=/x commit
+%% Rejects: prose like "use git to commit"
+%%
+%% BENEFITS
+%% 1. No manual /bumper-reset needed after commit
+%% 2. Natural workflow: commit = checkpoint = fresh budget
+%% 3. Encourages atomic commits (commit often, stay under threshold)
+%%
+%% PAIN POINTS / EDGE CASES
+%% 1. Fires even if commit fails (regex matches command, not result)
+%% 2. User might not notice auto-reset happened (muted stderr)
+%% 3. Resets to HEAD^{tree} - if commit failed, baseline = old commit
+%% 4. No auto-reset for git commit --amend (same HEAD, tree may differ)
+%% 5. Branch switch also auto-resets (separate flow in Stop hook)

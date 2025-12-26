@@ -1,0 +1,79 @@
+%% Status Line Render Flow: How the widget gets data and displays
+%% Render: cat statusline-render-sequence.mmd | mermaid-ascii -f -
+%% Focus: Data flow from Claude Code through bumper-lanes to diff-viz
+
+sequenceDiagram
+    participant CC as Claude Code
+    participant Script as Status Script
+    participant BL as bumper-lanes
+    participant Sess as Session
+    participant DV as git-diff-tree
+    participant Git
+
+    %% Claude Code triggers status line refresh
+    CC->>Script: invoke with JSON stdin
+    Script->>Script: input=$(cat)
+
+    %% Script calls bumper-lanes status
+    Script->>BL: echo $input | bumper-lanes status
+
+    %% bumper-lanes parses input
+    BL->>BL: parse JSON (session_id, model, cost)
+
+    %% Load session state
+    BL->>Sess: load(session_id)
+    Sess-->>BL: baseline_tree, threshold, paused, view_mode
+
+    %% Call diff-viz for score calculation
+    BL->>DV: git-diff-tree --stats-json --baseline=abc123
+    DV->>Git: git diff-tree baseline..worktree
+    Git-->>DV: raw diff data
+    DV-->>BL: {new_additions: 50, edit_additions: 80, files: 3}
+
+    %% Apply scoring policy (bumper-lanes logic)
+    BL->>BL: score = 50*1.0 + 80*1.3 + scatter
+
+    %% Call diff-viz for visualization
+    BL->>DV: git-diff-tree --mode=tree
+    DV->>Git: git diff-tree HEAD
+    Git-->>DV: changed files
+    DV-->>BL: tree visualization ASCII
+
+    %% Format output with colors
+    BL->>BL: format indicator + colors
+    BL-->>Script: indicator + diff tree
+
+    %% Script outputs to Claude Code
+    Script-->>CC: multi-line status output
+
+%% ============================================================
+%% VALIDATION REFERENCES
+%% ============================================================
+%% - Status input parsing: internal/statusline/statusline.go:274-281
+%% - Session load: internal/statusline/statusline.go:106
+%% - Score calculation: internal/statusline/statusline.go:186-214
+%% - Diff tree call: internal/statusline/statusline.go:216-249
+%% - Binary lookup: internal/statusline/statusline.go:251-272
+%% - Output formatting: internal/statusline/statusline.go:290-349
+%%
+%% EXTERNAL DEPENDENCY: diff-viz
+%% - Repo: github.com/kylesnowschwartz/diff-viz
+%% - Binary: git-diff-tree
+%% - Install: go install .../diff-viz/cmd/git-diff-tree@latest
+%% - Lookup: plugin/bin/ first, then PATH
+%%
+%% TWO CALLS TO diff-viz PER RENDER
+%% 1. --stats-json: raw numbers for score (policy in bumper-lanes)
+%% 2. --mode=X: visualization (presentation from diff-viz)
+%%
+%% WIDGET MODES (--widget flag)
+%% - all: full status line + diff tree (default)
+%% - indicator: just "active (125/400 - 31%)"
+%% - diff-tree: just the ASCII visualization
+%%
+%% PAIN POINTS
+%% 1. Two subprocess calls to diff-viz per render (perf)
+%% 2. Binary lookup fallback chain (plugin/bin → PATH)
+%% 3. Non-breaking space hack for Claude Code compatibility
+%% 4. Score calculated fresh each render (no caching)
+%% 5. Chdir to workspace for git ops (not thread-safe)

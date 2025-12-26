@@ -12,10 +12,15 @@
       "Bash(git diff-tree:*)",
       "Bash(go test:*)",
       "Bash(just build:*)",
-      "Bash(ast-grep run:*)"
+      "Bash(ast-grep run:*)",
+      "Bash(just build-bumper-lanes:*)",
+      "Bash(mermaid-ascii:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/Users/kyle/Code/my-projects/diff-viz"
+    ]
   },
   "statusLine": {
     "type": "command",
