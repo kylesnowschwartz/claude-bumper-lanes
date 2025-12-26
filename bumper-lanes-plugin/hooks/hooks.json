@@ -32,7 +32,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|Update|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
