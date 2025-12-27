@@ -64,13 +64,25 @@ func SessionStart(input *HookInput) int {
 		return 0 // Fail open
 	}
 
-	// Cleanup orphaned checkpoints from crashed sessions
-	state.CleanupOrphaned(input.SessionID, log)
+	// Collect warnings to show user (exit 1 with stderr shows warnings)
+	var warnings []string
+
+	// Check for excessive checkpoint accumulation
+	if warning := state.CheckpointCountWarning(); warning != "" {
+		warnings = append(warnings, warning)
+	}
 
 	// Auto-setup status line wrapper (once per user)
 	if msg := setupStatusLineWrapper(log); msg != "" {
-		fmt.Fprintln(os.Stderr, msg)
-		return 1 // Exit 1 shows stderr as warning
+		warnings = append(warnings, msg)
+	}
+
+	// Show all warnings via stderr + exit 1
+	if len(warnings) > 0 {
+		for _, w := range warnings {
+			fmt.Fprintln(os.Stderr, w)
+		}
+		return 1 // Exit 1 shows stderr to user
 	}
 
 	return 0

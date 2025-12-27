@@ -1,5 +1,4 @@
 ---
-name: test-threshold
 description: Stress test bumper lanes by creating files until threshold blocks
 argument-hint: "[optional: target points, default 500]"
 model: haiku

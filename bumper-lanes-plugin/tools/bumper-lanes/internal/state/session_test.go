@@ -2,8 +2,11 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -86,5 +89,115 @@ func TestSessionState_SetScore(t *testing.T) {
 
 	if state.Score != 250 {
 		t.Errorf("Score = %d, want 250", state.Score)
+	}
+}
+
+func TestCountCheckpoints(t *testing.T) {
+	// Create temp dir and init as git repo
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Initialize git repo
+	if err := os.WriteFile("test.txt", []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = tmpDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "Test")
+	runGit("add", ".")
+	runGit("commit", "-m", "initial")
+
+	// Get the checkpoint dir
+	checkpointDir, err := GetCheckpointDir()
+	if err != nil {
+		t.Fatalf("Failed to get checkpoint dir: %v", err)
+	}
+	os.MkdirAll(checkpointDir, 0755)
+
+	// Initially should be 0
+	if count := CountCheckpoints(); count != 0 {
+		t.Errorf("CountCheckpoints() = %d, want 0", count)
+	}
+
+	// Create some session files
+	for i := 0; i < 5; i++ {
+		path := filepath.Join(checkpointDir, "session-test-"+string(rune('a'+i)))
+		os.WriteFile(path, []byte("{}"), 0644)
+	}
+
+	if count := CountCheckpoints(); count != 5 {
+		t.Errorf("CountCheckpoints() = %d, want 5", count)
+	}
+
+	// .tmp files should not be counted
+	os.WriteFile(filepath.Join(checkpointDir, "session-temp.tmp"), []byte("{}"), 0644)
+	if count := CountCheckpoints(); count != 5 {
+		t.Errorf("CountCheckpoints() with .tmp = %d, want 5", count)
+	}
+
+	// Non-session files should not be counted
+	os.WriteFile(filepath.Join(checkpointDir, "other-file"), []byte("{}"), 0644)
+	if count := CountCheckpoints(); count != 5 {
+		t.Errorf("CountCheckpoints() with other file = %d, want 5", count)
+	}
+}
+
+func TestCheckpointCountWarning(t *testing.T) {
+	// Create temp dir and init as git repo
+	tmpDir := t.TempDir()
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	// Initialize git repo
+	runGit := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = tmpDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+	os.WriteFile("test.txt", []byte("test"), 0644)
+	runGit("init")
+	runGit("config", "user.email", "test@test.com")
+	runGit("config", "user.name", "Test")
+	runGit("add", ".")
+	runGit("commit", "-m", "initial")
+
+	checkpointDir, _ := GetCheckpointDir()
+	os.MkdirAll(checkpointDir, 0755)
+
+	// Under threshold - no warning
+	for i := 0; i < 50; i++ {
+		path := filepath.Join(checkpointDir, fmt.Sprintf("session-%03d", i))
+		os.WriteFile(path, []byte("{}"), 0644)
+	}
+	if warning := CheckpointCountWarning(); warning != "" {
+		t.Errorf("CheckpointCountWarning() at 50 = %q, want empty", warning)
+	}
+
+	// At threshold - should warn
+	for i := 50; i < 100; i++ {
+		path := filepath.Join(checkpointDir, fmt.Sprintf("session-%03d", i))
+		os.WriteFile(path, []byte("{}"), 0644)
+	}
+	warning := CheckpointCountWarning()
+	if warning == "" {
+		t.Error("CheckpointCountWarning() at 100 = empty, want warning")
+	}
+	if !strings.Contains(warning, "100") {
+		t.Errorf("Warning should contain count: %q", warning)
+	}
+	if !strings.Contains(warning, "rm -rf") {
+		t.Errorf("Warning should contain cleanup command: %q", warning)
 	}
 }

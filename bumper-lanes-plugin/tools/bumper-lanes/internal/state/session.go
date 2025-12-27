@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 )
 
 // SessionState represents the persisted state for a bumper-lanes session.
@@ -208,50 +206,39 @@ func (s *SessionState) GetViewOpts() string {
 	return s.ViewOpts
 }
 
-// CleanupOrphaned removes session files that don't match the current session.
-// This cleans up orphaned checkpoints from crashed sessions.
-// Fails open - errors are logged but don't block execution.
-func CleanupOrphaned(currentSessionID string, log *logging.Logger) {
+// CheckpointWarningThreshold is the number of checkpoint files that triggers a warning.
+const CheckpointWarningThreshold = 100
+
+// CountCheckpoints returns the number of session checkpoint files.
+// Returns 0 on any error (fail-open).
+func CountCheckpoints() int {
 	checkpointDir, err := GetCheckpointDir()
 	if err != nil {
-		log.Warn("failed to get checkpoint dir for cleanup: %v (failing open)", err)
-		return // Fail open
+		return 0
 	}
 
 	entries, err := os.ReadDir(checkpointDir)
 	if err != nil {
-		// Directory may not exist yet - this is expected, don't log
-		return // Fail open
+		return 0
 	}
 
-	currentFileName := "session-" + currentSessionID
-
+	count := 0
 	for _, entry := range entries {
 		name := entry.Name()
-
-		// Skip if it's the current session
-		if name == currentFileName {
-			continue
+		if strings.HasPrefix(name, "session-") && !strings.HasSuffix(name, ".tmp") {
+			count++
 		}
-
-		// Only clean up session files (session-*), skip .tmp files and others
-		if !strings.HasPrefix(name, "session-") {
-			continue
-		}
-
-		// Skip temp files - they may be in-progress atomic writes
-		if strings.HasSuffix(name, ".tmp") {
-			continue
-		}
-
-		// Remove orphaned session file
-		orphanPath := filepath.Join(checkpointDir, name)
-		if err := os.Remove(orphanPath); err != nil {
-			log.Warn("failed to clean orphaned checkpoint %s: %v (failing open)", name, err)
-			continue
-		}
-
-		// Log successful cleanup
-		log.Info("cleaned orphaned checkpoint: %s", name)
 	}
+	return count
+}
+
+// CheckpointCountWarning returns a warning message if checkpoint count exceeds threshold.
+// Returns empty string if count is acceptable.
+func CheckpointCountWarning() string {
+	count := CountCheckpoints()
+	if count >= CheckpointWarningThreshold {
+		checkpointDir, _ := GetCheckpointDir()
+		return fmt.Sprintf("[bumper-lanes] %d checkpoint files accumulated. Run: rm -rf %q", count, checkpointDir)
+	}
+	return ""
 }
