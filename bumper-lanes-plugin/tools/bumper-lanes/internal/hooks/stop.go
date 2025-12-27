@@ -1,7 +1,6 @@
 package hooks
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/diff-viz/diff"
 )
 
 // Stop handles the Stop hook event.
@@ -183,22 +183,22 @@ This workflow ensures incremental code review at predictable checkpoints.
 	return WriteResponse(resp)
 }
 
-// getStatsJSON calls git-diff-tree --stats-json and returns parsed stats.
-// Compares baselineTree to current working tree.
-func getStatsJSON(baselineTree string) *scoring.StatsJSON {
-	diffTreeBin := GetGitDiffTreePath()
-	cmd := exec.Command(diffTreeBin, "--stats-json", "--baseline", baselineTree)
-	output, err := cmd.Output()
+// getStatsJSON uses diff-viz library to get stats from baseline to current tree.
+func getStatsJSON(baselineTree string) *diff.StatsJSON {
+	// Capture current working tree
+	currentTree, err := diff.CaptureCurrentTree()
 	if err != nil {
 		return nil
 	}
 
-	var stats scoring.StatsJSON
-	if err := json.Unmarshal(output, &stats); err != nil {
+	// Get diff stats from baseline to current
+	stats, _, err := diff.GetTreeDiffStats(baselineTree, currentTree)
+	if err != nil {
 		return nil
 	}
 
-	return &stats
+	jsonStats := stats.ToJSON()
+	return &jsonStats
 }
 
 // acquireLock creates a lock directory to prevent parallel hook races.

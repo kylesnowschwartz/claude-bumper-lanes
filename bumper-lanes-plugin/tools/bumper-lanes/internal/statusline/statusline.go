@@ -3,6 +3,7 @@
 package statusline
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/diff-viz/diff"
+	"github.com/kylesnowschwartz/diff-viz/render"
 )
 
 // StatusInput is the JSON payload from Claude Code's status line hook.
@@ -216,92 +219,101 @@ func formatTrafficLightBar(percentage int, tripped bool) string {
 	return fmt.Sprintf("%s%s%s%s", color, filled, empty, colorReset)
 }
 
-// calculateScore runs diff-viz to get stats, then calculates score locally.
+// calculateScore uses diff-viz library to get stats, then calculates score.
 // This keeps scoring logic in bumper-lanes (policy) while diff-viz provides raw data.
 func calculateScore(baselineTree string) int {
 	if baselineTree == "" {
 		return 0
 	}
 
-	// Find diff-viz binary relative to bumper-lanes binary
-	binPath := findDiffVizBinary()
-	if binPath == "" {
-		return 0
-	}
-
-	cmd := exec.Command(binPath, "--stats-json", "--baseline="+baselineTree)
-	output, err := cmd.Output()
+	// Capture current working tree
+	currentTree, err := diff.CaptureCurrentTree()
 	if err != nil {
 		return 0
 	}
 
-	// Parse raw stats from diff-viz
-	var stats scoring.StatsJSON
-	if err := json.Unmarshal(output, &stats); err != nil {
+	// Get diff stats from baseline to current
+	stats, _, err := diff.GetTreeDiffStats(baselineTree, currentTree)
+	if err != nil {
 		return 0
 	}
 
 	// Calculate score using bumper-lanes scoring policy
-	result := scoring.Calculate(&stats)
+	jsonStats := stats.ToJSON()
+	result := scoring.Calculate(&jsonStats)
 	return result.Score
 }
 
-// getDiffTree runs diff-viz to get the tree visualization.
-// viewOpts contains additional flags like "--width 100 --depth 3".
+// getDiffTree uses diff-viz library to render the tree visualization.
+// viewOpts contains additional flags like "--width 100 --depth 3" (parsed for renderer config).
 func getDiffTree(viewMode, viewOpts string) string {
-	binPath := findDiffVizBinary()
-	if binPath == "" {
-		return ""
-	}
-
 	if viewMode == "" {
 		viewMode = "tree"
 	}
 
-	// Build args: mode + any additional options
-	args := []string{"--mode=" + viewMode}
-	if viewOpts != "" {
-		// Split opts string into individual args
-		for _, opt := range strings.Fields(viewOpts) {
-			args = append(args, opt)
-		}
-	}
-
-	cmd := exec.Command(binPath, args...)
-	output, err := cmd.Output()
-	if err != nil {
+	// Get current diff stats (working tree vs HEAD)
+	stats, _, err := diff.GetAllStats()
+	if err != nil || stats.TotalFiles == 0 {
 		return ""
 	}
 
-	// Only trim trailing whitespace - preserve leading spaces for alignment
-	result := strings.TrimRight(string(output), " \t\n\r")
+	// Parse options for width/depth
+	width := 100
+	depth := 4
+	expand := -1
+	for _, opt := range strings.Fields(viewOpts) {
+		if strings.HasPrefix(opt, "--width=") {
+			fmt.Sscanf(opt, "--width=%d", &width)
+		} else if strings.HasPrefix(opt, "--depth=") {
+			fmt.Sscanf(opt, "--depth=%d", &depth)
+		} else if strings.HasPrefix(opt, "--expand=") {
+			fmt.Sscanf(opt, "--expand=%d", &expand)
+		}
+	}
+
+	// Render to buffer
+	var buf bytes.Buffer
+	useColor := true
+	renderer := getRenderer(viewMode, &buf, useColor, width, depth, expand)
+	renderer.Render(stats)
+
+	// Trim trailing whitespace, preserve leading
+	result := strings.TrimRight(buf.String(), " \t\n\r")
 	if result == "No changes" {
 		return ""
 	}
 	return result
 }
 
-// findDiffVizBinary locates the git-diff-tree binary.
-// Looks in: same directory as this binary, then PATH.
-// Install via: go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
-func findDiffVizBinary() string {
-	// Try same directory as current executable
-	exe, err := os.Executable()
-	if err == nil {
-		binDir := filepath.Dir(exe)
-		candidate := filepath.Join(binDir, "git-diff-tree")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
+// diffRenderer is a local interface matching diff-viz's renderer pattern.
+type diffRenderer interface {
+	Render(stats *diff.DiffStats)
+}
 
-	// Fall back to PATH
-	path, err := exec.LookPath("git-diff-tree")
-	if err == nil {
-		return path
+// getRenderer returns the appropriate renderer for the given mode.
+func getRenderer(mode string, buf *bytes.Buffer, useColor bool, width, depth, expand int) diffRenderer {
+	switch mode {
+	case "tree":
+		return render.NewTreeRenderer(buf, useColor)
+	case "collapsed":
+		return render.NewCollapsedRenderer(buf, useColor)
+	case "smart":
+		return render.NewSmartSparklineRenderer(buf, useColor)
+	case "topn":
+		return render.NewTopNRenderer(buf, useColor, 5)
+	case "icicle":
+		r := render.NewIcicleRenderer(buf, useColor)
+		r.Width = width
+		r.MaxDepth = depth
+		return r
+	case "brackets":
+		r := render.NewBracketsRenderer(buf, useColor)
+		r.Width = width
+		r.ExpandDepth = expand
+		return r
+	default:
+		return render.NewTreeRenderer(buf, useColor)
 	}
-
-	return ""
 }
 
 // ParseInput parses JSON input from stdin.

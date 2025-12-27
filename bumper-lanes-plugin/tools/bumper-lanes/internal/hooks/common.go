@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -155,34 +154,4 @@ func GetCurrentBranch() string {
 		return "" // Detached HEAD
 	}
 	return branch
-}
-
-// GetGitDiffTreePath returns the path to the git-diff-tree binary.
-// Looks in common locations, prioritizing CLAUDE_PLUGIN_ROOT.
-func GetGitDiffTreePath() string {
-	// First check CLAUDE_PLUGIN_ROOT (set by Claude Code when running hooks)
-	if pluginRoot := os.Getenv("CLAUDE_PLUGIN_ROOT"); pluginRoot != "" {
-		binPath := filepath.Join(pluginRoot, "bin", "git-diff-tree")
-		if _, err := os.Stat(binPath); err == nil {
-			return binPath
-		}
-	}
-
-	// Check if in PATH
-	if path, err := exec.LookPath("git-diff-tree"); err == nil {
-		return path
-	}
-
-	// Check relative to current working directory (for development)
-	candidates := []string{
-		"bumper-lanes-plugin/bin/git-diff-tree",
-		"./bin/git-diff-tree",
-		"/usr/local/bin/git-diff-tree",
-	}
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return "git-diff-tree" // Fall back to PATH lookup
 }

@@ -1,3 +1,5 @@
 module github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes
 
-go 1.21
+go 1.25.5
+
+require github.com/kylesnowschwartz/diff-viz v0.7.0

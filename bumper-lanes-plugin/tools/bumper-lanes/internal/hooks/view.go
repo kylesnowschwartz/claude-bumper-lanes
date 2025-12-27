@@ -2,12 +2,11 @@ package hooks
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/diff-viz/render"
 )
 
 // ViewShow displays the current view mode and available options.
@@ -79,24 +78,12 @@ func View(sessionID, mode, opts string) error {
 	return nil
 }
 
-// getValidModes queries git-diff-tree for valid modes.
+// getValidModes returns the list of supported visualization modes from diff-viz.
 func getValidModes() []string {
-	diffTreeBin := GetGitDiffTreePath()
-	cmd := exec.Command(diffTreeBin, "--list-modes")
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to query %s --list-modes: %v (using fallback)\n", diffTreeBin, err)
-		return []string{"tree", "collapsed", "smart", "topn", "icicle", "brackets"}
-	}
-	return strings.Fields(strings.TrimSpace(string(output)))
+	return render.ValidModes
 }
 
-// isValidMode checks if mode is in the list.
-func isValidMode(mode string, validModes []string) bool {
-	for _, m := range validModes {
-		if m == mode {
-			return true
-		}
-	}
-	return false
+// isValidMode checks if mode is valid using diff-viz's exported validation.
+func isValidMode(mode string, _ []string) bool {
+	return render.IsValidMode(mode)
 }

@@ -27,17 +27,6 @@ func TestStopCumulativeStats(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		// Set up CLAUDE_PLUGIN_ROOT to find the binary
-		pluginRoot := filepath.Join(origDir, "..", "..", "..", "..")
-		os.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
-		defer os.Unsetenv("CLAUDE_PLUGIN_ROOT")
-
-		// Verify binary exists
-		binPath := GetGitDiffTreePath()
-		if _, err := os.Stat(binPath); os.IsNotExist(err) {
-			t.Skipf("Binary not found at %s - run 'just build-diff-viz' first", binPath)
-		}
-
 		// Get baseline tree SHA
 		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
 		output, _ := cmd.Output()
@@ -254,16 +243,6 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		// Set up plugin root for binary
-		pluginRoot := filepath.Join(origDir, "..", "..", "..", "..")
-		os.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
-		defer os.Unsetenv("CLAUDE_PLUGIN_ROOT")
-
-		binPath := GetGitDiffTreePath()
-		if _, err := os.Stat(binPath); os.IsNotExist(err) {
-			t.Skipf("Binary not found at %s", binPath)
-		}
-
 		// Get baseline
 		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
 		output, _ := cmd.Output()
@@ -281,7 +260,7 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		// Create session with LOW threshold (easy to exceed)
 		sessionID := "test-e2e-block"
 		sess, _ := state.New(sessionID, baselineTree, "main", 30) // 30 pts = easy to exceed
-		sess.Score = 50                                 // Already over
+		sess.Score = 50                                           // Already over
 		sess.Save()
 
 		// Capture stdout
@@ -441,16 +420,6 @@ func TestScoreDecreasesWhenFileDeleted(t *testing.T) {
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
 	os.Chdir(tmpDir)
-
-	// Set up plugin root for binary
-	pluginRoot := filepath.Join(origDir, "..", "..", "..", "..")
-	os.Setenv("CLAUDE_PLUGIN_ROOT", pluginRoot)
-	defer os.Unsetenv("CLAUDE_PLUGIN_ROOT")
-
-	binPath := GetGitDiffTreePath()
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		t.Skipf("Binary not found at %s - run 'just build-diff-viz' first", binPath)
-	}
 
 	// Get baseline tree SHA
 	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")

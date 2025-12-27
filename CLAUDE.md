@@ -13,7 +13,7 @@ Defense-in-depth hook system with three layers:
 ## Technology Stack
 
 - **Go 1.21+**: Hook handler (`bumper-lanes`)
-- **[diff-viz](https://github.com/kylesnowschwartz/diff-viz)**: External dependency for diff visualization (`git-diff-tree`)
+- **[diff-viz](https://github.com/kylesnowschwartz/diff-viz)**: Library dependency for diff calculation and visualization (via go.mod)
 - **Git 2.x+**: Working tree snapshots via `git write-tree`, diff calculation via `git diff-tree`
 - **Claude Code Hooks**: SessionStart, PostToolUse, Stop, UserPromptSubmit events
 
@@ -155,22 +155,10 @@ type StatusOutput struct {
 
 ## Diff Visualization
 
-Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), a standalone tool.
-
-### Installation
-
-```bash
-# Install diff-viz
-just install-diff-viz
-# or: go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
-
-# Bundle into plugin bin/ for distribution
-just bundle-diff-viz
-```
+Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library dependency.
 
 ### Available Modes
 
-Run `git-diff-tree --list-modes` for available visualization modes:
 - `tree` - Indented file tree with +/- stats (default)
 - `collapsed` - Single-line per directory
 - `smart` - Depth-2 aggregated sparkline
@@ -178,9 +166,29 @@ Run `git-diff-tree --list-modes` for available visualization modes:
 - `icicle` - Horizontal area chart
 - `brackets` - Nested `[dir file]` single-line
 
+### Updating diff-viz
+
+diff-viz is a library dependency tracked in `go.mod`. The `@latest` tag fetches the latest **tagged** version (not latest commit).
+
+When diff-viz has new features needed by bumper-lanes:
+
+```bash
+# 1. In diff-viz: tag a release
+git tag v0.X.0 && git push --tags
+
+# 2. In bumper-lanes: update dependency
+cd bumper-lanes-plugin/tools/bumper-lanes
+go get github.com/kylesnowschwartz/diff-viz@latest
+go mod tidy
+
+# 3. Bump plugin.json version to trigger user rebuilds
+```
+
 ### Development
 
 For diff-viz development, see https://github.com/kylesnowschwartz/diff-viz
+
+The diff-viz source is also available at `/Users/kyle/Code/my-projects/diff-viz` for local development.
 
 ## Release Process
 

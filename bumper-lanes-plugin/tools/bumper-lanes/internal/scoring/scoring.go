@@ -1,29 +1,8 @@
 // Package scoring implements bumper-lanes weighted threshold scoring.
-// This calculates scores from raw DiffStats JSON (from git-diff-tree --stats-json).
+// This calculates scores from raw DiffStats JSON (from diff-viz library).
 package scoring
 
-// StatsJSON matches the output of git-diff-tree --stats-json.
-// This is duplicated to avoid importing from diff-viz.
-type StatsJSON struct {
-	Files  []FileStatJSON `json:"files"`
-	Totals TotalsJSON     `json:"totals"`
-}
-
-// FileStatJSON represents a single file's stats.
-type FileStatJSON struct {
-	Path   string `json:"path"`
-	Adds   int    `json:"adds"`
-	Dels   int    `json:"dels"`
-	Binary bool   `json:"binary,omitempty"`
-	New    bool   `json:"new,omitempty"`
-}
-
-// TotalsJSON represents aggregate stats.
-type TotalsJSON struct {
-	Adds      int `json:"adds"`
-	Dels      int `json:"dels"`
-	FileCount int `json:"fileCount"`
-}
+import "github.com/kylesnowschwartz/diff-viz/diff"
 
 // WeightedScore holds the bumper-lanes weighted score calculation.
 type WeightedScore struct {
@@ -48,7 +27,7 @@ const (
 // Calculate computes bumper-lanes score from raw diff stats.
 // New files get 1.0x weight, edits get 1.3x weight.
 // Deletions are ignored (they reduce complexity, not add review burden).
-func Calculate(stats *StatsJSON) *WeightedScore {
+func Calculate(stats *diff.StatsJSON) *WeightedScore {
 	var newAdd, editAdd int
 	var filesWithAdditions int // Only count files that add lines (not pure deletions)
 
