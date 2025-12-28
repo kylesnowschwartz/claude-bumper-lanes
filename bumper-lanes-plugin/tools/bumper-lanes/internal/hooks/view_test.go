@@ -38,7 +38,7 @@ func TestView(t *testing.T) {
 		}
 
 		// Call View
-		mode := "collapsed"
+		mode := "sparkline-tree"
 		err = View(sessionID, mode, "")
 		if err != nil {
 			t.Fatalf("View() error = %v", err)

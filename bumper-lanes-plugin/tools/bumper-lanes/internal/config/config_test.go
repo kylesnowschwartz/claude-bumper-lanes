@@ -48,10 +48,10 @@ func TestConfigLoading(t *testing.T) {
 		}
 
 		// Config overrides default
-		os.WriteFile(repoPath, []byte(`{"default_view_mode": "collapsed"}`), 0644)
+		os.WriteFile(repoPath, []byte(`{"default_view_mode": "sparkline-tree"}`), 0644)
 		defer os.Remove(repoPath)
-		if got := LoadViewMode(); got != "collapsed" {
-			t.Errorf("LoadViewMode() = %q, want %q (config)", got, "collapsed")
+		if got := LoadViewMode(); got != "sparkline-tree" {
+			t.Errorf("LoadViewMode() = %q, want %q (config)", got, "sparkline-tree")
 		}
 	})
 
@@ -183,12 +183,21 @@ func TestIsValidMode(t *testing.T) {
 		mode  string
 		valid bool
 	}{
+		// Valid modes (diff-viz v2.0.0)
 		{"tree", true},
-		{"collapsed", true},
 		{"smart", true},
-		{"topn", true},
+		{"sparkline-tree", true},
+		{"hotpath", true},
 		{"icicle", true},
 		{"brackets", true},
+		{"gauge", true},
+		{"depth", true},
+		{"heatmap", true},
+		{"stat", true},
+		// Removed modes (no longer valid)
+		{"collapsed", false},
+		{"topn", false},
+		// Other invalid
 		{"invalid", false},
 		{"", false},
 		{"TREE", false}, // case sensitive
@@ -208,7 +217,7 @@ func TestLoadConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test-config.json")
 
-	configJSON := `{"threshold": 300, "default_view_mode": "collapsed"}`
+	configJSON := `{"threshold": 300, "default_view_mode": "sparkline-tree"}`
 	if err := os.WriteFile(configPath, []byte(configJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
@@ -221,8 +230,8 @@ func TestLoadConfigFile(t *testing.T) {
 	if cfg.Threshold != 300 {
 		t.Errorf("Threshold = %d, want 300", cfg.Threshold)
 	}
-	if cfg.DefaultViewMode != "collapsed" {
-		t.Errorf("DefaultViewMode = %q, want %q", cfg.DefaultViewMode, "collapsed")
+	if cfg.DefaultViewMode != "sparkline-tree" {
+		t.Errorf("DefaultViewMode = %q, want %q", cfg.DefaultViewMode, "sparkline-tree")
 	}
 }
 

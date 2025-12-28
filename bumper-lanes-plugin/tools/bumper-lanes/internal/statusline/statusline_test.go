@@ -118,7 +118,7 @@ func TestFormatBumperStatus(t *testing.T) {
 			score:      0, // score/limit ignored for paused
 			limit:      0,
 			percentage: 0,
-			viewMode:   "collapsed",
+			viewMode:   "sparkline-tree",
 			wantColor:  colorYellow,
 			wantBar:    false,
 			wantText:   "Paused",

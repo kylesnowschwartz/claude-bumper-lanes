@@ -87,11 +87,20 @@ Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignor
 {
   "threshold": 300,
   "default_view_mode": "tree",
-  "default_view_opts": "--width 80 --depth 3"
+  "defaults": {"width": 80, "depth": 3},
+  "modes": {
+    "icicle": {"depth": 5},
+    "sparkline-tree": {"n": 15}
+  }
 }
 ```
 
-Threshold range: 50-2000 points. After changing config, run `/bumper-reset` to apply to current session.
+- `threshold`: Diff point limit (50-2000). Run `/bumper-reset` after changing.
+- `default_view_mode`: Visualization mode to use
+- `defaults`: Global renderer defaults (width, depth, expand, n)
+- `modes`: Per-mode overrides (same fields as defaults)
+
+Note: The old `default_view_opts` string format is deprecated in favor of `defaults`/`modes` objects.
 
 ## Project Structure
 
@@ -157,28 +166,32 @@ type StatusOutput struct {
 
 Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library dependency.
 
-### Available Modes
+### Available Modes (diff-viz v2.0.0)
 
 - `tree` - Indented file tree with +/- stats (default)
-- `collapsed` - Single-line per directory
-- `smart` - Depth-2 aggregated sparkline
-- `topn` - Top 5 files by change size
+- `smart` - Multi-column table sorted by magnitude
+- `sparkline-tree` - Rainbow sidebar tree with sparkline bars
+- `hotpath` - Hot trail view (follows largest child at each level)
 - `icicle` - Horizontal area chart
 - `brackets` - Nested `[dir file]` single-line
+- `gauge` - Progress gauge showing change magnitude
+- `depth` - Nested gauges showing change distribution by depth
+- `heatmap` - Heatmap matrix (rows=dirs, cols=depth levels)
+- `stat` - Native git diff --stat output
 
 ### Updating diff-viz
 
-diff-viz is a library dependency tracked in `go.mod`. The `@latest` tag fetches the latest **tagged** version (not latest commit).
+diff-viz v2+ is a library dependency tracked in `go.mod` with the `/v2` import suffix (Go semantic import versioning).
 
 When diff-viz has new features needed by bumper-lanes:
 
 ```bash
 # 1. In diff-viz: tag a release
-git tag v0.X.0 && git push --tags
+git tag v2.X.0 && git push --tags
 
 # 2. In bumper-lanes: update dependency
 cd bumper-lanes-plugin/tools/bumper-lanes
-go get github.com/kylesnowschwartz/diff-viz@latest
+go get github.com/kylesnowschwartz/diff-viz/v2@latest
 go mod tidy
 
 # 3. Bump plugin.json version to trigger user rebuilds
