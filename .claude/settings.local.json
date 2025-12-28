@@ -14,7 +14,13 @@
       "Bash(just build:*)",
       "Bash(ast-grep run:*)",
       "Bash(just build-bumper-lanes:*)",
-      "Bash(mermaid-ascii:*)"
+      "Bash(mermaid-ascii:*)",
+      "Bash(go get:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(git tag:*)",
+      "Bash(go build:*)",
+      "Bash(git rev-list:*)",
+      "Bash(git describe:*)"
     ],
     "deny": [],
     "ask": [],

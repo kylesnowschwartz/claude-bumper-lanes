@@ -1,7 +1,28 @@
 # Claude Bumper Lanes - Go Implementation
+# Part of bumper-lanes-dev workspace (../go.work)
 
 # Run all tests (default)
 default: test
+
+# ─────────────────────────────────────────────────────────────
+# Workspace commands (passthrough to ../justfile)
+# ─────────────────────────────────────────────────────────────
+
+# Sync to latest diff-viz tag
+sync-deps:
+    just -f ../justfile sync-deps
+
+# Verify build without workspace (test real deps)
+verify-upstream:
+    just -f ../justfile verify-upstream
+
+# Show status of both repos
+workspace-status:
+    just -f ../justfile status
+
+# ─────────────────────────────────────────────────────────────
+# Local commands
+# ─────────────────────────────────────────────────────────────
 
 # Run all Go tests
 test: test-go
@@ -55,12 +76,6 @@ build-bumper-lanes:
 install-diff-viz:
     go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
     @echo "Installed: git-diff-tree (via go install)"
-
-# Update diff-viz library to latest and rebuild
-update-diff-viz:
-    cd bumper-lanes-plugin/tools/bumper-lanes && go get github.com/kylesnowschwartz/diff-viz/v2@latest && go mod tidy
-    @echo "Updated diff-viz dependency"
-    just build-bumper-lanes
 
 # Copy git-diff-tree to plugin bin directory (for bundled distribution)
 bundle-diff-viz:
