@@ -51,10 +51,16 @@ build-bumper-lanes:
 # diff-viz (external dependency)
 # ─────────────────────────────────────────────────────────────
 
-# Install diff-viz from GitHub
+# Install diff-viz CLI globally from GitHub
 install-diff-viz:
-    go install github.com/kylesnowschwartz/diff-viz/cmd/git-diff-tree@latest
+    go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
     @echo "Installed: git-diff-tree (via go install)"
+
+# Update diff-viz library to latest and rebuild
+update-diff-viz:
+    cd bumper-lanes-plugin/tools/bumper-lanes && go get github.com/kylesnowschwartz/diff-viz/v2@latest && go mod tidy
+    @echo "Updated diff-viz dependency"
+    just build-bumper-lanes
 
 # Copy git-diff-tree to plugin bin directory (for bundled distribution)
 bundle-diff-viz:
