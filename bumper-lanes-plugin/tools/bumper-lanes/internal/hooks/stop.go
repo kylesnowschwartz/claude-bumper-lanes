@@ -10,7 +10,7 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
-	"github.com/kylesnowschwartz/diff-viz/diff"
+	"github.com/kylesnowschwartz/diff-viz/v2/diff"
 )
 
 // Stop handles the Stop hook event.

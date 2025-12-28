@@ -3,7 +3,7 @@ package scoring
 import (
 	"testing"
 
-	"github.com/kylesnowschwartz/diff-viz/diff"
+	"github.com/kylesnowschwartz/diff-viz/v2/diff"
 )
 
 func TestCalculate(t *testing.T) {

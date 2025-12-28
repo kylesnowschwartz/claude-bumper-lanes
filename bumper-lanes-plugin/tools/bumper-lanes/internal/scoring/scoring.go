@@ -2,7 +2,7 @@
 // This calculates scores from raw DiffStats JSON (from diff-viz library).
 package scoring
 
-import "github.com/kylesnowschwartz/diff-viz/diff"
+import "github.com/kylesnowschwartz/diff-viz/v2/diff"
 
 // WeightedScore holds the bumper-lanes weighted score calculation.
 type WeightedScore struct {

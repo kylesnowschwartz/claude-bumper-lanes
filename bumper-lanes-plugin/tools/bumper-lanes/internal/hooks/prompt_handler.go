@@ -69,23 +69,36 @@ func HandlePrompt(input *HookInput) int {
 	}
 
 	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
+	// Matches diff-viz v2.0.0 modes: tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, heatmap, stat
 	if matchCommand(prompt, "bumper-tree") {
 		return handleViewMode(sessionID, "tree")
-	}
-	if matchCommand(prompt, "bumper-icicle") {
-		return handleViewMode(sessionID, "icicle")
-	}
-	if matchCommand(prompt, "bumper-collapsed") {
-		return handleViewMode(sessionID, "collapsed")
 	}
 	if matchCommand(prompt, "bumper-smart") {
 		return handleViewMode(sessionID, "smart")
 	}
-	if matchCommand(prompt, "bumper-topn") {
-		return handleViewMode(sessionID, "topn")
+	if matchCommand(prompt, "bumper-sparkline-tree") {
+		return handleViewMode(sessionID, "sparkline-tree")
+	}
+	if matchCommand(prompt, "bumper-hotpath") {
+		return handleViewMode(sessionID, "hotpath")
+	}
+	if matchCommand(prompt, "bumper-icicle") {
+		return handleViewMode(sessionID, "icicle")
 	}
 	if matchCommand(prompt, "bumper-brackets") {
 		return handleViewMode(sessionID, "brackets")
+	}
+	if matchCommand(prompt, "bumper-gauge") {
+		return handleViewMode(sessionID, "gauge")
+	}
+	if matchCommand(prompt, "bumper-depth") {
+		return handleViewMode(sessionID, "depth")
+	}
+	if matchCommand(prompt, "bumper-heatmap") {
+		return handleViewMode(sessionID, "heatmap")
+	}
+	if matchCommand(prompt, "bumper-stat") {
+		return handleViewMode(sessionID, "stat")
 	}
 
 	// No match - let it through
@@ -153,7 +166,7 @@ func handleView(sessionID, mode string) int {
 	if mode == "" {
 		// Show current mode + hint
 		currentMode := config.LoadViewMode()
-		blockPrompt(fmt.Sprintf("Current: %s\nModes: tree, collapsed, smart, topn, icicle, brackets", currentMode))
+		blockPrompt(fmt.Sprintf("Current: %s\nModes: %s", currentMode, config.ValidModes))
 		return 0
 	}
 

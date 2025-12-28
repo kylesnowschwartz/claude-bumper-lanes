@@ -18,8 +18,8 @@ const (
 	DefaultViewMode = "tree"
 
 	// ValidModes lists all valid visualization modes.
-	// This should match git-diff-tree --list-modes output.
-	ValidModes = "tree collapsed smart topn icicle brackets"
+	// This should match diff-viz v2.0.0 render.ValidModes.
+	ValidModes = "tree smart sparkline-tree hotpath icicle brackets gauge depth heatmap stat"
 )
 
 // Config represents bumper-lanes configuration.
@@ -117,6 +117,15 @@ func isValidMode(mode string) bool {
 		}
 	}
 	return false
+}
+
+// GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).
+func GetConfigPath() string {
+	repoRoot, err := getRepoRoot()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(repoRoot, ".bumper-lanes.json")
 }
 
 // SaveRepoConfig writes threshold to repo config file.

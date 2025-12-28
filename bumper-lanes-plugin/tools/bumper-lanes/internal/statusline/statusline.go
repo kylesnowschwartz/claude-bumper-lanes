@@ -14,8 +14,10 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
-	"github.com/kylesnowschwartz/diff-viz/diff"
-	"github.com/kylesnowschwartz/diff-viz/render"
+	"github.com/kylesnowschwartz/diff-viz/v2/diff"
+	"github.com/kylesnowschwartz/diff-viz/v2/render"
+
+	diffvizconfig "github.com/kylesnowschwartz/diff-viz/v2/config"
 )
 
 // StatusInput is the JSON payload from Claude Code's status line hook.
@@ -245,7 +247,7 @@ func calculateScore(baselineTree string) int {
 }
 
 // getDiffTree uses diff-viz library to render the tree visualization.
-// viewOpts contains additional flags like "--width 100 --depth 3" (parsed for renderer config).
+// Uses diff-viz config system for per-mode defaults from .bumper-lanes.json.
 func getDiffTree(viewMode, viewOpts string) string {
 	if viewMode == "" {
 		viewMode = "tree"
@@ -257,24 +259,38 @@ func getDiffTree(viewMode, viewOpts string) string {
 		return ""
 	}
 
-	// Parse options for width/depth
-	width := 100
-	depth := 4
-	expand := -1
-	for _, opt := range strings.Fields(viewOpts) {
-		if strings.HasPrefix(opt, "--width=") {
-			fmt.Sscanf(opt, "--width=%d", &width)
-		} else if strings.HasPrefix(opt, "--depth=") {
-			fmt.Sscanf(opt, "--depth=%d", &depth)
-		} else if strings.HasPrefix(opt, "--expand=") {
-			fmt.Sscanf(opt, "--expand=%d", &expand)
+	// Load diff-viz config from .bumper-lanes.json (ignores bumper-specific fields)
+	configPath := config.GetConfigPath()
+	cfg, _ := diffvizconfig.Load(configPath) // nil cfg is fine, Resolve handles it
+
+	// Parse CLI-style overrides from viewOpts (legacy support)
+	var cliFlags *diffvizconfig.ModeConfig
+	if viewOpts != "" {
+		cliFlags = &diffvizconfig.ModeConfig{}
+		for _, opt := range strings.Fields(viewOpts) {
+			if strings.HasPrefix(opt, "--width=") {
+				var w int
+				fmt.Sscanf(opt, "--width=%d", &w)
+				cliFlags.Width = &w
+			} else if strings.HasPrefix(opt, "--depth=") {
+				var d int
+				fmt.Sscanf(opt, "--depth=%d", &d)
+				cliFlags.Depth = &d
+			} else if strings.HasPrefix(opt, "--expand=") {
+				var e int
+				fmt.Sscanf(opt, "--expand=%d", &e)
+				cliFlags.Expand = &e
+			}
 		}
 	}
+
+	// Resolve config: global defaults < mode defaults < config file < CLI flags
+	resolved := cfg.Resolve(viewMode, cliFlags)
 
 	// Render to buffer
 	var buf bytes.Buffer
 	useColor := true
-	renderer := getRenderer(viewMode, &buf, useColor, width, depth, expand)
+	renderer := getRenderer(viewMode, &buf, useColor, resolved)
 	renderer.Render(stats)
 
 	// Trim trailing whitespace, preserve leading
@@ -291,26 +307,50 @@ type diffRenderer interface {
 }
 
 // getRenderer returns the appropriate renderer for the given mode.
-func getRenderer(mode string, buf *bytes.Buffer, useColor bool, width, depth, expand int) diffRenderer {
+// Uses resolved config from diff-viz config system for per-mode settings.
+func getRenderer(mode string, buf *bytes.Buffer, useColor bool, cfg diffvizconfig.ResolvedConfig) diffRenderer {
 	switch mode {
 	case "tree":
 		return render.NewTreeRenderer(buf, useColor)
-	case "collapsed":
-		return render.NewCollapsedRenderer(buf, useColor)
 	case "smart":
-		return render.NewSmartSparklineRenderer(buf, useColor)
-	case "topn":
-		return render.NewTopNRenderer(buf, useColor, 5)
+		r := render.NewSmartSparklineRenderer(buf, useColor)
+		r.Width = cfg.Width
+		r.MaxDepth = cfg.Depth
+		return r
+	case "sparkline-tree":
+		r := render.NewSparklineTreeRenderer(buf, useColor)
+		r.MaxDepth = cfg.Depth
+		r.N = cfg.N
+		return r
+	case "hotpath":
+		r := render.NewHotpathRenderer(buf, useColor)
+		r.MaxDepth = cfg.Depth
+		return r
 	case "icicle":
 		r := render.NewIcicleRenderer(buf, useColor)
-		r.Width = width
-		r.MaxDepth = depth
+		r.Width = cfg.Width
+		r.MaxDepth = cfg.Depth
 		return r
 	case "brackets":
 		r := render.NewBracketsRenderer(buf, useColor)
-		r.Width = width
-		r.ExpandDepth = expand
+		r.Width = cfg.Width
+		r.ExpandDepth = cfg.Expand
 		return r
+	case "gauge":
+		r := render.NewGaugeRenderer(buf, useColor)
+		r.Width = cfg.Width
+		return r
+	case "depth":
+		r := render.NewDepthRenderer(buf, useColor)
+		r.MaxDepth = cfg.Depth
+		r.Width = cfg.Width
+		return r
+	case "heatmap":
+		r := render.NewHeatmapRenderer(buf, useColor)
+		r.MaxDepth = cfg.Depth
+		return r
+	case "stat":
+		return render.NewStatRenderer(buf, nil)
 	default:
 		return render.NewTreeRenderer(buf, useColor)
 	}

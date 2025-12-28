@@ -6,7 +6,7 @@ import (
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
-	"github.com/kylesnowschwartz/diff-viz/render"
+	"github.com/kylesnowschwartz/diff-viz/v2/render"
 )
 
 // ViewShow displays the current view mode and available options.

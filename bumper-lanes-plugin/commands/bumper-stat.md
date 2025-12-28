@@ -1,5 +1,5 @@
 ---
-description: Switch to topn visualization mode
+description: Switch to stat visualization mode
 ---
 
 This command is handled by the hook system.
