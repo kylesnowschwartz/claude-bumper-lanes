@@ -90,6 +90,18 @@ func Stop(input *HookInput) error {
 		return nil
 	}
 
+	// If threshold is 0 (disabled), track changes but don't enforce
+	// Same behavior as paused, but config-driven instead of session command
+	if sess.ThresholdLimit == 0 {
+		stats := getStatsJSON(sess.BaselineTree)
+		if stats != nil {
+			result := scoring.Calculate(stats)
+			sess.SetScore(result.Score)
+			sess.Save()
+		}
+		return nil
+	}
+
 	// Capture current working tree
 	currentTree, err := CaptureTree()
 	if err != nil {

@@ -190,6 +190,7 @@ func handleView(sessionID, mode string) int {
 	}
 
 	sess.SetViewMode(mode)
+	sess.SetShowDiffVizOverride(true) // Force show for this session
 	if !saveOrBlock(sess) {
 		return 0
 	}
@@ -203,6 +204,7 @@ func handleView(sessionID, mode string) int {
 
 // handleViewMode sets view mode via no-arg command (triggers immediate statusline refresh).
 // This exists because Claude Code only refreshes statusline for no-arg commands.
+// Also forces diff-viz to show for this session (overrides config.show_diff_viz=false).
 func handleViewMode(sessionID, mode string) int {
 	sess := loadSessionOrBlock(sessionID)
 	if sess == nil {
@@ -210,6 +212,7 @@ func handleViewMode(sessionID, mode string) int {
 	}
 
 	sess.SetViewMode(mode)
+	sess.SetShowDiffVizOverride(true) // Force show for this session
 	if !saveOrBlock(sess) {
 		return 0
 	}
@@ -225,11 +228,20 @@ func handleConfig(sessionID, args string) int {
 		// Show current config
 		threshold := config.LoadThreshold()
 		viewMode := config.LoadViewMode()
+		configPath := config.GetConfigPath()
+
 		source := "default"
-		if threshold != config.DefaultThreshold {
-			source = "config file"
+		if configPath != "" && (threshold != config.DefaultThreshold || threshold == 0) {
+			source = configPath
 		}
-		blockPrompt(fmt.Sprintf("Threshold: %d points\nView mode: %s\nSource: %s", threshold, viewMode, source))
+
+		var thresholdStr string
+		if threshold == 0 {
+			thresholdStr = "disabled"
+		} else {
+			thresholdStr = fmt.Sprintf("%d points", threshold)
+		}
+		blockPrompt(fmt.Sprintf("Threshold: %s\nView mode: %s\nSource: %s", thresholdStr, viewMode, source))
 		return 0
 	}
 
@@ -238,15 +250,17 @@ func handleConfig(sessionID, args string) int {
 }
 
 // setThreshold parses and saves threshold value to .bumper-lanes.json.
+// Accepts 0 (disabled) or 50-2000 (active threshold).
 func setThreshold(sessionID, valStr string) int {
 	val, err := strconv.Atoi(strings.TrimSpace(valStr))
 	if err != nil {
-		blockPrompt(fmt.Sprintf("Invalid threshold: %s\nUse a number 50-2000", valStr))
+		blockPrompt(fmt.Sprintf("Invalid threshold: %s\nUse 0 (disabled) or 50-2000", valStr))
 		return 0
 	}
 
-	if val < 50 || val > 2000 {
-		blockPrompt(fmt.Sprintf("Threshold must be 50-2000 (got %d)", val))
+	// Allow 0 (disabled) or 50-2000 (active)
+	if val != 0 && (val < 50 || val > 2000) {
+		blockPrompt(fmt.Sprintf("Threshold must be 0 (disabled) or 50-2000 (got %d)", val))
 		return 0
 	}
 
@@ -261,7 +275,11 @@ func setThreshold(sessionID, valStr string) int {
 		sess.Save()
 	}
 
-	blockPrompt(fmt.Sprintf("Threshold set to %d.", val))
+	if val == 0 {
+		blockPrompt("Threshold disabled. Run /bumper-config <num> to re-enable.")
+	} else {
+		blockPrompt(fmt.Sprintf("Threshold set to %d.", val))
+	}
 	return 0
 }
 

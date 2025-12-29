@@ -227,8 +227,8 @@ func TestLoadConfigFile(t *testing.T) {
 		t.Fatalf("loadConfigFile failed: %v", err)
 	}
 
-	if cfg.Threshold != 300 {
-		t.Errorf("Threshold = %d, want 300", cfg.Threshold)
+	if cfg.Threshold == nil || *cfg.Threshold != 300 {
+		t.Errorf("Threshold = %v, want 300", cfg.Threshold)
 	}
 	if cfg.DefaultViewMode != "sparkline-tree" {
 		t.Errorf("DefaultViewMode = %q, want %q", cfg.DefaultViewMode, "sparkline-tree")

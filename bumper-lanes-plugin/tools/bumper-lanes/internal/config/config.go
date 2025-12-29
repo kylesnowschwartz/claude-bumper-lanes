@@ -23,10 +23,13 @@ const (
 )
 
 // Config represents bumper-lanes configuration.
+// Threshold: nil=use default (400), 0=disabled, 50-2000=active threshold
+// ShowDiffViz: nil=default (true), false=hide diff visualization
 type Config struct {
-	Threshold       int    `json:"threshold,omitempty"`
+	Threshold       *int   `json:"threshold,omitempty"`
 	DefaultViewMode string `json:"default_view_mode,omitempty"`
 	DefaultViewOpts string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
+	ShowDiffViz     *bool  `json:"show_diff_viz,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -63,6 +66,7 @@ func loadConfigFile(path string) (*Config, error) {
 }
 
 // LoadThreshold returns the configured threshold value.
+// Returns 0 if explicitly disabled, DefaultThreshold if not set.
 func LoadThreshold() int {
 	repoRoot, err := getRepoRoot()
 	if err != nil {
@@ -70,11 +74,22 @@ func LoadThreshold() int {
 	}
 
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
-	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.Threshold > 0 {
-		return cfg.Threshold
+	cfg, err := loadConfigFile(repoPath)
+	if err != nil {
+		return DefaultThreshold
+	}
+
+	// nil = not set (use default), non-nil = explicit value (including 0 for disabled)
+	if cfg.Threshold != nil {
+		return *cfg.Threshold
 	}
 
 	return DefaultThreshold
+}
+
+// IsDisabled returns true if the given threshold means enforcement is disabled.
+func IsDisabled(threshold int) bool {
+	return threshold == 0
 }
 
 // LoadViewMode returns the configured default view mode.
@@ -119,6 +134,27 @@ func isValidMode(mode string) bool {
 	return false
 }
 
+// LoadShowDiffViz returns whether diff visualization should be shown.
+// Returns true (default) if not configured, false if explicitly disabled.
+func LoadShowDiffViz() bool {
+	repoRoot, err := getRepoRoot()
+	if err != nil {
+		return true // Default to showing
+	}
+
+	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
+	cfg, err := loadConfigFile(repoPath)
+	if err != nil {
+		return true
+	}
+
+	if cfg.ShowDiffViz != nil {
+		return *cfg.ShowDiffViz
+	}
+
+	return true // Default to showing
+}
+
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).
 func GetConfigPath() string {
 	repoRoot, err := getRepoRoot()
@@ -135,7 +171,7 @@ func SaveRepoConfig(threshold int) error {
 		return err
 	}
 
-	cfg := Config{Threshold: threshold}
+	cfg := Config{Threshold: &threshold}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
@@ -160,8 +196,8 @@ func SaveConfig(updates Config) error {
 		existing = &Config{}
 	}
 
-	// Apply updates (non-zero values override)
-	if updates.Threshold > 0 {
+	// Apply updates (non-nil pointers and non-empty strings override)
+	if updates.Threshold != nil {
 		existing.Threshold = updates.Threshold
 	}
 	if updates.DefaultViewMode != "" {
@@ -169,6 +205,9 @@ func SaveConfig(updates Config) error {
 	}
 	if updates.DefaultViewOpts != "" {
 		existing.DefaultViewOpts = updates.DefaultViewOpts
+	}
+	if updates.ShowDiffViz != nil {
+		existing.ShowDiffViz = updates.ShowDiffViz
 	}
 
 	data, err := json.MarshalIndent(existing, "", "  ")

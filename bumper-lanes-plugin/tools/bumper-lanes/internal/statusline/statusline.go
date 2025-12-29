@@ -118,7 +118,9 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 		}
 
 		// Determine state
-		if sess.Paused {
+		if sess.ThresholdLimit == 0 {
+			stateStr = "disabled"
+		} else if sess.Paused {
 			stateStr = "paused"
 		} else if sess.StopTriggered {
 			stateStr = "tripped"
@@ -137,9 +139,11 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage, viewMode)
 		parts = append(parts, bumperIndicator)
 
-		// Get diff tree visualization (show even when paused)
-		viewOpts := sess.GetViewOpts()
-		diffTree = getDiffTree(viewMode, viewOpts)
+		// Get diff tree visualization (only if should show)
+		if sess.ShouldShowDiffViz() {
+			viewOpts := sess.GetViewOpts()
+			diffTree = getDiffTree(viewMode, viewOpts)
+		}
 	}
 
 	return &StatusOutput{
@@ -176,6 +180,11 @@ func isGitDirty() bool {
 func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string) string {
 	if viewMode == "" {
 		viewMode = "tree"
+	}
+
+	// Disabled state shows text in blue
+	if stateStr == "disabled" {
+		return fmt.Sprintf("%sDisabled%s [%s]", colorBlue, colorReset, viewMode)
 	}
 
 	// Paused state shows text instead of bar

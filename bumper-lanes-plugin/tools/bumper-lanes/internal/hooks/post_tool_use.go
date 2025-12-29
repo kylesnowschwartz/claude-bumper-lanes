@@ -98,6 +98,11 @@ func handleWriteEdit(input *HookInput) int {
 		return 0
 	}
 
+	// If threshold is 0 (disabled), exit silently (no fuel gauge)
+	if sess.ThresholdLimit == 0 {
+		return 0
+	}
+
 	// Get diff stats from baseline (fresh calculation, not incremental)
 	// This allows score to decrease when user manually deletes/reverts changes
 	stats := getStatsJSON(sess.BaselineTree)

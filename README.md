@@ -43,21 +43,25 @@ Work normally with Claude. When the threshold is exceeded:
 | Command | Description |
 |---------|-------------|
 | `/bumper-reset` | Reset baseline after reviewing changes |
-| `/bumper-pause` | Pause threshold enforcement |
+| `/bumper-pause` | Pause threshold enforcement (session only) |
 | `/bumper-resume` | Resume threshold enforcement |
 | `/bumper-config` | Show current configuration |
-| `/bumper-config <n>` | Set repo threshold (50-2000) |
+| `/bumper-config <n>` | Set repo threshold (0=disabled, 50-2000) |
 
 ### View Modes
 
 | Command | Description |
 |---------|-------------|
-| `/bumper-tree` | Tree view with file hierarchy |
-| `/bumper-collapsed` | Single-line grouped by directory |
-| `/bumper-icicle` | Flame chart showing hierarchy by width |
-| `/bumper-topn` | Top N files by change size |
-| `/bumper-smart` | Depth-2 aggregated sparkline |
-| `/bumper-brackets` | Nested bracket notation |
+| `/bumper-tree` | Indented file tree with +/- stats |
+| `/bumper-smart` | Multi-column table sorted by magnitude |
+| `/bumper-sparkline-tree` | Rainbow sidebar tree with sparkline bars |
+| `/bumper-hotpath` | Hot trail view (follows largest child) |
+| `/bumper-icicle` | Horizontal area chart |
+| `/bumper-brackets` | Nested `[dir file]` single-line |
+| `/bumper-gauge` | Progress gauge showing change magnitude |
+| `/bumper-depth` | Nested gauges by depth level |
+| `/bumper-heatmap` | Heatmap matrix (rows=dirs, cols=depth) |
+| `/bumper-stat` | Native git diff --stat output |
 
 ## Status Line Setup
 
@@ -112,9 +116,19 @@ Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't
 {
   "threshold": 400,
   "default_view_mode": "tree",
-  "default_view_opts": "--width 80 --depth 3"
+  "show_diff_viz": true
 }
 ```
+
+| Field | Description |
+|-------|-------------|
+| `threshold` | Points limit. `0` = disabled, `50-2000` = active |
+| `default_view_mode` | Visualization mode (tree, smart, icicle, etc.) |
+| `show_diff_viz` | Show diff visualization in status line (default: true) |
+
+**Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions.
+
+**Hiding diff visualization:** Set `"show_diff_viz": false` to hide the diff tree from the status line. Running any view command (`/bumper-tree`, etc.) restores it for the current session.
 
 ## Requirements
 
