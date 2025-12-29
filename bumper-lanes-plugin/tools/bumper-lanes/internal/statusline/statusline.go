@@ -170,8 +170,8 @@ func isGitDirty() bool {
 	return err != nil // non-zero exit = dirty
 }
 
-// formatBumperStatus produces a traffic light bar for bumper-lanes status.
-// Bar color: green <60%, yellow 60-80%, red >80% or tripped.
+// formatBumperStatus produces a traffic light gauge for bumper-lanes status.
+// Progressive reveal: ▂ green <70%, ▂▄ +yellow 70-90%, ▂▄█ +red >90% or tripped.
 // viewMode is included to force status line refresh when mode changes.
 func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string) string {
 	if viewMode == "" {
@@ -189,36 +189,39 @@ func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode 
 	return fmt.Sprintf("%s [%s]", bar, viewMode)
 }
 
-// formatTrafficLightBar returns a 5-char colored bar showing percentage.
-// Color tiers: green <70%, yellow 70-90%, red >90%.
+// formatTrafficLightBar returns a colored traffic light gauge with percentage.
+// Progressive reveal: green <70%, green+yellow 70-90%, all three >90% or tripped.
+// Uses increasing height blocks: ▂ (short), ▄ (medium), █ (tall).
 func formatTrafficLightBar(percentage int, tripped bool) string {
-	// Determine fill level (0-5 chars)
-	fill := (percentage * 5) / 100
-	if fill > 5 {
-		fill = 5
-	}
-	if fill < 0 {
-		fill = 0
-	}
+	// Unicode block characters of increasing height
+	const (
+		shortBar  = "▂" // U+2582 - lower quarter block (green zone)
+		mediumBar = "▄" // U+2584 - lower half block (yellow zone)
+		tallBar   = "█" // U+2588 - full block (red zone)
+	)
 
-	// Determine color based on tier (or tripped state)
-	var color string
+	var bar string
+
 	switch {
-	case tripped:
-		color = colorRed
-	case percentage >= 90:
-		color = colorRed
+	case tripped || percentage >= 90:
+		// Red zone: show all three bars
+		bar = fmt.Sprintf("%s%s%s%s%s%s%s",
+			colorGreen, shortBar,
+			colorYellow, mediumBar,
+			colorRed, tallBar,
+			colorReset)
 	case percentage >= 70:
-		color = colorYellow
+		// Yellow zone: show green + yellow
+		bar = fmt.Sprintf("%s%s%s%s%s",
+			colorGreen, shortBar,
+			colorYellow, mediumBar,
+			colorReset)
 	default:
-		color = colorGreen
+		// Green zone: show only green
+		bar = fmt.Sprintf("%s%s%s", colorGreen, shortBar, colorReset)
 	}
 
-	// Build bar: filled portion + empty portion
-	filled := strings.Repeat("█", fill)
-	empty := strings.Repeat("░", 5-fill)
-
-	return fmt.Sprintf("%s%s%s%s", color, filled, empty, colorReset)
+	return fmt.Sprintf("%s %d%%", bar, percentage)
 }
 
 // calculateScore uses diff-viz library to get stats, then calculates score.

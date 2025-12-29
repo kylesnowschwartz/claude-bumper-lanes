@@ -143,9 +143,14 @@ func TestFormatBumperStatus(t *testing.T) {
 				t.Errorf("formatBumperStatus() missing color %q in: %s", tt.wantColor, got)
 			}
 			if tt.wantBar {
-				// Traffic light bar uses █ (filled) and ░ (empty)
-				if !strings.Contains(got, "█") && !strings.Contains(got, "░") {
+				// Traffic light uses ▂ (short/green), ▄ (medium/yellow), █ (tall/red)
+				hasBar := strings.Contains(got, "▂") || strings.Contains(got, "▄") || strings.Contains(got, "█")
+				if !hasBar {
 					t.Errorf("formatBumperStatus() missing bar chars in: %s", got)
+				}
+				// Should include percentage
+				if !strings.Contains(got, "%") {
+					t.Errorf("formatBumperStatus() missing percentage in: %s", got)
 				}
 			}
 			if tt.wantText != "" && !strings.Contains(got, tt.wantText) {
@@ -167,7 +172,7 @@ func TestFormatOutput(t *testing.T) {
 	t.Run("widget=all formats full output", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project | main | $1.23",
-			BumperIndicator: "█░░░░ [tree]",
+			BumperIndicator: "▂ 25% [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
@@ -182,15 +187,16 @@ func TestFormatOutput(t *testing.T) {
 
 	t.Run("widget=indicator returns only bumper indicator", func(t *testing.T) {
 		out := &StatusOutput{
-			StatusLine:      "[Sonnet] | project | main | $1.23 | █░░░░ [tree]",
-			BumperIndicator: "█░░░░ [tree]",
+			StatusLine:      "[Sonnet] | project | main | $1.23 | ▂ 25% [tree]",
+			BumperIndicator: "▂ 25% [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
 		got := FormatOutput(out, WidgetIndicator)
 
-		// Should have indicator with bar chars
-		if !strings.Contains(got, "█") {
+		// Should have indicator with bar chars (▂, ▄, or █)
+		hasBar := strings.Contains(got, "▂") || strings.Contains(got, "▄") || strings.Contains(got, "█")
+		if !hasBar {
 			t.Errorf("FormatOutput(indicator) missing bar char, got: %q", got)
 		}
 		// Should NOT have full status line parts
@@ -205,7 +211,7 @@ func TestFormatOutput(t *testing.T) {
 	t.Run("widget=diff-tree returns only visualization", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project",
-			BumperIndicator: "█░░░░ [tree]",
+			BumperIndicator: "▂ 25% [tree]",
 			DiffTree:        "├── src\n│   └── main.go +10",
 		}
 
