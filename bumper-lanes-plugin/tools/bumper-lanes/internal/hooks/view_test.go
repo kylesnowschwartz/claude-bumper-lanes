@@ -134,7 +134,9 @@ func TestSaveConfigPreservesExistingValues(t *testing.T) {
 func setupTempGitRepo(t *testing.T, tmpDir string) {
 	t.Helper()
 
-	cmd := exec.Command("git", "init")
+	// Use -b main to ensure consistent branch name across different git configs
+	// (CI may default to "master" while tests use "main")
+	cmd := exec.Command("git", "init", "-b", "main")
 	cmd.Dir = tmpDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git init failed: %v", err)
