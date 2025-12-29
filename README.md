@@ -77,7 +77,7 @@ Add to `~/.claude/settings.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "/path/to/bumper-lanes-plugin/bin/bumper-lanes"
+    "command": "/path/to/bumper-lanes-plugin/bin/bumper-lanes status"
   }
 }
 ```
@@ -90,13 +90,13 @@ Add to the **end** of your status line script (after your main output):
 
 ```bash
 # Bumper-lanes widgets (requires input=$(cat) at script start)
-bumper_indicator=$(echo "$input" | bumper-lanes status --widget=indicator)
-diff_tree=$(echo "$input" | bumper-lanes status --widget=diff-tree)
+# Use full path to binary - adjust to your plugin installation location
+BUMPER_BIN="/path/to/bumper-lanes-plugin/bin/bumper-lanes"
+bumper_indicator=$(echo "$input" | "$BUMPER_BIN" status --widget=indicator)
+diff_tree=$(echo "$input" | "$BUMPER_BIN" status --widget=diff-tree)
 [[ -n "$bumper_indicator" ]] && echo "$bumper_indicator"
 [[ -n "$diff_tree" ]] && echo "$diff_tree"
 ```
-
-Run `/bumper-setup-statusline` for setup instructions.
 
 ### Opting Out of Auto-Setup
 
@@ -116,15 +116,19 @@ Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't
 {
   "threshold": 400,
   "default_view_mode": "tree",
+  "default_view_opts": "--width 80 --depth 3",
   "show_diff_viz": true
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `threshold` | Points limit. `0` = disabled, `50-2000` = active |
-| `default_view_mode` | Visualization mode (tree, smart, icicle, etc.) |
+| `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 400) |
+| `default_view_mode` | Visualization mode (default: tree) |
+| `default_view_opts` | Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`) |
 | `show_diff_viz` | Show diff visualization in status line (default: true) |
+
+**Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, heatmap, stat
 
 **Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions.
 
@@ -148,7 +152,8 @@ bumper-lanes-plugin/
 ├── tools/
 │   └── bumper-lanes/       # Hook handler source (Go)
 ├── commands/               # Slash command definitions
-└── hooks/hooks.json        # Hook configuration
+└── hooks/
+    └── hooks.json          # Hook configuration
 ```
 
 Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz).

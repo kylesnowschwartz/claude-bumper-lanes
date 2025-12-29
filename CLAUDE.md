@@ -85,22 +85,17 @@ Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignor
 
 ```json
 {
-  "threshold": 300,
+  "threshold": 400,
   "default_view_mode": "tree",
-  "defaults": {"width": 80, "depth": 3},
-  "modes": {
-    "icicle": {"depth": 5},
-    "sparkline-tree": {"n": 15}
-  }
+  "default_view_opts": "--width 80 --depth 3",
+  "show_diff_viz": true
 }
 ```
 
-- `threshold`: Diff point limit (50-2000). Run `/bumper-reset` after changing.
-- `default_view_mode`: Visualization mode to use
-- `defaults`: Global renderer defaults (width, depth, expand, n)
-- `modes`: Per-mode overrides (same fields as defaults)
-
-Note: The old `default_view_opts` string format is deprecated in favor of `defaults`/`modes` objects.
+- `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 400). Run `/bumper-reset` after changing.
+- `default_view_mode`: Visualization mode (default: tree)
+- `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
+- `show_diff_viz`: Show diff visualization in status line (default: true)
 
 ## Project Structure
 
@@ -110,7 +105,8 @@ bumper-lanes-plugin/
 ├── tools/
 │   └── bumper-lanes/  # Hook handler and commands (Go)
 ├── commands/          # Slash command definitions
-└── hooks.json         # Hook configuration and matchers
+└── hooks/
+    └── hooks.json     # Hook configuration and matchers
 ```
 
 See [docs/bumper-lanes-threshold-flow.mmd](docs/bumper-lanes-threshold-flow.mmd) for detailed flow diagrams.
