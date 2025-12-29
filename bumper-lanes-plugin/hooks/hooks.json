@@ -23,16 +23,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes post-tool-use"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|Update|MultiEdit|NotebookEdit",
+        "matcher": "Bash|Write|Edit|Update|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
