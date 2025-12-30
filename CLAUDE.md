@@ -26,7 +26,7 @@ Defense-in-depth hook system with three layers:
 
 ## Key Implementation Details
 
-- Default threshold: 400 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
+- Default threshold: 600 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
@@ -85,14 +85,14 @@ Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignor
 
 ```json
 {
-  "threshold": 400,
+  "threshold": 600,
   "default_view_mode": "tree",
   "default_view_opts": "--width 80 --depth 3",
   "show_diff_viz": true
 }
 ```
 
-- `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 400). Run `/bumper-reset` after changing.
+- `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 600). Run `/bumper-reset` after changing.
 - `default_view_mode`: Visualization mode (default: tree)
 - `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
 - `show_diff_viz`: Show diff visualization in status line (default: true)

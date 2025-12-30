@@ -12,7 +12,7 @@ import (
 
 const (
 	// DefaultThreshold is the default diff point threshold.
-	DefaultThreshold = 400
+	DefaultThreshold = 600
 
 	// DefaultViewMode is the default visualization mode.
 	DefaultViewMode = "tree"
@@ -23,7 +23,7 @@ const (
 )
 
 // Config represents bumper-lanes configuration.
-// Threshold: nil=use default (400), 0=disabled, 50-2000=active threshold
+// Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
 // ShowDiffViz: nil=default (true), false=hide diff visualization
 type Config struct {
 	Threshold       *int   `json:"threshold,omitempty"`
