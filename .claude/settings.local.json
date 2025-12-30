@@ -20,12 +20,15 @@
       "Bash(git tag:*)",
       "Bash(go build:*)",
       "Bash(git rev-list:*)",
-      "Bash(git describe:*)"
+      "Bash(git describe:*)",
+      "mcp__just",
+      "mcp__just__test-go",
+      "mcp__just__build"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
-      "/Users/kyle/Code/my-projects/diff-viz"
+      "/Users/kyle/Code/my-projects/bumper-lanes-dev/diff-viz"
     ]
   }
 }
