@@ -6,15 +6,18 @@ model: haiku
 
 # Test Bumper Lanes
 
+You are about to write dummy content files to the current working directory for testing purposes.
+
 <threshold>
-!`jq -r '.threshold // 600' .bumper-lanes.json 2>/dev/null || echo 600` points
+Configured Point Threshold: !`jq -r '.threshold // 600' .bumper-lanes.json 2>/dev/null || echo 600` points
 </threshold>
 
-## Step 1: Create directories
 
-Directories Initialized: !`mkdir -p tmp-threshold-test/src/components tmp-threshold-test/src/utils tmp-threshold-test/tests/unit`
+<directories>
+Directories Initialized: !`mkdir -p tmp-threshold-test/src/components tmp-threshold-test/src/utils tmp-threshold-test/tests/unit && ls tmp-threshold-test`
+</directories>
 
-## Step 2: Write files
+## Writing Files
 
 Sequential by default. If `$ARGUMENTS` contains `parallel`, batch all Writes in one message.
 !`ls`
@@ -45,4 +48,4 @@ The content of each files does not matter, but must have at least 75 lines. Use 
 // Line 075
 ```
 
-Write each file using the pattern above until we exceed the Threshold
+Write each file using the pattern above until we exceed the Threshold. You will be notified automatically.

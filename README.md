@@ -1,23 +1,22 @@
-![Bumper Lanes](bumper-lanes.png)
+# Bumper Lanes
 
-Vibe coding too much? Losing discipline and track of your changes? Add bumper lanes to your Claude Code sessions, and stay out of the gutters!
+Bumper lanes gives you two features native to Claude-Code:
+1. A 'Heads Up Display' of the changes Claude makes via unique git-diff visualizations in the status line
+2. A configurable circuit breaker that blocks Claude from continuing until you review and approve the accumulated changes
+
+![Threshold exceeded demo](assets/bumper.gif)
+
+![View modes demo](assets/vid2.gif)
 
 ## What It Does
 
-Bumper-Lanes tracks how much code Claude has written or edited, blocking further edits when a threshold is exceeded. 400 points corresponds roughly to 300-500 lines of code changed, depending on the mix of new files vs edits.
+Bumper-Lanes tracks how much code Claude has written or edited, blocking further edits when a threshold is exceeded. 600 points corresponds roughly to that many lines of code added, depending on the mix of new files vs edits.
 
 When the threshold is exceeded:
 
-1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (70% NOTICE → 90% WARNING)
+1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (70% NOTICE → 90% WARNING) to you and to Claude
 2. **Stop hook** blocks Claude from finishing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after you review
-
-### Weighted Scoring
-
-- **New file additions**: 1.0x weight
-- **Edits to existing files**: 1.3x weight (harder to review)
-- **Scatter penalty**: Extra points when touching many files
-- **Deletions**: Not counted (removing code is good)
 
 ## Installation
 
@@ -30,12 +29,12 @@ claude plugin install claude-bumper-lanes
 
 ## Usage
 
-Work normally with Claude. When the threshold is exceeded:
+Work normally with Claude. If the configurable threshold is exceeded:
 
 1. Claude will be blocked from continuing
-2. Review changes: `git diff` or `git status`
-3. Optionally commit: `git add -u && git commit -m "message"`
-4. Reset baseline: `/bumper-reset`
+2. Review your changes
+3. Optionally commit: `git add -u && git commit -m "message"` (resets the baseline automatically)
+4. Or Manually reset the baseline: `/bumper-reset`
 5. Continue working with restored budget
 
 ## Commands
@@ -65,38 +64,31 @@ Work normally with Claude. When the threshold is exceeded:
 
 ## Status Line Setup
 
-Status line is **auto-configured** on first session. No manual setup needed.
+Status line is **auto-configured** on first session. No manual setup needed, though you may want to tweak if you use a custom setup.
 
 If you need to configure manually:
 
-**Option 1: Use the binary directly** (no existing status line)
-
-Add to `~/.claude/settings.json`:
+Auto-setup writes this to `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "/path/to/bumper-lanes-plugin/bin/bumper-lanes status"
+    "command": "/path/to/.claude/plugins/cache/.../bumper-lanes status",
+    "padding": 0
   }
 }
 ```
 
-**Option 2: Add to existing status line**
+The path is versioned and changes on plugin updates—auto-setup handles this automatically.
 
-Claude Code status lines can be multi-line: line 1 is the compact status bar, additional lines are widgets.
-
-Add to the **end** of your status line script (after your main output):
+**Want just the diff visualization?** Install [diff-viz](https://github.com/kylesnowschwartz/diff-viz) globally:
 
 ```bash
-# Bumper-lanes widgets (requires input=$(cat) at script start)
-# Use full path to binary - adjust to your plugin installation location
-BUMPER_BIN="/path/to/bumper-lanes-plugin/bin/bumper-lanes"
-bumper_indicator=$(echo "$input" | "$BUMPER_BIN" status --widget=indicator)
-diff_tree=$(echo "$input" | "$BUMPER_BIN" status --widget=diff-tree)
-[[ -n "$bumper_indicator" ]] && echo "$bumper_indicator"
-[[ -n "$diff_tree" ]] && echo "$diff_tree"
+go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
 ```
+
+Then use `git-diff-tree` directly in your custom status line scripts. This optionally gives you the tree visualization without the threshold enforcement as well.
 
 ### Opting Out of Auto-Setup
 
@@ -123,16 +115,23 @@ Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't
 
 | Field | Description |
 |-------|-------------|
-| `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 400) |
+| `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 600) |
 | `default_view_mode` | Visualization mode (default: tree) |
 | `default_view_opts` | Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`) |
 | `show_diff_viz` | Show diff visualization in status line (default: true) |
 
 **Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, heatmap, stat
 
-**Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions.
+**Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions, or if you only want to display the diff tree visual.
 
 **Hiding diff visualization:** Set `"show_diff_viz": false` to hide the diff tree from the status line. Running any view command (`/bumper-tree`, etc.) restores it for the current session.
+
+### Weighted Scoring
+
+- **New file additions**: 1.0x weight
+- **Edits to existing files**: 1.3x weight (harder to review)
+- **Scatter penalty**: Extra points when touching many files
+- **Deletions**: Not counted (removing code is good)
 
 ## Requirements
 
