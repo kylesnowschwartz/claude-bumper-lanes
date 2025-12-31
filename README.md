@@ -4,9 +4,9 @@ Bumper lanes gives you two features native to Claude-Code:
 1. A 'Heads Up Display' of the changes Claude makes via unique git-diff visualizations in the status line
 2. A configurable circuit breaker that blocks Claude from continuing until you review and approve the accumulated changes
 
-![Threshold exceeded demo](assets/bumper.gif)
+![Threshold exceeded demo](assets/bumper-demo.gif)
 
-![View modes demo](assets/vid2.gif)
+![View modes demo](assets/diff-viz-demo.gif)
 
 ## What It Does
 
