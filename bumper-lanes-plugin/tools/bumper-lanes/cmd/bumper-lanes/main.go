@@ -19,6 +19,7 @@ Usage:
 
 Hook Commands (called by hooks.json):
   session-start       Initialize session state
+  pre-tool-use        Block Write/Edit when threshold exceeded
   post-tool-use       Fuel gauge warnings after Write/Edit
   stop                Threshold enforcement check
   session-end         Cleanup session state
@@ -56,6 +57,8 @@ func main() {
 	switch cmd {
 	case "session-start":
 		exitCode = cmdSessionStart()
+	case "pre-tool-use":
+		exitCode = cmdPreToolUse()
 	case "post-tool-use":
 		exitCode = cmdPostToolUse()
 	case "stop":
@@ -102,6 +105,14 @@ func cmdSessionStart() int {
 		return 0 // Fail open
 	}
 	return hooks.SessionStart(input)
+}
+
+func cmdPreToolUse() int {
+	input, err := hooks.ReadInput()
+	if err != nil {
+		return 0 // Fail open
+	}
+	return hooks.PreToolUse(input)
 }
 
 func cmdPostToolUse() int {

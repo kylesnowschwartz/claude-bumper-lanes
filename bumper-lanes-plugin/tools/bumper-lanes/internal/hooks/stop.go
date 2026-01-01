@@ -73,7 +73,8 @@ func Stop(input *HookInput) error {
 		return nil // No baseline - fail open
 	}
 
-	// If already triggered, allow stop (PreToolUse is blocking)
+	// If already triggered, allow stop
+	// PreToolUse hook now blocks Write/Edit when StopTriggered=true
 	if sess.StopTriggered {
 		return nil
 	}

@@ -96,3 +96,16 @@ fmt-go:
 # Check Go code (vet + build)
 check-go:
     cd bumper-lanes-plugin/tools/bumper-lanes && go vet ./... && go build ./...
+
+# ─────────────────────────────────────────────────────────────
+# Version management
+# ─────────────────────────────────────────────────────────────
+
+# Show current version
+show-version:
+    @jq -r '.version' bumper-lanes-plugin/.claude-plugin/plugin.json
+
+# Bump plugin version (single source of truth)
+bump version:
+    @jq '.version = "{{version}}"' bumper-lanes-plugin/.claude-plugin/plugin.json > /tmp/plugin.json && mv /tmp/plugin.json bumper-lanes-plugin/.claude-plugin/plugin.json
+    @echo "Version is now: {{version}}"

@@ -23,7 +23,9 @@
       "Bash(git describe:*)",
       "mcp__just",
       "mcp__just__test-go",
-      "mcp__just__build"
+      "mcp__just__build",
+      "Bash(go vet:*)",
+      "Bash(git-diff-tree:*)"
     ],
     "deny": [],
     "ask": [],
