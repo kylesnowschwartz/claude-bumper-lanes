@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
-	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 	"github.com/kylesnowschwartz/diff-viz/v2/diff"
 	"github.com/kylesnowschwartz/diff-viz/v2/render"
@@ -110,8 +109,8 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 
 	sess, err := state.Load(input.SessionID)
 	if err == nil {
-		// Calculate fresh score
-		score = calculateScore(sess.BaselineTree)
+		// Use cached score (updated by PostToolUse hook on Write/Edit)
+		score = sess.Score
 		limit = sess.ThresholdLimit
 		if limit > 0 {
 			percentage = (score * 100) / limit
@@ -231,31 +230,6 @@ func formatTrafficLightBar(percentage int, tripped bool) string {
 	}
 
 	return fmt.Sprintf("%s %d%%", bar, percentage)
-}
-
-// calculateScore uses diff-viz library to get stats, then calculates score.
-// This keeps scoring logic in bumper-lanes (policy) while diff-viz provides raw data.
-func calculateScore(baselineTree string) int {
-	if baselineTree == "" {
-		return 0
-	}
-
-	// Capture current working tree
-	currentTree, err := diff.CaptureCurrentTree()
-	if err != nil {
-		return 0
-	}
-
-	// Get diff stats from baseline to current
-	stats, _, err := diff.GetTreeDiffStats(baselineTree, currentTree)
-	if err != nil {
-		return 0
-	}
-
-	// Calculate score using bumper-lanes scoring policy
-	jsonStats := stats.ToJSON()
-	result := scoring.Calculate(&jsonStats)
-	return result.Score
 }
 
 // getDiffTree uses diff-viz library to render the tree visualization.
