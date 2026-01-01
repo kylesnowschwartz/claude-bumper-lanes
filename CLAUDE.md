@@ -162,7 +162,7 @@ type StatusOutput struct {
 
 Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library dependency.
 
-### Available Modes (diff-viz v2.0.0)
+### Available Modes (diff-viz v2.4.0)
 
 - `tree` - Indented file tree with +/- stats (default)
 - `smart` - Multi-column table sorted by magnitude
@@ -172,7 +172,6 @@ Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz
 - `brackets` - Nested `[dir file]` single-line
 - `gauge` - Progress gauge showing change magnitude
 - `depth` - Nested gauges showing change distribution by depth
-- `heatmap` - Heatmap matrix (rows=dirs, cols=depth levels)
 - `stat` - Native git diff --stat output
 
 ### Updating diff-viz

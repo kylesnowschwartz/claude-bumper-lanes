@@ -59,7 +59,6 @@ Work normally with Claude. If the configurable threshold is exceeded:
 | `/bumper-brackets` | Nested `[dir file]` single-line |
 | `/bumper-gauge` | Progress gauge showing change magnitude |
 | `/bumper-depth` | Nested gauges by depth level |
-| `/bumper-heatmap` | Heatmap matrix (rows=dirs, cols=depth) |
 | `/bumper-stat` | Native git diff --stat output |
 
 ## Status Line Setup
@@ -120,7 +119,7 @@ Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't
 | `default_view_opts` | Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`) |
 | `show_diff_viz` | Show diff visualization in status line (default: true) |
 
-**Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, heatmap, stat
+**Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, stat
 
 **Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions, or if you only want to display the diff tree visual.
 

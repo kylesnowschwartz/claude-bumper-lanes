@@ -192,7 +192,6 @@ func TestIsValidMode(t *testing.T) {
 		{"brackets", true},
 		{"gauge", true},
 		{"depth", true},
-		{"heatmap", true},
 		{"stat", true},
 		// Removed modes (no longer valid)
 		{"collapsed", false},

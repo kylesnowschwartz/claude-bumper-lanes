@@ -357,10 +357,6 @@ func getRenderer(mode string, buf *bytes.Buffer, useColor bool, cfg diffvizconfi
 		r.MaxDepth = cfg.Depth
 		r.Width = cfg.Width
 		return r
-	case "heatmap":
-		r := render.NewHeatmapRenderer(buf, useColor)
-		r.MaxDepth = cfg.Depth
-		return r
 	case "stat":
 		return render.NewStatRenderer(buf, nil)
 	default:

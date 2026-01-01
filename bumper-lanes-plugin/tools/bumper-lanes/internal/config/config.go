@@ -18,8 +18,8 @@ const (
 	DefaultViewMode = "tree"
 
 	// ValidModes lists all valid visualization modes.
-	// This should match diff-viz v2.0.0 render.ValidModes.
-	ValidModes = "tree smart sparkline-tree hotpath icicle brackets gauge depth heatmap stat"
+	// This should match diff-viz v2.4.0 render.ValidModes.
+	ValidModes = "tree smart sparkline-tree hotpath icicle brackets gauge depth stat"
 )
 
 // Config represents bumper-lanes configuration.

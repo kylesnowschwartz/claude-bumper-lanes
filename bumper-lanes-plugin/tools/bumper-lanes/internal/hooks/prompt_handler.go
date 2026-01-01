@@ -69,7 +69,7 @@ func HandlePrompt(input *HookInput) int {
 	}
 
 	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
-	// Matches diff-viz v2.0.0 modes: tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, heatmap, stat
+	// Matches diff-viz v2.4.0 modes: tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, stat
 	if matchCommand(prompt, "bumper-tree") {
 		return handleViewMode(sessionID, "tree")
 	}
@@ -93,9 +93,6 @@ func HandlePrompt(input *HookInput) int {
 	}
 	if matchCommand(prompt, "bumper-depth") {
 		return handleViewMode(sessionID, "depth")
-	}
-	if matchCommand(prompt, "bumper-heatmap") {
-		return handleViewMode(sessionID, "heatmap")
 	}
 	if matchCommand(prompt, "bumper-stat") {
 		return handleViewMode(sessionID, "stat")
