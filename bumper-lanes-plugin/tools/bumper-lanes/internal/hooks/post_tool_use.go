@@ -3,9 +3,7 @@ package hooks
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
-	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
@@ -60,14 +58,14 @@ func handleBashCommit(input *HookInput) int {
 		return 0 // No session - fail open
 	}
 
-	// Get the tree SHA from HEAD (what was just committed)
-	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
-	output, err := cmd.Output()
+	// Capture current tree including untracked files
+	// Must use CaptureTree() (same as manual reset) so pre-existing
+	// untracked files are included in baseline and don't get re-counted
+	currentTree, err := CaptureTree()
 	if err != nil {
-		log.Warn("failed to get tree from HEAD: %v (failing open)", err)
-		return 0 // Failed to get tree - fail open
+		log.Warn("failed to capture tree after commit: %v (failing open)", err)
+		return 0 // Failed to capture tree - fail open
 	}
-	currentTree := strings.TrimSpace(string(output))
 
 	// Reset baseline
 	currentBranch := GetCurrentBranch()
