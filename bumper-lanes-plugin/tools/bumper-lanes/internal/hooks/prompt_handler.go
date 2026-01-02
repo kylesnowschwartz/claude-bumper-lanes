@@ -109,16 +109,27 @@ func handleReset(sessionID string) int {
 		return 0
 	}
 
-	newTree, err := CaptureTree()
-	if err != nil {
-		blockPrompt(fmt.Sprintf("Error: Failed to capture tree: %v", err))
-		return 0
-	}
-
-	sess.ResetBaseline(newTree, GetCurrentBranch())
+	// Reset score FIRST for immediate statusline update
+	sess.Score = 0
+	sess.StopTriggered = false
 	if !saveOrBlock(sess) {
 		return 0
 	}
+
+	// Now do the slow git work (statusline already shows 0)
+	newTree, err := CaptureTree()
+	if err != nil {
+		// Score already reset - just warn about baseline
+		blockPrompt(fmt.Sprintf("Score reset. Warning: baseline capture failed: %v", err))
+		return 0
+	}
+
+	// Update baseline with new tree
+	sess.BaselineTree = newTree
+	if branch := GetCurrentBranch(); branch != "" {
+		sess.BaselineBranch = branch
+	}
+	sess.Save() // Best-effort save of baseline
 
 	blockPrompt(fmt.Sprintf("Baseline reset. Score: 0/%d", sess.ThresholdLimit))
 	return 0

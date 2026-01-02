@@ -10,8 +10,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 	"github.com/kylesnowschwartz/diff-viz/v2/diff"
 	"github.com/kylesnowschwartz/diff-viz/v2/render"
@@ -65,6 +67,9 @@ const (
 // Render produces a complete status line from Claude Code's status input.
 // Returns StatusOutput with formatted text ready for display.
 func Render(input *StatusInput) (*StatusOutput, error) {
+	start := time.Now()
+	log := logging.New(input.SessionID, "statusline")
+
 	var parts []string
 
 	// Model name
@@ -144,6 +149,8 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 			diffTree = getDiffTree(viewMode, viewOpts)
 		}
 	}
+
+	log.Debug("render completed in %v", time.Since(start))
 
 	return &StatusOutput{
 		StatusLine:      strings.Join(parts, " | "),
