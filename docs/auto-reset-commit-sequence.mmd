@@ -1,6 +1,6 @@
-%% Auto-Reset on Commit: Invisible baseline capture after git commit
+%% Auto-Reset: Invisible baseline capture when tree becomes clean
 %% Render: cat auto-reset-commit-sequence.mmd | mermaid-ascii -f -
-%% Focus: The "magic" that resets budget when Claude commits
+%% Focus: The "magic" that resets budget after commits (any source)
 
 sequenceDiagram
     participant User
@@ -9,7 +9,10 @@ sequenceDiagram
     participant Git
     participant Sess as Session
 
-    %% Context: Claude is working, approaching threshold
+    %% ============================================================
+    %% CASE 1: Claude commits via Bash tool
+    %% ============================================================
+    Note over User,Sess: Scenario 1: Claude commits
     User->>Claude: finish up and commit
     Claude->>Claude: (score at 350/400)
 
@@ -19,40 +22,74 @@ sequenceDiagram
 
     %% PostToolUse fires for Bash
     PTU->>PTU: (regex matches git commit)
-    PTU->>Git: git rev-parse HEAD^{tree}
+    PTU->>Git: CaptureTree()
     Git-->>PTU: tree SHA def456
 
     %% Reset baseline to committed state
     PTU->>Sess: baseline = def456
     PTU->>Sess: score = 0
     PTU-->>Claude: stderr: Auto-reset. Fresh budget: 400 pts.
+    Claude-->>User: Committed. Fresh budget now.
 
-    %% Claude continues with fresh budget
-    Claude-->>User: Committed. I have fresh budget now.
-    User->>Claude: great, continue with next task
-    Claude->>Claude: Write newfile.ts
-    PTU->>Sess: calculate score
-    Sess-->>PTU: 50/400 (12%)
-    PTU->>PTU: (under 70% - silent)
+    %% ============================================================
+    %% CASE 2: External commit (IDE, terminal)
+    %% ============================================================
+    Note over User,Sess: Scenario 2: External commit
+    User->>Git: git commit (in IDE/terminal)
+    Git-->>User: committed xyz789
+    User->>Claude: continue working
+
+    %% Claude makes next change (Write/Edit)
+    Claude->>Git: Write file
+
+    %% PostToolUse fires for Write
+    PTU->>PTU: handleWriteEdit()
+    PTU->>Git: calculate fresh score
+    Git-->>PTU: score = 0 (tree matches baseline)
+
+    %% Auto-reset on clean tree
+    PTU->>PTU: (score == 0, auto-reset)
+    PTU->>Git: CaptureTree()
+    Git-->>PTU: tree SHA xyz789
+    PTU->>Sess: baseline = xyz789
+    PTU->>Sess: score = 0
+    PTU-->>Claude: stderr: Auto-reset (no changes to review). Fresh budget: 400 pts.
+    Claude-->>User: Fresh budget restored.
 
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - Commit detection: internal/hooks/post_tool_use.go:19 (regex)
-%% - Tree capture: internal/hooks/post_tool_use.go:64-70
-%% - Reset call: internal/hooks/post_tool_use.go:72-77
-%% - Feedback: internal/hooks/post_tool_use.go:79-82
+%% Scenario 1 (Claude commits):
+%% - Commit detection: internal/hooks/post_tool_use.go:gitCommitPattern
+%% - Tree capture: internal/hooks/post_tool_use.go:handleBashCommit (line 64)
+%% - Reset call: internal/hooks/post_tool_use.go:handleBashCommit (line 72)
+%% - Feedback: internal/hooks/post_tool_use.go:handleBashCommit (line 79)
 %%
-%% COMMIT PATTERN REGEX
+%% Scenario 2 (External commits):
+%% - Tree capture: internal/hooks/post_tool_use.go:handleWriteEdit (line 118)
+%% - HEAD tree check: internal/hooks/post_tool_use.go:handleWriteEdit (line 120)
+%% - Clean tree detection: internal/hooks/post_tool_use.go:handleWriteEdit (line 121, currentTree == headTree)
+%% - Reset call: internal/hooks/post_tool_use.go:handleWriteEdit (line 124)
+%% - Feedback: internal/hooks/post_tool_use.go:handleWriteEdit (line 127)
+%% - Helper function: internal/hooks/common.go:GetHeadTree (line 161)
+%%
+%% COMMIT PATTERN REGEX (Scenario 1)
 %% Matches: git commit, git -C /path commit, git --git-dir=/x commit
 %% Rejects: prose like "use git to commit"
 %%
 %% BENEFITS
-%% 1. No manual /bumper-reset needed after commit
+%% 1. No manual /bumper-reset needed after ANY commit (Claude or external)
 %% 2. Natural workflow: commit = checkpoint = fresh budget
 %% 3. Encourages atomic commits (commit often, stay under threshold)
+%% 4. Handles IDE commits, manual terminal commits, git revert, git reset --hard
 %%
 %% EDGE CASES
-%% 1. User might not notice auto-reset happened (muted stderr)
-%% 2. No auto-reset for git commit --amend (same HEAD, tree may differ)
-%% 3. Branch switch also auto-resets (separate flow in Stop hook)
+%% 1. Scenario 1 fires immediately on commit (no delay)
+%% 2. Scenario 2 fires on next Write/Edit after external commit (slight delay)
+%% 3. Scenario 2 triggers whenever working tree == HEAD (clean tree)
+%%    - External commits (IDE, terminal)
+%%    - git reset --hard HEAD
+%%    - Manual file reversions that match HEAD
+%% 4. Scenario 2 does NOT trigger when working tree != HEAD (uncommitted changes)
+%% 5. Both scenarios handle untracked files correctly (CaptureTree includes them)
+%% 6. Fail-open: If tree capture fails or HEAD unavailable, threshold remains (no auto-reset)

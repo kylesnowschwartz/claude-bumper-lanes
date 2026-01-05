@@ -21,7 +21,7 @@ Defense-in-depth hook system with three layers:
 
 - **Stateful enforcement**: Track cumulative diff per session against baseline snapshot
 - **Fail-open with visibility**: Errors allow operations (availability over strictness), logging warnings to session log files for operator debugging
-- **Explicit approval**: User must manually reset after reviewing changes
+- **Automatic reset on clean tree**: When no changes remain (score = 0), baseline auto-resets to eliminate manual reset friction
 - **Transparent feedback**: Both user and Claude see threshold status and reasons
 
 ## Key Implementation Details
@@ -32,6 +32,7 @@ Defense-in-depth hook system with three layers:
 - PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
+- Auto-reset triggers: Claude's `git commit` (via Bash tool) OR when diff score reaches 0 after Write/Edit (handles external commits, manual reverts, IDE commits)
 
 ## Logging
 

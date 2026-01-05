@@ -264,6 +264,223 @@ func TestPostToolUseRouting(t *testing.T) {
 	})
 }
 
+func TestAutoResetOnCleanTree(t *testing.T) {
+	// Skip if not in a git repo
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	t.Run("auto-resets after external commit (RED - should fail initially)", func(t *testing.T) {
+		// This test captures the ACTUAL user scenario:
+		// 1. Session starts at tree-A
+		// 2. Claude makes changes (working tree dirty)
+		// 3. User commits externally (HEAD advances to tree-B)
+		// 4. Working tree is now clean (at tree-B)
+		// 5. Claude's next Write/Edit should auto-reset (working tree == HEAD)
+
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Initial commit to establish tree-A
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		// Capture baseline at tree-A (session start)
+		baseline, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("Failed to capture baseline: %v", err)
+		}
+
+		// Create session with baseline = tree-A
+		sessionID := "test-external-commit"
+		sess, err := state.New(sessionID, baseline, "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.Save()
+
+		// Simulate Claude making changes (dirty working tree)
+		os.WriteFile("feature.txt", []byte("new feature\n"), 0644)
+
+		// Verify score is non-zero (changes exist)
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+		handleWriteEdit(input) // This updates score
+
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.Score == 0 {
+			t.Fatalf("Score should be non-zero after Claude makes changes")
+		}
+		originalScore := reloaded.Score
+		t.Logf("Score after changes: %d", originalScore)
+
+		// User commits externally (NOT via Claude's Bash tool)
+		exec.Command("git", "add", "feature.txt").Run()
+		commitCmd := exec.Command("git", "commit", "-m", "feat: add feature")
+		if err := commitCmd.Run(); err != nil {
+			t.Fatalf("External commit failed: %v", err)
+		}
+
+		// Working tree is now CLEAN (no uncommitted changes)
+		// But baseline is still tree-A, HEAD is now tree-B
+		// Score = diff(tree-A, tree-B) = original score (non-zero)
+
+		// Claude's next Write/Edit should detect clean tree and auto-reset
+		exitCode := handleWriteEdit(input)
+
+		// EXPECTATION: Should return 2 with auto-reset message
+		if exitCode != 2 {
+			t.Errorf("handleWriteEdit(clean tree after external commit) = %d, want 2 (auto-reset)", exitCode)
+		}
+
+		// Verify session was reset
+		reloaded, err = state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("Failed to reload session: %v", err)
+		}
+
+		// Score should be reset to 0
+		if reloaded.Score != 0 {
+			t.Errorf("Score = %d, want 0 (should auto-reset after external commit)", reloaded.Score)
+		}
+
+		// Baseline should be updated to HEAD (tree-B)
+		headTree, _ := exec.Command("git", "rev-parse", "HEAD^{tree}").Output()
+		expectedTree := strings.TrimSpace(string(headTree))
+		if reloaded.BaselineTree != expectedTree {
+			t.Errorf("BaselineTree = %q, want %q (HEAD after commit)", reloaded.BaselineTree, expectedTree)
+		}
+	})
+
+	t.Run("auto-resets when working tree matches HEAD (git reset --hard)", func(t *testing.T) {
+		// Edge case: User does git reset --hard HEAD, bringing working tree
+		// back to a clean state matching HEAD (which happens to be the baseline)
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		// Capture baseline = HEAD
+		baseline, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("Failed to capture baseline: %v", err)
+		}
+
+		// Create session
+		sessionID := "test-reset-hard"
+		sess, err := state.New(sessionID, baseline, "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.Score = 100 // Pretend we had accumulated score
+		sess.Save()
+
+		// Working tree is clean (matches HEAD == baseline)
+		// This simulates: user made changes, then did git reset --hard HEAD
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+
+		exitCode := handleWriteEdit(input)
+		// Should return 2 with auto-reset message
+		if exitCode != 2 {
+			t.Errorf("handleWriteEdit(clean tree) = %d, want 2 (auto-reset)", exitCode)
+		}
+
+		// Verify session was reset
+		reloaded, err := state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("Failed to reload session: %v", err)
+		}
+
+		if reloaded.Score != 0 {
+			t.Errorf("Score = %d, want 0 (auto-reset)", reloaded.Score)
+		}
+
+		// Baseline should still be HEAD
+		headTree := GetHeadTree()
+		if reloaded.BaselineTree != headTree {
+			t.Errorf("BaselineTree = %q, want %q (HEAD)", reloaded.BaselineTree, headTree)
+		}
+	})
+
+	t.Run("does not reset when working tree is dirty (uncommitted changes)", func(t *testing.T) {
+		// Verify we DON'T auto-reset when working tree has uncommitted changes
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		// Capture baseline at HEAD
+		baseline, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("Failed to capture baseline: %v", err)
+		}
+
+		// Create session
+		sessionID := "test-no-reset-dirty"
+		sess, err := state.New(sessionID, baseline, "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.Save()
+
+		// Make uncommitted changes (working tree != HEAD)
+		os.WriteFile(filepath.Join(tmpDir, "uncommitted.txt"), []byte("new content\n"), 0644)
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+
+		exitCode := handleWriteEdit(input)
+		// Should return 0 (under 70% threshold) - NOT auto-reset
+		if exitCode != 0 {
+			t.Errorf("handleWriteEdit(dirty tree) = %d, want 0 (under threshold, no auto-reset)", exitCode)
+		}
+
+		// Verify baseline NOT changed
+		reloaded, err := state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("Failed to reload session: %v", err)
+		}
+
+		if reloaded.BaselineTree != baseline {
+			t.Errorf("BaselineTree changed unexpectedly to %q, want %q (should not reset)", reloaded.BaselineTree, baseline)
+		}
+
+		// Score should be updated (non-zero because working tree is dirty)
+		if reloaded.Score == 0 {
+			t.Errorf("Score = 0, want non-zero (dirty tree with uncommitted changes)")
+		}
+	})
+}
+
 func TestHandleBashCommit(t *testing.T) {
 	// Skip if not in a git repo
 	if !IsGitRepo() {

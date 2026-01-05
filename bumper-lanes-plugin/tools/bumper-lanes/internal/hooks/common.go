@@ -155,3 +155,14 @@ func GetCurrentBranch() string {
 	}
 	return branch
 }
+
+// GetHeadTree returns the tree SHA of HEAD.
+// Returns empty string if HEAD doesn't exist (empty repo) or on error.
+func GetHeadTree() string {
+	cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
