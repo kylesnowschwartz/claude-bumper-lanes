@@ -38,8 +38,7 @@ func BenchmarkPreToolUseCleanTreeCheck(b *testing.B) {
 		b.Fatalf("Failed to capture baseline: %v", err)
 	}
 
-	headTree := GetHeadTree()
-	if headTree == "" {
+	if GetHeadTree() == "" {
 		b.Fatalf("No HEAD tree")
 	}
 
