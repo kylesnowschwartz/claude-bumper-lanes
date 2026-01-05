@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -92,8 +93,8 @@ func PreToolUse(input *HookInput) (exitCode int) {
 				sess.ResetBaseline(currentTree, currentBranch)
 				sess.Save()
 
-				// Allow tool to proceed (no JSON output needed here)
-				// PostToolUse will provide feedback when it recalculates score=0
+				// Provide feedback to user and Claude
+				fmt.Fprintf(os.Stderr, "✓ Bumper lanes: Auto-reset (no uncommitted changes). Fresh budget: %d pts.\n", sess.ThresholdLimit)
 				return 0
 			}
 		}

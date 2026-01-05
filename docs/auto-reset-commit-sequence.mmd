@@ -5,6 +5,7 @@
 sequenceDiagram
     participant User
     participant Claude
+    participant PreTU as PreToolUse
     participant PTU as PostToolUse
     participant Git
     participant Sess as Session
@@ -32,39 +33,53 @@ sequenceDiagram
     Claude-->>User: Committed. Fresh budget now.
 
     %% ============================================================
-    %% CASE 2: External commit (IDE, terminal)
+    %% CASE 2: PreToolUse auto-reset (v3.7.0)
     %% ============================================================
-    Note over User,Sess: Scenario 2: External commit
+    Note over User,Sess: Scenario 2: PreToolUse catches external commit
+    Note over User,Claude: (Threshold exceeded - StopTriggered=true)
     User->>Git: git commit (in IDE/terminal)
-    Git-->>User: committed xyz789
+    Git-->>User: committed jkl012
     User->>Claude: continue working
 
-    %% Claude makes next change (Write/Edit)
+    %% Claude attempts Write - PreToolUse fires BEFORE execution
+    Claude->>PreTU as PreToolUse: (wants to Write file)
+
+    %% PreToolUse checks state
+    PreTU->>Sess: Load session
+    Sess-->>PreTU: StopTriggered=true, score=450/400
+
+    %% Auto-reset check (NEW in v3.7.0)
+    Note over PreTU,Git: Clean tree check (handles external commits)
+    PreTU->>Git: CaptureTree()
+    Git-->>PreTU: tree SHA jkl012
+    PreTU->>Git: GetHeadTree()
+    Git-->>PreTU: HEAD tree jkl012
+
+    %% Trees match - auto-reset and allow
+    PreTU->>PreTU: (tree == HEAD, clean!)
+    PreTU->>Git: GetCurrentBranch()
+    Git-->>PreTU: main
+    PreTU->>Sess: ResetBaseline(jkl012, main)
+    PreTU->>Sess: StopTriggered = false
+    PreTU->>Sess: score = 0
+
+    %% Allow Write to proceed (no JSON output)
+    PreTU-->>Claude: exit 0 (allow tool)
+    Note over PreTU,Claude: No JSON = tool proceeds normally
+
+    %% Write executes successfully
     Claude->>Git: Write file
+    Git-->>Claude: file written
 
-    %% PostToolUse fires for Write
+    %% PostToolUse calculates new score and provides feedback
     PTU->>PTU: handleWriteEdit()
-    PTU->>Git: calculate fresh score
-    Git-->>PTU: score = 0 (tree matches baseline)
+    PTU->>Git: calculate diff from jkl012
+    Git-->>PTU: score = 15 pts (just this Write)
+    PTU->>Sess: score = 15
+    PTU-->>Claude: stderr: Fresh budget after auto-reset. Score: 15/400 (3%)
+    Claude-->>User: Changes made. Fresh budget: 15/400.
 
-    %% Auto-reset on clean tree
-    PTU->>PTU: (score == 0, auto-reset)
-    PTU->>Git: CaptureTree()
-    Git-->>PTU: tree SHA xyz789
-    PTU->>Sess: baseline = xyz789
-    PTU->>Sess: score = 0
-    PTU-->>Claude: stderr: Auto-reset (no changes to review). Fresh budget: 400 pts.
-    Claude-->>User: Fresh budget restored.
-
-%% ============================================================
-%% CASE 3: PreToolUse auto-reset (v3.7.0)
-%% ============================================================
-%% Note: PreToolUse checks if tree has become clean since Stop triggered
-%% This handles external commits BEFORE Claude writes (correct timing)
-%% When StopTriggered=true and tree is clean, auto-resets and allows tool
-%% Eliminates manual /bumper-reset after external commits
-
-%% ============================================================
+    %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% Scenario 1 (Claude commits):
@@ -73,15 +88,7 @@ sequenceDiagram
 %% - Reset call: internal/hooks/post_tool_use.go:handleBashCommit (line 72)
 %% - Feedback: internal/hooks/post_tool_use.go:handleBashCommit (line 79)
 %%
-%% Scenario 2 (External commits):
-%% - Tree capture: internal/hooks/post_tool_use.go:handleWriteEdit (line 118)
-%% - HEAD tree check: internal/hooks/post_tool_use.go:handleWriteEdit (line 120)
-%% - Clean tree detection: internal/hooks/post_tool_use.go:handleWriteEdit (line 121, currentTree == headTree)
-%% - Reset call: internal/hooks/post_tool_use.go:handleWriteEdit (line 124)
-%% - Feedback: internal/hooks/post_tool_use.go:handleWriteEdit (line 127)
-%% - Helper function: internal/hooks/common.go:GetHeadTree (line 161)
-%%
-%% Scenario 3 (PreToolUse auto-reset, v3.7.0):
+%% Scenario 2 (PreToolUse auto-reset, v3.7.0):
 %% - StopTriggered check: internal/hooks/pre_tool_use.go:78
 %% - Tree capture: internal/hooks/pre_tool_use.go:79
 %% - HEAD tree check: internal/hooks/pre_tool_use.go:81
@@ -97,15 +104,17 @@ sequenceDiagram
 %% 1. No manual /bumper-reset needed after ANY commit (Claude or external)
 %% 2. Natural workflow: commit = checkpoint = fresh budget
 %% 3. Encourages atomic commits (commit often, stay under threshold)
-%% 4. Handles IDE commits, manual terminal commits, git revert, git reset --hard
+%% 4. Handles IDE commits, manual terminal commits (when threshold exceeded)
+%% 5. PreToolUse timing (v3.7.0) checks BEFORE Write dirties tree (correct timing)
 %%
 %% EDGE CASES
 %% 1. Scenario 1 fires immediately on commit (no delay)
-%% 2. Scenario 2 fires on next Write/Edit after external commit (slight delay)
-%% 3. Scenario 2 triggers whenever working tree == HEAD (clean tree)
+%% 2. Scenario 2 fires on next Write/Edit after external commit (when StopTriggered=true)
+%% 3. Scenario 2 only triggers when threshold exceeded (StopTriggered=true)
+%% 4. Scenario 2 triggers when working tree == HEAD (clean tree):
 %%    - External commits (IDE, terminal)
 %%    - git reset --hard HEAD
 %%    - Manual file reversions that match HEAD
-%% 4. Scenario 2 does NOT trigger when working tree != HEAD (uncommitted changes)
-%% 5. Both scenarios handle untracked files correctly (CaptureTree includes them)
-%% 6. Fail-open: If tree capture fails or HEAD unavailable, threshold remains (no auto-reset)
+%% 5. Scenario 2 does NOT trigger when working tree != HEAD (uncommitted changes)
+%% 6. Both scenarios handle untracked files correctly (CaptureTree includes them)
+%% 7. Fail-open: If tree capture fails or HEAD unavailable, threshold remains (no auto-reset)
