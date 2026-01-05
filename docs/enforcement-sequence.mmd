@@ -69,11 +69,24 @@ sequenceDiagram
     Sess-->>Stop: 600/400 (150%)
     Stop-->>Claude: BLOCKED
 
+    %% === AUTO-RECOVERY (v3.7.0) ===
+    %% Option C: User reverts changes - automatic recovery
+    Note over User,Sess: Bidirectional State Transition (v3.7.0)
+    User->>Git: git checkout -- bigfile.ts
+    Git-->>User: file reverted
+    Claude->>Stop: (tries to finish)
+    Stop->>Sess: recalculate score from baseline
+    Sess-->>Stop: 350/400 (87% - under threshold!)
+    Stop->>Sess: clear stop_triggered flag
+    Stop-->>User: ✓ Auto-recovered (score: 350/400)
+    Stop-->>Claude: ALLOW - continue work
+
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - PostToolUse tiers: internal/hooks/post_tool_use.go:119-128
 %% - Stop blocking: internal/hooks/stop.go:127-184
+%% - Stop auto-recovery: internal/hooks/stop.go:134-154 (v3.7.0)
 %% - Reset: internal/hooks/prompt_handler.go:96-115
 %% - Pause: internal/hooks/prompt_handler.go:118-131
 %% - Resume: internal/hooks/prompt_handler.go:134-147
@@ -88,7 +101,7 @@ sequenceDiagram
 %% 2. Pause accumulates unbounded score - can be huge on resume
 %% 3. No partial reset - it's all-or-nothing baseline capture
 %% 4. Auto-reset on commit not shown (separate flow)
-%% 5. Score can decrease if user reverts changes - not obvious
+%% 5. ~~Score can decrease if user reverts changes - not obvious~~ (FIXED v3.7.0: Stop auto-recovery)
 %%
 %% STATUS LINE TIERS (implemented)
 %% Status line now matches fuel gauge visibility:
