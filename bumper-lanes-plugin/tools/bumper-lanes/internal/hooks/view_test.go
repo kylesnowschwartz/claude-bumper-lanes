@@ -142,15 +142,22 @@ func setupTempGitRepo(t *testing.T, tmpDir string) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
+	// Configure git identity (required for CI environments)
+	configCmds := [][]string{
+		{"config", "user.name", "Test"},
+		{"config", "user.email", "test@example.com"},
+	}
+	for _, args := range configCmds {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = tmpDir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git %v failed: %v", args, err)
+		}
+	}
+
 	// Create initial commit so we have HEAD
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "initial")
 	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=test",
-		"GIT_AUTHOR_EMAIL=test@test.com",
-		"GIT_COMMITTER_NAME=test",
-		"GIT_COMMITTER_EMAIL=test@test.com",
-	)
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git commit failed: %v", err)
 	}

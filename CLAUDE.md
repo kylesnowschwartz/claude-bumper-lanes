@@ -39,19 +39,15 @@ Baseline resets automatically in these scenarios:
 
 1. **PreToolUse clean tree check** (NEW in v3.7.0): When threshold exceeded but tree becomes clean
    - Detects: External commits (IDE, terminal, git CLI) between Stop and next Write/Edit
-   - Location: `pre_tool_use.go:72-94`
+   - Location: `pre_tool_use.go:78-98`
    - Benefit: Eliminates manual `/bumper-reset` after external commits
-   - Cost: ~60ms per Write/Edit when StopTriggered=true (rare)
+   - Cost: ~125ms per Write/Edit when StopTriggered=true (rare)
 
 2. **Claude's git commit** (via Bash tool)
    - Detects: Regex matches `git commit` command patterns
    - Location: `post_tool_use.go:41-81`
 
-3. **PostToolUse clean tree check** (defense-in-depth)
-   - Handles: Score decreases to 0 (user reverts uncommitted changes)
-   - Location: `post_tool_use.go:115-131`
-
-4. **Branch switch**
+3. **Branch switch**
    - Detects: Branch name changed since baseline
    - Location: `stop.go:115-126`
 

@@ -16,11 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Auto-reset timing issue**: PostToolUse auto-reset couldn't detect clean tree because Write tool dirties tree before check runs
   - New PreToolUse check runs BEFORE Write dirties tree (correct timing)
-  - Existing PostToolUse auto-reset kept as defense-in-depth for edge cases
+  - Removed redundant PostToolUse clean-tree check (dead code - never triggered)
 
 ### Technical Details
-- Location: `internal/hooks/pre_tool_use.go:72-94`
-- Cost: ~60ms per Write/Edit when StopTriggered=true (rare)
+- Location: `internal/hooks/pre_tool_use.go:78-98`
+- Cost: ~125ms per Write/Edit when StopTriggered=true (rare)
 - Preserves existing blocking behavior when tree is dirty
 
 ## [1.0.0] - 2025-11-06

@@ -112,24 +112,6 @@ func handleWriteEdit(input *HookInput) int {
 	result := scoring.Calculate(stats)
 	freshScore := result.Score
 
-	// Auto-reset if working tree is clean (no uncommitted changes)
-	// Detects: external commits, IDE commits, manual reverts, git reset
-	// Check: current working tree == HEAD (not baseline)
-	currentTree, err := CaptureTree()
-	if err == nil {
-		headTree := GetHeadTree()
-		if headTree != "" && currentTree == headTree {
-			// Working tree matches HEAD - no uncommitted changes
-			currentBranch := GetCurrentBranch()
-			sess.ResetBaseline(currentTree, currentBranch)
-			sess.Save()
-
-			fmt.Fprintf(os.Stderr, "✓ Bumper lanes: Auto-reset (no uncommitted changes). Fresh budget: %d pts.\n", sess.ThresholdLimit)
-			return 2
-		}
-		// If trees don't match or HEAD unavailable, fall through (working tree is dirty)
-	}
-
 	// Update state with fresh score
 	sess.SetScore(freshScore)
 	sess.Save()

@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -84,20 +85,30 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	// This handles external commits (IDE, terminal, git CLI) that clean the tree
 	if sess.StopTriggered {
 		currentTree, err := CaptureTree()
-		if err == nil {
-			headTree := GetHeadTree()
-			if headTree != "" && currentTree == headTree {
-				// Tree is clean - auto-reset baseline and clear flag
-				currentBranch := GetCurrentBranch()
-				sess.ResetBaseline(currentTree, currentBranch)
-				sess.Save()
-
-				// Allow tool to proceed (no JSON output needed here)
-				// PostToolUse will provide feedback when it recalculates score=0
-				return 0
-			}
+		if err != nil {
+			// Fail-open: If we can't capture tree state, don't block the user
+			log.Warn("failed to capture tree for auto-reset check: %v (failing open)", err)
+			return 0
 		}
-		// Tree is dirty or check failed - fall through to blocking
+
+		headTree := GetHeadTree()
+		if headTree == "" {
+			// Fail-open: If HEAD tree unavailable (empty repo?), don't block
+			log.Warn("HEAD tree unavailable for auto-reset check (failing open)")
+			return 0
+		}
+
+		if currentTree == headTree {
+			// Tree is clean - auto-reset baseline and clear flag
+			currentBranch := GetCurrentBranch()
+			sess.ResetBaseline(currentTree, currentBranch)
+			sess.Save()
+
+			// Provide feedback to user and Claude
+			fmt.Fprintf(os.Stderr, "✓ Baseline auto-reset (external commit detected). Budget restored.\n")
+			return 0
+		}
+		// Tree is dirty - fall through to blocking
 	}
 
 	// KEY CHECK: Only block if Stop hook has already triggered
@@ -136,8 +147,9 @@ func formatBlockReason(score, limit, pct int) string {
 Threshold exceeded: ` + formatScore(score, limit, pct) + `
 
 The Stop hook has already fired. To continue:
-1. Review the changes with the user
-2. Run /bumper-reset to restore budget
+1. Review changes with the user
+2. Commit changes (baseline auto-resets), OR
+3. Run /bumper-reset to manually restore budget
 
 This prevents unbounded changes without review.`
 }
