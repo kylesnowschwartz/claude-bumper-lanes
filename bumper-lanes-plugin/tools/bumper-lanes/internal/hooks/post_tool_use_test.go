@@ -479,6 +479,108 @@ func TestAutoResetOnCleanTree(t *testing.T) {
 			t.Errorf("Score = 0, want non-zero (dirty tree with uncommitted changes)")
 		}
 	})
+
+	t.Run("threshold exceeded, external commit, then Write (demonstrates timing issue)", func(t *testing.T) {
+		// This test demonstrates the TIMING ISSUE with auto-reset in PostToolUse:
+		// 1. Score ABOVE threshold (e.g., 440/400 - 110%)
+		// 2. User commits changes externally (tree becomes CLEAN)
+		// 3. Claude tries Write (dirties tree BEFORE PostToolUse can check)
+		// 4. PostToolUse fires: auto-reset check fails because tree is now dirty
+		// 5. Threshold remains exceeded
+		//
+		// EXPECTED BEHAVIOR: Auto-reset should happen BEFORE Write dirties tree
+		// ACTUAL BEHAVIOR: Auto-reset check sees dirty tree, doesn't trigger
+		//
+		// This test documents the gap identified in investigation:
+		// .agent-history/2026-01-05-auto-reset-threshold-interaction.md
+
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		// Capture baseline
+		baseline, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("Failed to capture baseline: %v", err)
+		}
+
+		// Create session with score ABOVE threshold
+		sessionID := "test-threshold-exceeded"
+		sess, err := state.New(sessionID, baseline, "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.SetScore(440) // 110% - threshold exceeded
+		sess.SetStopTriggered(true)
+		sess.Save()
+
+		// Simulate Claude having made changes
+		os.WriteFile("changes.txt", []byte("Claude's changes\n"), 0644)
+		exec.Command("git", "add", "changes.txt").Run()
+		exec.Command("git", "commit", "-m", "feat: changes").Run()
+
+		// At this point:
+		// - Baseline: initial.txt only
+		// - HEAD: initial.txt + changes.txt
+		// - Working tree: clean (matches HEAD)
+		// - Score: 440 (still reflecting diff from baseline to HEAD)
+
+		// Verify working tree matches HEAD (clean)
+		currentTree, _ := CaptureTree()
+		headTree := GetHeadTree()
+		if currentTree != headTree {
+			t.Fatalf("Test setup failed: tree should be clean (currentTree=%s, headTree=%s)", currentTree, headTree)
+		}
+
+		// User asks Claude to continue, Claude tries Write
+		// Simulate Write tool execution: create a new file
+		os.WriteFile("newfile.txt", []byte("new content\n"), 0644)
+
+		// PostToolUse fires AFTER Write tool executed
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+		exitCode := handleWriteEdit(input)
+
+		// Check results
+		reloaded, _ := state.Load(sessionID)
+
+		// ISSUE: Auto-reset should have triggered (tree WAS clean before Write)
+		// But auto-reset check happens AFTER Write (tree is now dirty)
+		// So auto-reset doesn't trigger, baseline not updated
+
+		// Current behavior: exitCode is NOT 2 (auto-reset didn't happen)
+		// We expect fuel gauge warning or silent (exitCode 0 or 2)
+		t.Logf("exitCode after Write: %d", exitCode)
+		t.Logf("Score after Write: %d (baseline still old)", reloaded.Score)
+		t.Logf("Baseline tree: %s", reloaded.BaselineTree)
+		t.Logf("HEAD tree: %s", headTree)
+
+		// Baseline should have been updated to HEAD (external commit)
+		// But it wasn't because tree was dirty when PostToolUse checked
+		if reloaded.BaselineTree == headTree {
+			t.Logf("✓ Auto-reset worked (baseline updated to HEAD)")
+		} else {
+			t.Logf("✗ Auto-reset didn't trigger (baseline still old)")
+			t.Logf("  This is EXPECTED with current implementation")
+			t.Logf("  Auto-reset check in PostToolUse sees tree AFTER Write dirties it")
+			t.Logf("  See: .agent-history/2026-01-05-auto-reset-threshold-interaction.md")
+		}
+
+		// This test documents the timing issue but doesn't fail
+		// It's a "known limitation" test that demonstrates the gap
+		// Fix: Add auto-reset check to Stop hook (before Write executes)
+	})
 }
 
 func TestHandleBashCommit(t *testing.T) {

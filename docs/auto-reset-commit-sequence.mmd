@@ -57,6 +57,14 @@ sequenceDiagram
     Claude-->>User: Fresh budget restored.
 
 %% ============================================================
+%% CASE 3: PreToolUse auto-reset (v3.7.0)
+%% ============================================================
+%% Note: PreToolUse checks if tree has become clean since Stop triggered
+%% This handles external commits BEFORE Claude writes (correct timing)
+%% When StopTriggered=true and tree is clean, auto-resets and allows tool
+%% Eliminates manual /bumper-reset after external commits
+
+%% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% Scenario 1 (Claude commits):
@@ -72,6 +80,14 @@ sequenceDiagram
 %% - Reset call: internal/hooks/post_tool_use.go:handleWriteEdit (line 124)
 %% - Feedback: internal/hooks/post_tool_use.go:handleWriteEdit (line 127)
 %% - Helper function: internal/hooks/common.go:GetHeadTree (line 161)
+%%
+%% Scenario 3 (PreToolUse auto-reset, v3.7.0):
+%% - StopTriggered check: internal/hooks/pre_tool_use.go:78
+%% - Tree capture: internal/hooks/pre_tool_use.go:79
+%% - HEAD tree check: internal/hooks/pre_tool_use.go:81
+%% - Clean tree detection: internal/hooks/pre_tool_use.go:82
+%% - Reset call: internal/hooks/pre_tool_use.go:85
+%% - Allow tool: internal/hooks/pre_tool_use.go:90
 %%
 %% COMMIT PATTERN REGEX (Scenario 1)
 %% Matches: git commit, git -C /path commit, git --git-dir=/x commit

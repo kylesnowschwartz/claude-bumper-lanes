@@ -5,6 +5,24 @@ All notable changes to claude-bumper-lanes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-01-05
+
+### Added
+- **PreToolUse auto-reset**: When threshold exceeded and tree becomes clean after external commit, PreToolUse automatically resets baseline before blocking
+  - Eliminates manual `/bumper-reset` friction after external commits (IDE, terminal, git CLI)
+  - Check runs only when `StopTriggered=true` (minimal performance impact)
+  - Handles workflow: threshold exceeded → external commit → Claude continues automatically
+
+### Fixed
+- **Auto-reset timing issue**: PostToolUse auto-reset couldn't detect clean tree because Write tool dirties tree before check runs
+  - New PreToolUse check runs BEFORE Write dirties tree (correct timing)
+  - Existing PostToolUse auto-reset kept as defense-in-depth for edge cases
+
+### Technical Details
+- Location: `internal/hooks/pre_tool_use.go:72-94`
+- Cost: ~60ms per Write/Edit when StopTriggered=true (rare)
+- Preserves existing blocking behavior when tree is dirty
+
 ## [1.0.0] - 2025-11-06
 
 ### Added

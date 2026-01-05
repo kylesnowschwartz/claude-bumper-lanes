@@ -27,6 +27,13 @@ type HookSpecificOutput struct {
 // It blocks file modification tools (Write, Edit, etc.) when the threshold
 // has been exceeded and StopTriggered is true.
 //
+// NEW (v3.7.0): Before blocking, checks if working tree has become clean
+// (matches HEAD) since Stop hook triggered. If clean, auto-resets baseline
+// and clears StopTriggered flag, allowing the tool to proceed.
+//
+// This handles external commits (IDE, terminal) that clean the tree between
+// Stop hook firing and the next Write/Edit attempt.
+//
 // This is the "hard enforcement" layer - it prevents tools from executing
 // entirely, complementing the Stop hook which blocks turn completion.
 //
@@ -67,6 +74,30 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	// If threshold is 0 (disabled), allow tool
 	if sess.ThresholdLimit == 0 {
 		return 0
+	}
+
+	// ╔═══════════════════════════════════════════════════════════╗
+	// ║ AUTO-RESET: Check if tree has become clean since Stop    ║
+	// ║ This handles external commits before Claude writes       ║
+	// ╚═══════════════════════════════════════════════════════════╝
+	// Check if tree has become clean since Stop hook triggered
+	// This handles external commits (IDE, terminal, git CLI) that clean the tree
+	if sess.StopTriggered {
+		currentTree, err := CaptureTree()
+		if err == nil {
+			headTree := GetHeadTree()
+			if headTree != "" && currentTree == headTree {
+				// Tree is clean - auto-reset baseline and clear flag
+				currentBranch := GetCurrentBranch()
+				sess.ResetBaseline(currentTree, currentBranch)
+				sess.Save()
+
+				// Allow tool to proceed (no JSON output needed here)
+				// PostToolUse will provide feedback when it recalculates score=0
+				return 0
+			}
+		}
+		// Tree is dirty or check failed - fall through to blocking
 	}
 
 	// KEY CHECK: Only block if Stop hook has already triggered

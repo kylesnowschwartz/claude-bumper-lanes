@@ -3,6 +3,7 @@ package hooks
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -24,6 +25,9 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 	os.Chdir(tmpDir)
 
 	sessionID := "test-pretooluse-block"
+
+	// Create an uncommitted change so tree is dirty (prevents auto-reset)
+	os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0644)
 
 	// Create session with StopTriggered=true (threshold was exceeded)
 	sess, err := state.New(sessionID, "some-baseline", "main", 400)
@@ -274,4 +278,166 @@ func TestPreToolUseWrongHookEvent(t *testing.T) {
 	if exitCode != 0 {
 		t.Errorf("PreToolUse(wrong event) = %d, want 0", exitCode)
 	}
+}
+
+func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
+	// Skip if not in a git repo
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	t.Run("auto-resets when tree becomes clean after Stop triggered", func(t *testing.T) {
+		// This test verifies the fix for the timing issue:
+		// 1. Threshold exceeded → StopTriggered=true
+		// 2. User commits externally → tree clean
+		// 3. Claude tries Write → PreToolUse should unblock (auto-reset)
+
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		// Capture baseline
+		baseline, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("Failed to capture baseline: %v", err)
+		}
+
+		// Create session with StopTriggered=true (threshold exceeded)
+		sessionID := "test-pretooluse-reset"
+		sess, err := state.New(sessionID, baseline, "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.SetStopTriggered(true)
+		sess.SetScore(500) // Above threshold
+		sess.Save()
+
+		// Simulate changes and external commit
+		os.WriteFile("changes.txt", []byte("new changes\n"), 0644)
+		exec.Command("git", "add", "changes.txt").Run()
+		exec.Command("git", "commit", "-m", "external commit").Run()
+
+		// Verify tree is clean (matches HEAD)
+		currentTree, _ := CaptureTree()
+		headTree := GetHeadTree()
+		if currentTree != headTree {
+			t.Fatalf("Setup failed: tree should be clean")
+		}
+
+		// Claude tries Write (PreToolUse should auto-reset and allow)
+		input := &HookInput{
+			HookEventName: "PreToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		exitCode := PreToolUse(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var output []byte
+		output = make([]byte, 4096)
+		n, _ := r.Read(output)
+		output = output[:n]
+
+		// Should allow (exit 0, no JSON denial)
+		if exitCode != 0 {
+			t.Errorf("Expected allow (exit 0), got %d", exitCode)
+		}
+
+		// Should NOT output JSON (no blocking)
+		if len(output) > 0 {
+			t.Errorf("Should not output blocking JSON, got: %s", output)
+		}
+
+		// Verify session was reset
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.StopTriggered {
+			t.Errorf("StopTriggered should be false after auto-reset")
+		}
+		if reloaded.Score != 0 {
+			t.Errorf("Score = %d, want 0 after auto-reset", reloaded.Score)
+		}
+
+		// Verify baseline was updated to HEAD
+		if reloaded.BaselineTree != headTree {
+			t.Errorf("Baseline not updated to HEAD tree")
+		}
+	})
+
+	t.Run("still blocks when tree is dirty (unchanged behavior)", func(t *testing.T) {
+		// Verify blocking still works when tree is dirty
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		baseline, _ := CaptureTree()
+		sessionID := "test-pretooluse-block"
+		sess, _ := state.New(sessionID, baseline, "main", 400)
+		sess.SetStopTriggered(true)
+		sess.Save()
+
+		// Create uncommitted changes (dirty tree)
+		os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0644)
+
+		// PreToolUse should block
+		input := &HookInput{
+			HookEventName: "PreToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		exitCode := PreToolUse(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var output []byte
+		output = make([]byte, 4096)
+		n, _ := r.Read(output)
+		output = output[:n]
+
+		// Should block (exit 0 with JSON denial)
+		if exitCode != 0 {
+			t.Errorf("Expected exit 0 (JSON output), got %d", exitCode)
+		}
+
+		// Should output JSON with denial
+		if len(output) == 0 {
+			t.Errorf("Should output blocking JSON")
+		}
+
+		// StopTriggered should still be true
+		reloaded, _ := state.Load(sessionID)
+		if !reloaded.StopTriggered {
+			t.Errorf("StopTriggered should remain true when tree is dirty")
+		}
+	})
 }

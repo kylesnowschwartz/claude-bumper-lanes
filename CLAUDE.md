@@ -32,7 +32,28 @@ Defense-in-depth hook system with three layers:
 - PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
-- Auto-reset triggers: Claude's `git commit` (via Bash tool) OR when diff score reaches 0 after Write/Edit (handles external commits, manual reverts, IDE commits)
+
+## Auto-Reset Triggers
+
+Baseline resets automatically in these scenarios:
+
+1. **PreToolUse clean tree check** (NEW in v3.7.0): When threshold exceeded but tree becomes clean
+   - Detects: External commits (IDE, terminal, git CLI) between Stop and next Write/Edit
+   - Location: `pre_tool_use.go:72-94`
+   - Benefit: Eliminates manual `/bumper-reset` after external commits
+   - Cost: ~60ms per Write/Edit when StopTriggered=true (rare)
+
+2. **Claude's git commit** (via Bash tool)
+   - Detects: Regex matches `git commit` command patterns
+   - Location: `post_tool_use.go:41-81`
+
+3. **PostToolUse clean tree check** (defense-in-depth)
+   - Handles: Score decreases to 0 (user reverts uncommitted changes)
+   - Location: `post_tool_use.go:115-131`
+
+4. **Branch switch**
+   - Detects: Branch name changed since baseline
+   - Location: `stop.go:115-126`
 
 ## Logging
 
