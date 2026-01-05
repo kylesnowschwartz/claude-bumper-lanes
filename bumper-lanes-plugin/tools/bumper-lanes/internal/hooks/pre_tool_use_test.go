@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"testing"
@@ -11,7 +12,7 @@ import (
 
 func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 	// This is the critical regression test - PreToolUse must block
-	// file modifications when StopTriggered=true
+	// file modifications when StopTriggered=true AND score still exceeds threshold
 
 	if !IsGitRepo() {
 		t.Skip("Not in a git repo")
@@ -26,19 +27,30 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 
 	sessionID := "test-pretooluse-block"
 
-	// Create an uncommitted change so tree is dirty (prevents auto-reset)
-	os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0644)
+	// Create initial commit to establish valid baseline
+	os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+	exec.Command("git", "add", "initial.txt").Run()
+	exec.Command("git", "commit", "-m", "initial").Run()
 
-	// Create session with StopTriggered=true (threshold was exceeded)
-	sess, err := state.New(sessionID, "some-baseline", "main", 400)
+	baseline, _ := CaptureTree()
+
+	// Create session with low threshold to ensure dirty changes exceed it
+	sess, err := state.New(sessionID, baseline, "main", 50) // Low threshold
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 	sess.SetStopTriggered(true)
-	sess.SetScore(500) // Over threshold
+	sess.SetScore(500) // Over threshold (will be recalculated)
 	if err := sess.Save(); err != nil {
 		t.Fatalf("Failed to save session: %v", err)
 	}
+
+	// Create large uncommitted change to exceed 50pt threshold
+	largeContent := make([]byte, 0, 10000)
+	for i := 0; i < 100; i++ {
+		largeContent = append(largeContent, []byte(fmt.Sprintf("// Line %d\n", i))...)
+	}
+	os.WriteFile("dirty.txt", largeContent, 0644)
 
 	// Test each file modification tool
 	for _, tool := range []string{"Write", "Edit", "MultiEdit", "NotebookEdit"} {
@@ -379,8 +391,8 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		}
 	})
 
-	t.Run("still blocks when tree is dirty (unchanged behavior)", func(t *testing.T) {
-		// Verify blocking still works when tree is dirty
+	t.Run("still blocks when tree is dirty but over threshold", func(t *testing.T) {
+		// Verify blocking still works when tree is dirty AND score exceeds threshold
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
 
@@ -395,12 +407,16 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 
 		baseline, _ := CaptureTree()
 		sessionID := "test-pretooluse-block"
-		sess, _ := state.New(sessionID, baseline, "main", 400)
+		sess, _ := state.New(sessionID, baseline, "main", 100) // Lower threshold to ensure we exceed it
 		sess.SetStopTriggered(true)
 		sess.Save()
 
-		// Create uncommitted changes (dirty tree)
-		os.WriteFile("dirty.txt", []byte("uncommitted\n"), 0644)
+		// Create uncommitted changes large enough to exceed 100pt threshold
+		largeContent := make([]byte, 0, 20000)
+		for i := 0; i < 200; i++ {
+			largeContent = append(largeContent, []byte(fmt.Sprintf("// Line %d of dirty file\n", i))...)
+		}
+		os.WriteFile("dirty.txt", largeContent, 0644)
 
 		// PreToolUse should block
 		input := &HookInput{
@@ -434,10 +450,85 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 			t.Errorf("Should output blocking JSON")
 		}
 
-		// StopTriggered should still be true
+		// StopTriggered should still be true when over threshold
 		reloaded, _ := state.Load(sessionID)
 		if !reloaded.StopTriggered {
-			t.Errorf("StopTriggered should remain true when tree is dirty")
+			t.Errorf("StopTriggered should remain true when score exceeds threshold")
+		}
+	})
+
+	t.Run("auto-recovers when dirty but score drops below threshold", func(t *testing.T) {
+		// NEW TEST: Validate auto-recovery when user manually reduces diff below threshold
+		// This is the fix for PR #3 - dynamic threshold checking
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		// Create initial commit
+		os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+		exec.Command("git", "add", "initial.txt").Run()
+		exec.Command("git", "commit", "-m", "initial").Run()
+
+		baseline, _ := CaptureTree()
+		sessionID := "test-pretooluse-autorecovery"
+		sess, _ := state.New(sessionID, baseline, "main", 200) // Threshold: 200 points
+		sess.SetStopTriggered(true)                            // Was over threshold
+		sess.SetScore(300)                                     // Was 300 points
+		sess.Save()
+
+		// Create small uncommitted change (below threshold)
+		os.WriteFile("small.txt", []byte("small change\n"), 0644) // ~1 line = ~1 point
+
+		// PreToolUse should auto-recover (not block)
+		input := &HookInput{
+			HookEventName: "PreToolUse",
+			ToolName:      "Write",
+			SessionID:     sessionID,
+		}
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		exitCode := PreToolUse(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var output []byte
+		output = make([]byte, 4096)
+		n, _ := r.Read(output)
+		output = output[:n]
+
+		// Should allow (exit 0, no JSON denial)
+		if exitCode != 0 {
+			t.Errorf("Expected allow (exit 0), got %d", exitCode)
+		}
+
+		// Should NOT output JSON blocking (no denial)
+		if len(output) > 0 {
+			// Check if it's a JSON denial
+			var resp PreToolUseResponse
+			if err := json.Unmarshal(output, &resp); err == nil {
+				if resp.HookSpecificOutput != nil && resp.HookSpecificOutput.PermissionDecision == "deny" {
+					t.Errorf("Should not block when score drops below threshold")
+				}
+			}
+		}
+
+		// StopTriggered should be cleared
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.StopTriggered {
+			t.Errorf("StopTriggered should be false after auto-recovery (score below threshold)")
+		}
+
+		// Score should be updated to fresh calculation
+		if reloaded.Score >= 200 {
+			t.Errorf("Score should be below threshold after auto-recovery, got %d", reloaded.Score)
 		}
 	})
 }

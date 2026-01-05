@@ -69,9 +69,11 @@ sequenceDiagram
     Sess-->>Stop: 600/400 (150%)
     Stop-->>Claude: BLOCKED
 
-    %% === AUTO-RECOVERY (v3.7.0) ===
+    %% === AUTO-RECOVERY (v3.7.0+) ===
     %% Option C: User reverts changes - automatic recovery
-    Note over User,Sess: Bidirectional State Transition (v3.7.0)
+    Note over User,Sess: Bidirectional State Transition (v3.7.0+)
+
+    %% Case 1: Stop hook auto-recovery (v3.7.0)
     User->>Git: git checkout -- bigfile.ts
     Git-->>User: file reverted
     Claude->>Stop: (tries to finish)
@@ -81,12 +83,27 @@ sequenceDiagram
     Stop-->>User: ✓ Auto-recovered (score: 350/400)
     Stop-->>Claude: ALLOW - continue work
 
+    %% Case 2: PreToolUse auto-recovery (v3.8.0 - PR #3 fix)
+    Note over User,Sess: PreToolUse catches external changes before Stop
+    User->>Git: rm bigfile.ts (via IDE/terminal)
+    Git-->>User: file removed
+    Claude->>Claude: (attempts Write/Edit)
+    Note over Claude,Sess: PreToolUse fires BEFORE tool executes
+    Claude->>Sess: Load session (StopTriggered=true)
+    Sess->>Sess: recalculate score from baseline
+    Sess-->>Claude: 280/400 (70% - below threshold!)
+    Sess->>Sess: clear stop_triggered flag
+    Sess-->>Claude: ✓ Auto-recovered. External changes reduced diff.
+    Claude->>Claude: Write/Edit proceeds normally
+
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% - PostToolUse tiers: internal/hooks/post_tool_use.go:119-128
 %% - Stop blocking: internal/hooks/stop.go:127-184
-%% - Stop auto-recovery: internal/hooks/stop.go:134-154 (v3.7.0)
+%% - Stop auto-recovery: internal/hooks/stop.go:136-154 (v3.7.0)
+%% - PreToolUse auto-recovery: internal/hooks/pre_tool_use.go:112-142 (v3.8.0)
+%% - PreToolUse blocking: internal/hooks/pre_tool_use.go:145-154
 %% - Reset: internal/hooks/prompt_handler.go:96-115
 %% - Pause: internal/hooks/prompt_handler.go:118-131
 %% - Resume: internal/hooks/prompt_handler.go:134-147
@@ -101,7 +118,7 @@ sequenceDiagram
 %% 2. Pause accumulates unbounded score - can be huge on resume
 %% 3. No partial reset - it's all-or-nothing baseline capture
 %% 4. Auto-reset on commit not shown (separate flow)
-%% 5. ~~Score can decrease if user reverts changes - not obvious~~ (FIXED v3.7.0: Stop auto-recovery)
+%% 5. ~~Score can decrease if user reverts changes - not obvious~~ (FIXED v3.7.0: Stop auto-recovery, v3.8.0: PreToolUse auto-recovery)
 %%
 %% STATUS LINE TIERS (implemented)
 %% Status line now matches fuel gauge visibility:

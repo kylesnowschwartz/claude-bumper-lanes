@@ -80,6 +80,56 @@ sequenceDiagram
     Claude-->>User: Changes made. Fresh budget: 15/400.
 
     %% ============================================================
+    %% CASE 3: PreToolUse auto-recovery (v3.8.0 - PR #3 fix)
+    %% ============================================================
+    Note over User,Sess: Scenario 3: User reduces diff below threshold (tree still dirty)
+    Note over User,Claude: (Threshold exceeded - StopTriggered=true)
+    User->>Git: rm large-file.ts (via IDE/terminal)
+    Git-->>User: file removed (but other changes remain)
+    User->>Claude: continue working
+
+    %% Claude attempts Write - PreToolUse fires BEFORE execution
+    Claude->>PreTU as PreToolUse: (wants to Write file)
+
+    %% PreToolUse checks state
+    PreTU->>Sess: Load session
+    Sess-->>PreTU: StopTriggered=true, score=600/400
+
+    %% Check if tree is clean (it's not)
+    Note over PreTU,Git: Tree dirty check (v3.8.0 recalculates score)
+    PreTU->>Git: CaptureTree()
+    Git-->>PreTU: tree SHA xyz789
+    PreTU->>Git: GetHeadTree()
+    Git-->>PreTU: HEAD tree jkl012
+
+    %% Trees don't match (dirty) - NEW: recalculate score
+    PreTU->>PreTU: (tree != HEAD, dirty - recalculate)
+    PreTU->>Git: calculate diff from baseline
+    Git-->>PreTU: freshScore = 280 pts (removed large-file.ts)
+
+    %% Score dropped below threshold - auto-recover!
+    PreTU->>PreTU: (280 <= 400, below threshold!)
+    PreTU->>Sess: StopTriggered = false
+    PreTU->>Sess: score = 280
+
+    %% Allow Write to proceed (no JSON output)
+    PreTU-->>Claude: exit 0 (allow tool)
+    PreTU-->>Claude: stderr: ✓ Auto-recovered: 280/400 (70%). External changes reduced diff.
+    Note over PreTU,Claude: No JSON = tool proceeds normally
+
+    %% Write executes successfully
+    Claude->>Git: Write file
+    Git-->>Claude: file written
+
+    %% PostToolUse calculates new score including this Write
+    PTU->>PTU: handleWriteEdit()
+    PTU->>Git: calculate diff from baseline
+    Git-->>PTU: score = 295 pts (280 + this Write)
+    PTU->>Sess: score = 295
+    PTU-->>Claude: stderr: Score: 295/400 (73%)
+    Claude-->>User: Changes made. Score: 295/400.
+
+    %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
 %% Scenario 1 (Claude commits):
@@ -88,13 +138,22 @@ sequenceDiagram
 %% - Reset call: internal/hooks/post_tool_use.go:handleBashCommit (line 72)
 %% - Feedback: internal/hooks/post_tool_use.go:handleBashCommit (line 79)
 %%
-%% Scenario 2 (PreToolUse auto-reset, v3.7.0):
-%% - StopTriggered check: internal/hooks/pre_tool_use.go:78
-%% - Tree capture: internal/hooks/pre_tool_use.go:79
-%% - HEAD tree check: internal/hooks/pre_tool_use.go:81
-%% - Clean tree detection: internal/hooks/pre_tool_use.go:82
-%% - Reset call: internal/hooks/pre_tool_use.go:85
-%% - Allow tool: internal/hooks/pre_tool_use.go:90
+%% Scenario 2 (PreToolUse auto-reset on clean tree, v3.7.0):
+%% - StopTriggered check: internal/hooks/pre_tool_use.go:88
+%% - Tree capture: internal/hooks/pre_tool_use.go:89
+%% - HEAD tree check: internal/hooks/pre_tool_use.go:94-98
+%% - Clean tree detection: internal/hooks/pre_tool_use.go:101
+%% - Reset call: internal/hooks/pre_tool_use.go:104
+%% - Allow tool: internal/hooks/pre_tool_use.go:109
+%%
+%% Scenario 3 (PreToolUse auto-recovery on dirty tree, v3.8.0 - PR #3 fix):
+%% - StopTriggered check: internal/hooks/pre_tool_use.go:88
+%% - Tree capture: internal/hooks/pre_tool_use.go:89
+%% - HEAD tree check: internal/hooks/pre_tool_use.go:94-98
+%% - Diff recalculation: internal/hooks/pre_tool_use.go:114-121
+%% - Threshold check: internal/hooks/pre_tool_use.go:124
+%% - Clear StopTriggered: internal/hooks/pre_tool_use.go:125-127
+%% - Allow tool: internal/hooks/pre_tool_use.go:137
 %%
 %% COMMIT PATTERN REGEX (Scenario 1)
 %% Matches: git commit, git -C /path commit, git --git-dir=/x commit
@@ -106,6 +165,8 @@ sequenceDiagram
 %% 3. Encourages atomic commits (commit often, stay under threshold)
 %% 4. Handles IDE commits, manual terminal commits (when threshold exceeded)
 %% 5. PreToolUse timing (v3.7.0) checks BEFORE Write dirties tree (correct timing)
+%% 6. Dynamic threshold checking (v3.8.0) auto-recovers when user reduces diff below threshold
+%% 7. No manual intervention needed for partial file reversions (IDE undo, selective git checkout)
 %%
 %% EDGE CASES
 %% 1. Scenario 1 fires immediately on commit (no delay)
@@ -115,19 +176,29 @@ sequenceDiagram
 %%    - External commits (IDE, terminal)
 %%    - git reset --hard HEAD
 %%    - Manual file reversions that match HEAD
-%% 5. Scenario 2 does NOT trigger when working tree != HEAD (uncommitted changes)
-%% 6. Both scenarios handle untracked files correctly (CaptureTree includes them)
-%% 7. Fail-open: If tree capture fails or HEAD unavailable, threshold remains (no auto-reset)
+%% 5. Scenario 3 (NEW v3.8.0) fires on next Write/Edit when tree dirty BUT score <= threshold:
+%%    - User removes/reverts files via IDE
+%%    - User runs `git checkout -- some-files` (partial revert)
+%%    - User manually deletes uncommitted files
+%%    - Any external change that reduces diff below threshold
+%% 6. Scenario 3 updates score even if still over threshold (dynamic tracking)
+%% 7. All scenarios handle untracked files correctly (CaptureTree includes them)
+%% 8. Fail-open: If tree capture fails or HEAD unavailable, operations allowed (no blocking)
 %%
 %% PERFORMANCE NOTES
 %% 1. CaptureTree() calls `git write-tree` which computes SHA1 hash of entire working tree
 %%    - Walks all files, stats them, reads contents, computes object hashes
 %%    - Cost: O(n) where n = number of files in repository
 %%    - Typical cost: 50-100ms on modern hardware for medium repos
-%% 2. Scenario 2 (PreToolUse check) runs CaptureTree() + GetHeadTree() when StopTriggered=true
+%% 2. Scenario 2 (PreToolUse clean tree check) runs CaptureTree() + GetHeadTree() when StopTriggered=true
 %%    - Only triggers AFTER threshold exceeded (rare state)
-%%    - Cost: ~120ms per Write/Edit in blocked state
-%% 3. Potential optimization (out of scope): Use `git diff-index --quiet HEAD`
+%%    - Cost: ~120ms per Write/Edit in blocked state (tree check only)
+%% 3. Scenario 3 (PreToolUse auto-recovery, v3.8.0) adds diff recalculation to Scenario 2's cost
+%%    - When tree is dirty (not clean), also calculates diff score from baseline
+%%    - Cost: ~125ms per Write/Edit in blocked state (tree check + diff calculation)
+%%    - Only triggers when StopTriggered=true (rare - requires threshold breach)
+%%    - Enables auto-recovery without manual /bumper-reset (UX benefit)
+%% 4. Potential optimization (out of scope): Use `git diff-index --quiet HEAD`
 %%    - Returns exit code 0 (clean) or 1 (dirty) without computing tree hash
 %%    - Cost: ~10ms (90% faster than CaptureTree + GetHeadTree)
 %%    - Trade-off: Doesn't provide tree SHA for baseline reset (would need follow-up call)

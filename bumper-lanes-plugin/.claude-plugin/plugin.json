@@ -1,6 +1,6 @@
 {
   "name": "claude-bumper-lanes",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Enforces git diff thresholds to promote disciplined code review during AI agent sessions",
   "author": {
     "name": "Kyle Snow Schwartz",

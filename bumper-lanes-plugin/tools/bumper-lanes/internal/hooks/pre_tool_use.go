@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -78,23 +79,24 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	}
 
 	// ╔═══════════════════════════════════════════════════════════╗
-	// ║ AUTO-RESET: Check if tree has become clean since Stop    ║
-	// ║ This handles external commits before Claude writes       ║
+	// ║ AUTO-RECOVERY: Recalculate score when StopTriggered      ║
+	// ║ This handles external changes that reduce the diff       ║
+	// ║ Cost: ~125ms per Write/Edit when blocked (rare)          ║
 	// ╚═══════════════════════════════════════════════════════════╝
-	// Check if tree has become clean since Stop hook triggered
-	// This handles external commits (IDE, terminal, git CLI) that clean the tree
+	// When Stop hook has triggered, recalculate score from baseline
+	// to handle external changes (IDE, terminal, git CLI) that reduce the diff
 	if sess.StopTriggered {
 		currentTree, err := CaptureTree()
 		if err != nil {
 			// Fail-open: If we can't capture tree state, don't block the user
-			log.Warn("failed to capture tree for auto-reset check: %v (failing open)", err)
+			log.Warn("failed to capture tree for auto-recovery check: %v (failing open)", err)
 			return 0
 		}
 
 		headTree := GetHeadTree()
 		if headTree == "" {
 			// Fail-open: If HEAD tree unavailable (empty repo?), don't block
-			log.Warn("HEAD tree unavailable for auto-reset check (failing open)")
+			log.Warn("HEAD tree unavailable for auto-recovery check (failing open)")
 			return 0
 		}
 
@@ -108,7 +110,38 @@ func PreToolUse(input *HookInput) (exitCode int) {
 			fmt.Fprintf(os.Stderr, "✓ Baseline auto-reset (external commit detected). Budget restored.\n")
 			return 0
 		}
-		// Tree is dirty - fall through to blocking
+
+		// Tree is dirty - recalculate score to check if below threshold
+		// This mirrors the Stop hook's auto-recovery logic (stop.go:123-154)
+		stats := getStatsJSON(sess.BaselineTree)
+		if stats == nil {
+			log.Warn("failed to get diff stats for auto-recovery (failing open)")
+			return 0 // Fail open
+		}
+
+		result := scoring.Calculate(stats)
+		freshScore := result.Score
+
+		if freshScore <= sess.ThresholdLimit {
+			// Score at or below threshold - auto-recover
+			sess.SetStopTriggered(false)
+			sess.SetScore(freshScore)
+			sess.Save()
+
+			pct := 0
+			if sess.ThresholdLimit > 0 {
+				pct = (freshScore * 100) / sess.ThresholdLimit
+			}
+
+			// Provide feedback to user and Claude
+			fmt.Fprintf(os.Stderr, "✓ Threshold auto-recovered: %d/%d pts (%d%%). External changes reduced diff.\n",
+				freshScore, sess.ThresholdLimit, pct)
+			return 0
+		}
+
+		// Still over threshold - update score and fall through to blocking
+		sess.SetScore(freshScore)
+		sess.Save()
 	}
 
 	// KEY CHECK: Only block if Stop hook has already triggered
