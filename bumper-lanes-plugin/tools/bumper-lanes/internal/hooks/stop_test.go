@@ -166,12 +166,12 @@ func TestStopAllowsWhenUnderThreshold(t *testing.T) {
 	})
 }
 
-func TestStopSkipsWhenStopTriggered(t *testing.T) {
+func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 	if !IsGitRepo() {
 		t.Skip("Not in a git repo")
 	}
 
-	t.Run("skips when stop_triggered is true", func(t *testing.T) {
+	t.Run("auto-recovers when stop_triggered=true and score drops below threshold", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
 
@@ -183,13 +183,153 @@ func TestStopSkipsWhenStopTriggered(t *testing.T) {
 		output, _ := cmd.Output()
 		currentTree := strings.TrimSpace(string(output))
 
-		// Create session with stop_triggered = true
-		sessionID := "test-stop-triggered"
+		// Create session with:
+		// - StopTriggered = true (threshold was previously exceeded)
+		// - Score = 50 (now BELOW threshold of 100)
+		sessionID := "test-stop-recovery"
 		sess, err := state.New(sessionID, currentTree, "main", 100)
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		sess.StopTriggered = true // Already triggered once
+		sess.StopTriggered = true
+		sess.Score = 50 // Below threshold now
+		sess.Save()
+
+		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
+		checkpointDir := filepath.Join(strings.TrimSpace(string(gitDir)), "bumper-checkpoints")
+		os.MkdirAll(checkpointDir, 0755)
+
+		// Capture stdout to verify recovery response
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		input := &HookInput{
+			SessionID:      sessionID,
+			HookEventName:  "Stop",
+			StopHookActive: false,
+		}
+
+		err = Stop(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf [8192]byte
+		n, _ := r.Read(buf[:])
+		outputStr := string(buf[:n])
+
+		if err != nil {
+			t.Errorf("Stop() recovery should return nil (WriteResponse handles output), got error: %v", err)
+		}
+
+		// Verify recovery message was sent
+		if !strings.Contains(outputStr, "Auto-recovered") {
+			t.Errorf("Expected recovery message, got: %s", outputStr)
+		}
+
+		// Verify StopTriggered was cleared
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.StopTriggered {
+			t.Error("StopTriggered should be false after auto-recovery")
+		}
+
+		// Verify score was updated
+		if reloaded.Score != 0 {
+			t.Errorf("Score = %d, want 0 (clean tree)", reloaded.Score)
+		}
+	})
+
+	t.Run("keeps stop_triggered when score still above threshold", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+		output, _ := cmd.Output()
+		baselineTree := strings.TrimSpace(string(output))
+
+		// Create a file to ensure score > threshold
+		testFile := filepath.Join(tmpDir, "over-threshold.go")
+		content := "package main\n\n"
+		for i := 0; i < 50; i++ {
+			content += "// line\n"
+		}
+		os.WriteFile(testFile, []byte(content), 0644)
+
+		// Create session with StopTriggered=true and low threshold
+		sessionID := "test-stop-still-over"
+		sess, err := state.New(sessionID, baselineTree, "main", 30) // Low threshold
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.StopTriggered = true
+		sess.Score = 60 // Above threshold
+		sess.Save()
+
+		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
+		checkpointDir := filepath.Join(strings.TrimSpace(string(gitDir)), "bumper-checkpoints")
+		os.MkdirAll(checkpointDir, 0755)
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		input := &HookInput{
+			SessionID:      sessionID,
+			HookEventName:  "Stop",
+			StopHookActive: false,
+		}
+
+		Stop(input)
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		var buf [8192]byte
+		n, _ := r.Read(buf[:])
+		outputStr := string(buf[:n])
+
+		// Should output threshold exceeded message (not recovery)
+		if strings.Contains(outputStr, "Auto-recovered") {
+			t.Errorf("Should NOT show recovery message when still over threshold: %s", outputStr)
+		}
+
+		if !strings.Contains(outputStr, "threshold exceeded") {
+			t.Errorf("Expected 'threshold exceeded' message, got: %s", outputStr)
+		}
+
+		// Verify StopTriggered remains true
+		reloaded, _ := state.Load(sessionID)
+		if !reloaded.StopTriggered {
+			t.Error("StopTriggered should remain true when score still above threshold")
+		}
+	})
+
+	t.Run("clears stop_triggered when score equals threshold", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
+		output, _ := cmd.Output()
+		currentTree := strings.TrimSpace(string(output))
+
+		// Session with score EXACTLY at threshold
+		sessionID := "test-stop-exact"
+		sess, err := state.New(sessionID, currentTree, "main", 100)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.StopTriggered = true
+		sess.Score = 100 // Exactly at threshold
 		sess.Save()
 
 		gitDir, _ := exec.Command("git", "rev-parse", "--absolute-git-dir").Output()
@@ -202,11 +342,12 @@ func TestStopSkipsWhenStopTriggered(t *testing.T) {
 			StopHookActive: false,
 		}
 
-		err = Stop(input)
+		Stop(input)
 
-		// Should return nil (don't block again)
-		if err != nil {
-			t.Errorf("Stop() with stop_triggered=true should return nil, got: %v", err)
+		// Verify StopTriggered was cleared (score <= threshold)
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.StopTriggered {
+			t.Error("StopTriggered should be false when score equals threshold")
 		}
 	})
 }

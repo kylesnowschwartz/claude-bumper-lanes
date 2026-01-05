@@ -73,12 +73,7 @@ func Stop(input *HookInput) error {
 		return nil // No baseline - fail open
 	}
 
-	// If already triggered, allow stop
-	// PreToolUse hook now blocks Write/Edit when StopTriggered=true
-	if sess.StopTriggered {
-		return nil
-	}
-
+	// Always recalculate score to enable bidirectional state transitions.
 	// If paused, track changes but don't enforce
 	if sess.Paused {
 		// Use fresh score from baseline (not incremental accumulation)
@@ -103,16 +98,16 @@ func Stop(input *HookInput) error {
 		return nil
 	}
 
-	// Capture current working tree
-	currentTree, err := CaptureTree()
-	if err != nil {
-		log.Warn("failed to capture current tree: %v (failing open)", err)
-		return nil // Fail open
-	}
-
 	// Detect branch switch - auto-reset baseline
 	currentBranch := GetCurrentBranch()
 	if sess.BaselineBranch != "" && currentBranch != "" && sess.BaselineBranch != currentBranch {
+		// Only capture tree when actually needed (branch switch detected)
+		// This avoids ~50ms overhead on every Stop invocation
+		currentTree, err := CaptureTree()
+		if err != nil {
+			log.Warn("failed to capture current tree for branch reset: %v (failing open)", err)
+			return nil
+		}
 		sess.ResetBaseline(currentTree, currentBranch)
 		sess.Save()
 
@@ -139,7 +134,27 @@ func Stop(input *HookInput) error {
 
 	// Check threshold
 	if freshScore <= sess.ThresholdLimit {
-		// Under threshold - update state and allow
+		// Under threshold - check if we need to clear StopTriggered flag
+		if sess.StopTriggered {
+			// Automatic recovery: score dropped below threshold
+			sess.SetStopTriggered(false)
+			sess.SetScore(freshScore)
+			sess.Save()
+
+			// Notify user of recovery
+			pct := 0
+			if sess.ThresholdLimit > 0 {
+				pct = (freshScore * 100) / sess.ThresholdLimit
+			}
+			resp := StopResponse{
+				Continue:       true,
+				SystemMessage:  fmt.Sprintf("✓ Bumper lanes: Auto-recovered (score dropped to %d/%d - %d%%)", freshScore, sess.ThresholdLimit, pct),
+				SuppressOutput: false,
+			}
+			return WriteResponse(resp)
+		}
+
+		// Normal case: update state and allow
 		sess.SetScore(freshScore)
 		sess.Save()
 		return nil

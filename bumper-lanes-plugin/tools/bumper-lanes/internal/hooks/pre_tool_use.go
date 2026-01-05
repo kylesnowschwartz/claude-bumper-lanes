@@ -94,7 +94,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 				sess.Save()
 
 				// Provide feedback to user and Claude
-				fmt.Fprintf(os.Stderr, "✓ Bumper lanes: Auto-reset (no uncommitted changes). Fresh budget: %d pts.\n", sess.ThresholdLimit)
+				fmt.Fprintf(os.Stderr, "✓ Baseline auto-reset (external commit detected). Budget restored.\n")
 				return 0
 			}
 		}
@@ -137,8 +137,9 @@ func formatBlockReason(score, limit, pct int) string {
 Threshold exceeded: ` + formatScore(score, limit, pct) + `
 
 The Stop hook has already fired. To continue:
-1. Review the changes with the user
-2. Run /bumper-reset to restore budget
+1. Review changes with the user
+2. Commit changes (baseline auto-resets), OR
+3. Run /bumper-reset to manually restore budget
 
 This prevents unbounded changes without review.`
 }
