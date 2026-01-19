@@ -101,7 +101,10 @@ This tells bumper-lanes to leave your configuration alone. The plugin will not w
 
 ## Configuration
 
-Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't want to track it.
+Config files (in precedence order):
+1. `.bumper-lanes.json` at repo root (highest priority)
+2. `~/.config/bumper-lanes/config.json` (global fallback)
+3. Built-in defaults
 
 ```json
 {
@@ -121,7 +124,22 @@ Config file: `.bumper-lanes.json` at repo root. Add to `.gitignore` if you don't
 
 **Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, stat
 
-**Disabling enforcement:** Set `"threshold": 0` to disable all warnings and blocking while still tracking changes. Useful for exploratory sessions, or if you only want to display the diff tree visual.
+### Viz-Only Mode (Global Config)
+
+Want the diff visualization without threshold enforcement? Create a global config:
+
+```bash
+mkdir -p ~/.config/bumper-lanes
+echo '{"threshold": 0}' > ~/.config/bumper-lanes/config.json
+```
+
+This disables enforcement across all repos while keeping the status line diff visualization. Individual repos can override with their own `.bumper-lanes.json`.
+
+Run `/bumper-config` to see which config files are active.
+
+### Other Options
+
+**Disabling per-repo:** Set `"threshold": 0` in `.bumper-lanes.json` to disable for a specific repo.
 
 **Hiding diff visualization:** Set `"show_diff_viz": false` to hide the diff tree from the status line. Running any view command (`/bumper-tree`, etc.) restores it for the current session.
 

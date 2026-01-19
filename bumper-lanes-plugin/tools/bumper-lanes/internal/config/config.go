@@ -1,5 +1,8 @@
 // Package config handles configuration loading for bumper-lanes.
-// Config file: .bumper-lanes.json at repo root (users can gitignore if desired)
+// Config files (in precedence order):
+//  1. .bumper-lanes.json at repo root (highest priority)
+//  2. ~/.config/bumper-lanes/config.json (global fallback)
+//  3. Built-in defaults (lowest priority)
 package config
 
 import (
@@ -65,25 +68,69 @@ func loadConfigFile(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// LoadThreshold returns the configured threshold value.
-// Returns 0 if explicitly disabled, DefaultThreshold if not set.
-func LoadThreshold() int {
+// getGlobalConfigPath returns the path to the global config file.
+// Uses XDG_CONFIG_HOME if set, otherwise ~/.config/bumper-lanes/config.json.
+func getGlobalConfigPath() string {
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		configDir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configDir, "bumper-lanes", "config.json")
+}
+
+// loadMergedConfig loads config from global and repo locations, merging them.
+// Repo config values override global config values.
+// Returns an empty Config if neither file exists (never nil).
+func loadMergedConfig() *Config {
+	merged := &Config{}
+
+	// Load global config first (lower priority)
+	if globalPath := getGlobalConfigPath(); globalPath != "" {
+		if global, err := loadConfigFile(globalPath); err == nil {
+			merged = global
+		}
+	}
+
+	// Load repo config and override (higher priority)
 	repoRoot, err := getRepoRoot()
 	if err != nil {
-		return DefaultThreshold
+		return merged
 	}
-
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
-	cfg, err := loadConfigFile(repoPath)
+	repo, err := loadConfigFile(repoPath)
 	if err != nil {
-		return DefaultThreshold
+		return merged
 	}
 
-	// nil = not set (use default), non-nil = explicit value (including 0 for disabled)
+	// Merge: repo values override global (non-nil pointers and non-empty strings)
+	if repo.Threshold != nil {
+		merged.Threshold = repo.Threshold
+	}
+	if repo.DefaultViewMode != "" {
+		merged.DefaultViewMode = repo.DefaultViewMode
+	}
+	if repo.DefaultViewOpts != "" {
+		merged.DefaultViewOpts = repo.DefaultViewOpts
+	}
+	if repo.ShowDiffViz != nil {
+		merged.ShowDiffViz = repo.ShowDiffViz
+	}
+
+	return merged
+}
+
+// LoadThreshold returns the configured threshold value.
+// Checks repo config first, then global config, then returns DefaultThreshold.
+// Returns 0 if explicitly disabled.
+func LoadThreshold() int {
+	cfg := loadMergedConfig()
 	if cfg.Threshold != nil {
 		return *cfg.Threshold
 	}
-
 	return DefaultThreshold
 }
 
@@ -93,35 +140,20 @@ func IsDisabled(threshold int) bool {
 }
 
 // LoadViewMode returns the configured default view mode.
+// Checks repo config first, then global config, then returns DefaultViewMode.
 func LoadViewMode() string {
-	repoRoot, err := getRepoRoot()
-	if err != nil {
-		return DefaultViewMode
+	cfg := loadMergedConfig()
+	if cfg.DefaultViewMode != "" && isValidMode(cfg.DefaultViewMode) {
+		return cfg.DefaultViewMode
 	}
-
-	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
-	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.DefaultViewMode != "" {
-		if isValidMode(cfg.DefaultViewMode) {
-			return cfg.DefaultViewMode
-		}
-	}
-
 	return DefaultViewMode
 }
 
 // LoadViewOpts returns the configured default view options (e.g., "--width 80").
+// Checks repo config first, then global config.
 func LoadViewOpts() string {
-	repoRoot, err := getRepoRoot()
-	if err != nil {
-		return ""
-	}
-
-	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
-	if cfg, err := loadConfigFile(repoPath); err == nil && cfg.DefaultViewOpts != "" {
-		return cfg.DefaultViewOpts
-	}
-
-	return ""
+	cfg := loadMergedConfig()
+	return cfg.DefaultViewOpts
 }
 
 // isValidMode checks if the mode is in the valid modes list.
@@ -135,24 +167,13 @@ func isValidMode(mode string) bool {
 }
 
 // LoadShowDiffViz returns whether diff visualization should be shown.
-// Returns true (default) if not configured, false if explicitly disabled.
+// Checks repo config first, then global config, then returns true (default).
 func LoadShowDiffViz() bool {
-	repoRoot, err := getRepoRoot()
-	if err != nil {
-		return true // Default to showing
-	}
-
-	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
-	cfg, err := loadConfigFile(repoPath)
-	if err != nil {
-		return true
-	}
-
+	cfg := loadMergedConfig()
 	if cfg.ShowDiffViz != nil {
 		return *cfg.ShowDiffViz
 	}
-
-	return true // Default to showing
+	return true
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).
@@ -162,6 +183,12 @@ func GetConfigPath() string {
 		return ""
 	}
 	return filepath.Join(repoRoot, ".bumper-lanes.json")
+}
+
+// GetGlobalConfigPath returns the path to the global config file.
+// Exported for documentation and debugging.
+func GetGlobalConfigPath() string {
+	return getGlobalConfigPath()
 }
 
 // SaveRepoConfig writes threshold to repo config file.

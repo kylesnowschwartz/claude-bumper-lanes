@@ -92,11 +92,14 @@ See the **hook-intercept-block** skill for full documentation on implementing ne
 
 ## Configuration
 
-Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignore` if they don't want to track it.
+Config files (in precedence order):
+1. `.bumper-lanes.json` at repo root (highest priority)
+2. `~/.config/bumper-lanes/config.json` (global fallback)
+3. Built-in defaults
 
 ### Config Commands
 
-- `/bumper-config` - Show current configuration
+- `/bumper-config` - Show current configuration and config file paths
 - `/bumper-config 300` - Set threshold (creates `.bumper-lanes.json`)
 
 ### Config Schema
@@ -114,6 +117,17 @@ Config file: `.bumper-lanes.json` at repo root. Users can add this to `.gitignor
 - `default_view_mode`: Visualization mode (default: tree)
 - `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
 - `show_diff_viz`: Show diff visualization in status line (default: true)
+
+### Viz-Only Mode (Global)
+
+For diff visualization without threshold enforcement across all repos:
+
+```bash
+mkdir -p ~/.config/bumper-lanes
+echo '{"threshold": 0}' > ~/.config/bumper-lanes/config.json
+```
+
+Individual repos can override with their own `.bumper-lanes.json`.
 
 ## Project Structure
 

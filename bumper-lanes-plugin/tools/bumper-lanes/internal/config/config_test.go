@@ -254,3 +254,133 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 		t.Error("Expected error for invalid JSON, got nil")
 	}
 }
+
+// TestGlobalConfigLoading verifies global config as fallback for repo config.
+func TestGlobalConfigLoading(t *testing.T) {
+	// Create temp git repo
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+
+	// Create temp XDG config dir
+	xdgDir := t.TempDir()
+	globalConfigDir := filepath.Join(xdgDir, "bumper-lanes")
+	os.MkdirAll(globalConfigDir, 0755)
+	globalConfigPath := filepath.Join(globalConfigDir, "config.json")
+
+	origDir, _ := os.Getwd()
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	defer func() {
+		os.Chdir(origDir)
+		if origXDG == "" {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			os.Setenv("XDG_CONFIG_HOME", origXDG)
+		}
+	}()
+	os.Chdir(tmpDir)
+	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+
+	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+
+	t.Run("global config used when no repo config", func(t *testing.T) {
+		os.Remove(repoPath)
+		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100}`), 0644)
+		defer os.Remove(globalConfigPath)
+
+		got := LoadThreshold()
+		if got != 100 {
+			t.Errorf("LoadThreshold() = %d, want 100 (global)", got)
+		}
+	})
+
+	t.Run("repo config overrides global config", func(t *testing.T) {
+		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100}`), 0644)
+		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644)
+		defer os.Remove(globalConfigPath)
+		defer os.Remove(repoPath)
+
+		got := LoadThreshold()
+		if got != 200 {
+			t.Errorf("LoadThreshold() = %d, want 200 (repo overrides global)", got)
+		}
+	})
+
+	t.Run("merge: repo threshold with global view mode", func(t *testing.T) {
+		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100, "default_view_mode": "sparkline-tree"}`), 0644)
+		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644) // only threshold, no view mode
+		defer os.Remove(globalConfigPath)
+		defer os.Remove(repoPath)
+
+		gotThreshold := LoadThreshold()
+		gotMode := LoadViewMode()
+		if gotThreshold != 200 {
+			t.Errorf("LoadThreshold() = %d, want 200 (repo)", gotThreshold)
+		}
+		if gotMode != "sparkline-tree" {
+			t.Errorf("LoadViewMode() = %q, want 'sparkline-tree' (global)", gotMode)
+		}
+	})
+
+	t.Run("global threshold 0 disables enforcement", func(t *testing.T) {
+		os.Remove(repoPath)
+		os.WriteFile(globalConfigPath, []byte(`{"threshold": 0}`), 0644)
+		defer os.Remove(globalConfigPath)
+
+		got := LoadThreshold()
+		if got != 0 {
+			t.Errorf("LoadThreshold() = %d, want 0 (disabled via global)", got)
+		}
+		if !IsDisabled(got) {
+			t.Error("IsDisabled() = false, want true")
+		}
+	})
+
+	t.Run("default when neither config exists", func(t *testing.T) {
+		os.Remove(repoPath)
+		os.Remove(globalConfigPath)
+
+		got := LoadThreshold()
+		if got != DefaultThreshold {
+			t.Errorf("LoadThreshold() = %d, want %d (default)", got, DefaultThreshold)
+		}
+	})
+}
+
+func TestGetGlobalConfigPath(t *testing.T) {
+	t.Run("uses XDG_CONFIG_HOME when set", func(t *testing.T) {
+		origXDG := os.Getenv("XDG_CONFIG_HOME")
+		defer func() {
+			if origXDG == "" {
+				os.Unsetenv("XDG_CONFIG_HOME")
+			} else {
+				os.Setenv("XDG_CONFIG_HOME", origXDG)
+			}
+		}()
+
+		os.Setenv("XDG_CONFIG_HOME", "/custom/config")
+		got := GetGlobalConfigPath()
+		want := "/custom/config/bumper-lanes/config.json"
+		if got != want {
+			t.Errorf("GetGlobalConfigPath() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("falls back to ~/.config when XDG not set", func(t *testing.T) {
+		origXDG := os.Getenv("XDG_CONFIG_HOME")
+		defer func() {
+			if origXDG == "" {
+				os.Unsetenv("XDG_CONFIG_HOME")
+			} else {
+				os.Setenv("XDG_CONFIG_HOME", origXDG)
+			}
+		}()
+
+		os.Unsetenv("XDG_CONFIG_HOME")
+		got := GetGlobalConfigPath()
+		home, _ := os.UserHomeDir()
+		want := filepath.Join(home, ".config", "bumper-lanes", "config.json")
+		if got != want {
+			t.Errorf("GetGlobalConfigPath() = %q, want %q", got, want)
+		}
+	})
+}
