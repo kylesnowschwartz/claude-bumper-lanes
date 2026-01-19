@@ -1,6 +1,7 @@
 ---
 description: Test bumper-lanes threshold enforcement
 argument-hint: "[parallel]"
+allowed-tools: Bash
 model: haiku
 ---
 
@@ -14,7 +15,7 @@ Configured Point Threshold: !`jq -r '.threshold // 600' .bumper-lanes.json 2>/de
 
 
 <directories>
-Directories Initialized: !`mkdir -p tmp-threshold-test/src/components tmp-threshold-test/src/utils tmp-threshold-test/tests/unit && ls tmp-threshold-test`
+Directories Initialized: !`mkdir -p ./tmp-threshold-test/src/components ./tmp-threshold-test/src/utils ./tmp-threshold-test/tests/unit && ls ./tmp-threshold-test`
 </directories>
 
 ## Writing Files
