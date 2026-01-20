@@ -22,3 +22,4 @@ bumper-lanes-plugin/bin/.build-version
 .claude/*
 !.claude/settings.local.json
 !.claude/commands/
+.idea/
