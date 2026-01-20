@@ -47,6 +47,11 @@ func HandlePrompt(input *HookInput) int {
 		return 0
 	}
 
+	// Early exit if not in a git repository - bumper-lanes commands require git
+	if !IsGitRepo() {
+		return 0 // Pass through - not in a git repo
+	}
+
 	sessionID := input.SessionID
 
 	// Simple commands (no args) - use string matching for performance
