@@ -15,7 +15,7 @@ Bumper-Lanes tracks how much code Claude has written or edited, blocking further
 When the threshold is exceeded:
 
 1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (70% NOTICE → 90% WARNING) to you and to Claude
-2. **Stop hook** blocks Claude from finishing when threshold exceeded
+2. **Stop hook** blocks Claude from continuing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after you review
 
 ## Installation
