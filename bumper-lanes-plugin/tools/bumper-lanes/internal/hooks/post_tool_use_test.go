@@ -305,8 +305,8 @@ func TestHandleBashCommit(t *testing.T) {
 
 		exitCode := PostToolUse(input)
 		// Should return 2 (to ensure stderr reaches Claude)
-		if exitCode != 2 {
-			t.Errorf("PostToolUse(git commit) = %d, want 2", exitCode)
+		if exitCode != 0 {
+			t.Errorf("PostToolUse(git commit) = %d, want 0 (additionalContext channel)", exitCode)
 		}
 
 		// Verify session was reset

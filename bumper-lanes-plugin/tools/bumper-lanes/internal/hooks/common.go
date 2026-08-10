@@ -13,14 +13,39 @@ import (
 )
 
 // HookInput represents the JSON input from Claude Code hooks.
+// Field presence varies by event and source (e.g. SessionStart with
+// source "resume" omits fields that "startup" includes) - parse defensively.
 type HookInput struct {
 	SessionID      string     `json:"session_id"`
 	StopHookActive bool       `json:"stop_hook_active,omitempty"`
 	ToolName       string     `json:"tool_name,omitempty"`
 	HookEventName  string     `json:"hook_event_name,omitempty"`
+	Source         string     `json:"source,omitempty"` // SessionStart: startup|resume|clear|compact
 	ToolInput      *ToolInput `json:"tool_input,omitempty"`
 	UserPrompt     string     `json:"user_prompt,omitempty"` // For UserPromptSubmit hooks
 	Prompt         string     `json:"prompt,omitempty"`      // Alternative field name
+}
+
+// ContextResponse injects additionalContext into Claude's context.
+// Supported by SessionStart, UserPromptSubmit, and PostToolUse.
+type ContextResponse struct {
+	HookSpecificOutput ContextOutput `json:"hookSpecificOutput"`
+}
+
+// ContextOutput is the event-specific payload of a ContextResponse.
+type ContextOutput struct {
+	HookEventName     string `json:"hookEventName"`
+	AdditionalContext string `json:"additionalContext"`
+}
+
+// WriteContext emits a ContextResponse for the given event to stdout.
+func WriteContext(eventName, context string) error {
+	return WriteResponse(ContextResponse{
+		HookSpecificOutput: ContextOutput{
+			HookEventName:     eventName,
+			AdditionalContext: context,
+		},
+	})
 }
 
 // GetPrompt returns the user prompt, checking both field names.

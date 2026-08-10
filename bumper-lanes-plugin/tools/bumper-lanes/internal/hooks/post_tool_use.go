@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
@@ -19,7 +18,7 @@ var gitCommitPattern = regexp.MustCompile(`git\s+(-{1,2}[A-Za-z-]+([ =]("[^"]*"|
 // PostToolUse handles the PostToolUse hook event.
 // For Write/Edit: provides fuel gauge warnings
 // For Bash: detects git commits and auto-resets baseline
-// Returns exit code 2 to ensure stderr reaches Claude.
+// Feedback reaches Claude via hookSpecificOutput.additionalContext (exit 0).
 func PostToolUse(input *HookInput) (exitCode int) {
 	// Validate hook event
 	if input.HookEventName != "PostToolUse" {
@@ -76,8 +75,8 @@ func handleBashCommit(input *HookInput) int {
 
 	// Output feedback
 	threshold := config.LoadThreshold()
-	fmt.Fprintf(os.Stderr, "✓ Bumper lanes: Auto-reset after commit. Fresh budget: %d pts.\n", threshold)
-	return 2
+	WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold))
+	return 0
 }
 
 // handleWriteEdit provides fuel gauge warnings after file modifications.
@@ -119,15 +118,13 @@ func handleWriteEdit(input *HookInput) int {
 	// Calculate percentage
 	pct := (freshScore * 100) / sess.ThresholdLimit
 
-	// Output fuel gauge to stderr based on threshold tier
-	// Exit 2 ensures stderr reaches Claude (per docs)
-	// Tiers: 70% NOTICE, 90% WARNING
+	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
 	if pct >= 90 {
-		fmt.Fprintf(os.Stderr, "WARNING: Review budget at %d%% (%d/%d pts). Complete current work, then ask user about checkpoint.\n", pct, freshScore, sess.ThresholdLimit)
-		return 2
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: review budget at %d%% (%d/%d pts). Finish the current increment and pause for review - do not start new work.", pct, freshScore, sess.ThresholdLimit))
+		return 0
 	} else if pct >= 70 {
-		fmt.Fprintf(os.Stderr, "NOTICE: %d%% budget used (%d/%d pts). Wrap up current task soon.\n", pct, freshScore, sess.ThresholdLimit)
-		return 2
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: review budget at %d%% (%d/%d pts). Plan to wrap up the current increment soon.", pct, freshScore, sess.ThresholdLimit))
+		return 0
 	}
 
 	// Under 70% - silent

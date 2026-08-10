@@ -6,7 +6,7 @@
 
 Defense-in-depth hook system with three layers:
 
-1. **Fuel Gauge** (PostToolUse): Escalating warnings after each Write/Edit - reaches Claude via stderr
+1. **Fuel Gauge** (PostToolUse): Escalating warnings after each Write/Edit - reaches Claude via `hookSpecificOutput.additionalContext`
 2. **Enforcement** (Stop): Block Claude from finishing turn when threshold exceeded
 3. **Manual Reset** (UserPromptSubmit): Intercept `/claude-bumper-lanes:bumper-reset` command to restore budget after review
 
@@ -29,8 +29,10 @@ Defense-in-depth hook system with three layers:
 - Default threshold: 600 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
-- PostToolUse fuel gauge tiers: 70% NOTICE, 90% WARNING
+- PostToolUse fuel gauge tiers: 70% and 90%, delivered as `additionalContext` JSON
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
+- Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining
+- UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
 ## Auto-Reset Triggers

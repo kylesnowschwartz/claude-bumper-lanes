@@ -35,6 +35,16 @@ func SessionStart(input *HookInput) int {
 		return 0 // Fail open - not a git repo
 	}
 
+	// Compaction and resume reuse the session id, so re-baselining here would
+	// silently refill the budget mid-task. Preserve the existing state and
+	// re-inject the budget into Claude's context (which compaction just wiped).
+	if input.Source == "compact" || input.Source == "resume" {
+		if sess, err := state.Load(input.SessionID); err == nil {
+			return emitBudgetRecap(sess, input.Source)
+		}
+		// No existing state for this session id - fall through to fresh baseline
+	}
+
 	// Capture baseline tree
 	baselineTree, err := CaptureTree()
 	if err != nil {
@@ -88,6 +98,20 @@ func SessionStart(input *HookInput) int {
 		return 1 // Exit 1 shows stderr to user
 	}
 
+	return 0
+}
+
+// emitBudgetRecap injects the preserved budget state into Claude's context.
+// Silent (but still preserving state) when enforcement is paused or disabled.
+func emitBudgetRecap(sess *state.SessionState, source string) int {
+	if sess.Paused || sess.ThresholdLimit == 0 {
+		return 0
+	}
+	pct := (sess.Score * 100) / sess.ThresholdLimit
+	msg := fmt.Sprintf(
+		"bumper-lanes: review budget %d/%d pts used (%d%%), preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
+		sess.Score, sess.ThresholdLimit, pct, source)
+	WriteContext("SessionStart", msg)
 	return 0
 }
 

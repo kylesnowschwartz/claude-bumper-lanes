@@ -22,31 +22,38 @@ sequenceDiagram
 
     %% === SESSION START ===
     CC->>Hook: bumper-lanes session-start
-    Hook->>Git: git rev-parse --absolute-git-dir
-    Git-->>Hook: /path/to/.git
-    Hook->>Git: git write-tree
-    Git-->>Hook: baseline tree SHA abc123
-    Hook->>Git: git branch --show-current
-    Git-->>Hook: main
-    Hook->>Cfg: load threshold
-    Cfg-->>Hook: 400 (default or config)
+    alt source is compact or resume, checkpoint exists
+        %% Compaction/resume reuse the session id - preserve the budget
+        Hook->>FS: read session-{id}
+        FS-->>Hook: existing SessionState (baseline, score, flags kept)
+        Hook-->>CC: additionalContext: budget recap (X/Y pts preserved across compact/resume)
+    else source is startup or clear, or no checkpoint
+        Hook->>Git: git rev-parse --absolute-git-dir
+        Git-->>Hook: /path/to/.git
+        Hook->>Git: git write-tree
+        Git-->>Hook: baseline tree SHA abc123
+        Hook->>Git: git branch --show-current
+        Git-->>Hook: main
+        Hook->>Cfg: load threshold
+        Cfg-->>Hook: 400 (default or config)
 
-    %% Create checkpoint directory and state file
-    Hook->>FS: mkdir bumper-checkpoints/
-    Hook->>FS: write session-{id}.tmp
-    Hook->>FS: rename to session-{id}
-    FS-->>Hook: state saved
+        %% Create checkpoint directory and state file
+        Hook->>FS: mkdir bumper-checkpoints/
+        Hook->>FS: write session-{id}.tmp
+        Hook->>FS: rename to session-{id}
+        FS-->>Hook: state saved
 
-    %% Cleanup orphaned checkpoints from crashed sessions
-    Hook->>FS: ReadDir bumper-checkpoints/
-    FS-->>Hook: list of session-* files
-    Hook->>Hook: filter: skip current session, skip .tmp
-    Hook->>FS: delete orphaned session files
-    FS-->>Hook: (log to stderr, ignore errors)
+        %% Cleanup orphaned checkpoints from crashed sessions
+        Hook->>FS: ReadDir bumper-checkpoints/
+        FS-->>Hook: list of session-* files
+        Hook->>Hook: filter: skip current session, skip .tmp
+        Hook->>FS: delete orphaned session files
+        FS-->>Hook: (log to stderr, ignore errors)
 
-    %% Idempotent auto-setup check
-    Hook->>Hook: setupStatusLineWrapper()
-    Hook-->>CC: (configure/wrap statusLine if needed)
+        %% Status line setup only when statusline_auto_setup=true (opt-in)
+        Hook->>Hook: setupStatusLineWrapper()
+        Hook-->>CC: (configure/wrap statusLine if opted in)
+    end
 
     %% === DURING SESSION (each hook call) ===
     CC->>Hook: PostToolUse / Stop

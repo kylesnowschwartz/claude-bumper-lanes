@@ -103,8 +103,29 @@ func HandlePrompt(input *HookInput) int {
 		return handleViewMode(sessionID, "stat")
 	}
 
-	// No match - let it through
+	// No match - let it through, injecting budget context when consumption is high
+	injectBudgetContext(sessionID)
 	return 0
+}
+
+// injectBudgetContext adds a budget line to Claude's context at prompt time
+// when at least half the review budget is spent, so the model plans the next
+// increment to fit. Uses the cached score (no git calls on the prompt path).
+func injectBudgetContext(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	sess, err := state.Load(sessionID)
+	if err != nil || sess.Paused || sess.ThresholdLimit == 0 {
+		return
+	}
+	pct := (sess.Score * 100) / sess.ThresholdLimit
+	if pct < 50 {
+		return
+	}
+	WriteContext("UserPromptSubmit", fmt.Sprintf(
+		"bumper-lanes: review budget %d/%d pts used (%d%%). Plan work that fits the remaining budget, or ask before expanding scope.",
+		sess.Score, sess.ThresholdLimit, pct))
 }
 
 // handleReset captures new baseline and resets score.
