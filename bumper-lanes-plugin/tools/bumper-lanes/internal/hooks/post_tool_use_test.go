@@ -1,6 +1,8 @@
 package hooks
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -264,6 +266,54 @@ func TestPostToolUseRouting(t *testing.T) {
 	})
 }
 
+// TestNotebookEditUpdatesScore verifies NotebookEdit routes to the fuel gauge
+// (the hooks.json matcher includes it; the handler must too).
+func TestNotebookEditUpdatesScore(t *testing.T) {
+	if !IsGitRepo() {
+		t.Skip("Not in a git repo")
+	}
+
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+	exec.Command("git", "add", "initial.txt").Run()
+	exec.Command("git", "commit", "-m", "initial").Run()
+
+	sessionID := "test-notebookedit-score"
+	baseline, _ := CaptureTree()
+	sess, err := state.New(sessionID, baseline, "main", 400)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	sess.Save()
+
+	// Dirty the tree so a fresh score calculation is non-zero
+	var content strings.Builder
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&content, "// line %d\n", i)
+	}
+	os.WriteFile("notebook-cells.txt", []byte(content.String()), 0644)
+
+	input := &HookInput{
+		HookEventName: "PostToolUse",
+		ToolName:      "NotebookEdit",
+		SessionID:     sessionID,
+	}
+	if exitCode := PostToolUse(input); exitCode != 0 {
+		t.Errorf("PostToolUse(NotebookEdit) = %d, want 0", exitCode)
+	}
+
+	reloaded, _ := state.Load(sessionID)
+	if reloaded.Score == 0 {
+		t.Errorf("Score = 0 after NotebookEdit with dirty tree, want > 0 (fuel gauge ran)")
+	}
+}
+
 func TestHandleBashCommit(t *testing.T) {
 	// Skip if not in a git repo
 	if !IsGitRepo() {
@@ -295,12 +345,13 @@ func TestHandleBashCommit(t *testing.T) {
 		checkpointDir := filepath.Join(tmpDir, ".git", "bumper-checkpoints")
 		os.MkdirAll(checkpointDir, 0755)
 
-		// Simulate a commit
+		// Simulate a successful commit (result carries git's summary line)
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
 			ToolInput:     &ToolInput{Command: "git commit -m 'test commit'"},
+			ToolResult:    json.RawMessage(`"[main abc1234] test commit\n 1 file changed, 1 insertion(+)"`),
 		}
 
 		exitCode := PostToolUse(input)
@@ -327,6 +378,70 @@ func TestHandleBashCommit(t *testing.T) {
 		// Score should be reset to 0
 		if reloaded.Score != 0 {
 			t.Errorf("Score = %d, want 0 (reset)", reloaded.Score)
+		}
+	})
+
+	t.Run("failed commit does not reset baseline", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		sessionID := "test-bash-failed-commit"
+		sess, err := state.New(sessionID, "old-tree-sha", "main", 400)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+		sess.Score = 100
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit -m 'rejected'"},
+			ToolResult:    json.RawMessage(`"pre-commit hook failed: lint errors\nerror: commit aborted"`),
+		}
+
+		if exitCode := PostToolUse(input); exitCode != 0 {
+			t.Errorf("PostToolUse(failed commit) = %d, want 0", exitCode)
+		}
+
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.BaselineTree != "old-tree-sha" {
+			t.Errorf("BaselineTree = %q, want unchanged old-tree-sha", reloaded.BaselineTree)
+		}
+		if reloaded.Score != 100 {
+			t.Errorf("Score = %d, want 100 (unchanged)", reloaded.Score)
+		}
+	})
+
+	t.Run("commit with no tool result does not reset baseline", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		sessionID := "test-bash-quiet-commit"
+		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
+		sess.Score = 100
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit -q -m 'quiet'"},
+		}
+
+		PostToolUse(input)
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.BaselineTree != "old-tree-sha" {
+			t.Errorf("BaselineTree = %q, want unchanged (no success evidence)", reloaded.BaselineTree)
 		}
 	})
 

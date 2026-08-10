@@ -27,7 +27,7 @@ func PostToolUse(input *HookInput) (exitCode int) {
 
 	// Route based on tool type
 	switch input.ToolName {
-	case "Write", "Edit":
+	case "Write", "Edit", "MultiEdit", "NotebookEdit":
 		return handleWriteEdit(input)
 	case "Bash":
 		return handleBashCommit(input)
@@ -35,6 +35,10 @@ func PostToolUse(input *HookInput) (exitCode int) {
 		return 0
 	}
 }
+
+// commitSucceededPattern matches git commit success output: the summary line
+// "[branch abc1234] subject" or the diffstat line "N file(s) changed".
+var commitSucceededPattern = regexp.MustCompile(`\[[^\]\n]+\b[0-9a-f]{7,40}\]|files? changed`)
 
 // handleBashCommit detects git commits and auto-resets baseline.
 func handleBashCommit(input *HookInput) int {
@@ -47,6 +51,15 @@ func handleBashCommit(input *HookInput) int {
 
 	// Check if this is a git commit command
 	if !gitCommitPattern.MatchString(input.ToolInput.Command) {
+		return 0
+	}
+
+	// A commit-shaped command is not a committed change: pre-commit hooks can
+	// reject it. Reset only on evidence of success in the tool result; when
+	// evidence is absent (rejected commit, or `git commit -q`), keep counting -
+	// the clean-tree recovery paths handle a genuinely committed tree later.
+	if !commitSucceededPattern.MatchString(input.ToolResultText()) {
+		log.Info("commit command without success evidence - baseline not reset")
 		return 0
 	}
 

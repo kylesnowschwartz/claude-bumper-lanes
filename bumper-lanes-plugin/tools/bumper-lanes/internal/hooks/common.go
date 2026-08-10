@@ -24,6 +24,28 @@ type HookInput struct {
 	ToolInput      *ToolInput `json:"tool_input,omitempty"`
 	UserPrompt     string     `json:"user_prompt,omitempty"` // For UserPromptSubmit hooks
 	Prompt         string     `json:"prompt,omitempty"`      // Alternative field name
+
+	// Tool execution result (PostToolUse). Encoded as a string (tool_result)
+	// or a string/object (tool_response) depending on Claude Code version.
+	ToolResult   json.RawMessage `json:"tool_result,omitempty"`
+	ToolResponse json.RawMessage `json:"tool_response,omitempty"`
+}
+
+// ToolResultText returns the tool's execution result as plain text,
+// tolerating both the tool_result and tool_response encodings.
+// Returns "" when neither field is present.
+func (h *HookInput) ToolResultText() string {
+	for _, raw := range []json.RawMessage{h.ToolResult, h.ToolResponse} {
+		if len(raw) == 0 {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			return s
+		}
+		return string(raw)
+	}
+	return ""
 }
 
 // ContextResponse injects additionalContext into Claude's context.
