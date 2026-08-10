@@ -56,12 +56,14 @@ Baseline resets automatically in these scenarios:
 Session logs are written to `~/.claude/logs/bumper-lanes/session-{session_id}.log` for debugging fail-open errors and operational visibility.
 
 **Log format:**
+
 ```
 [2025-12-27 09:56:28] [WARN] [session_start] failed to capture baseline tree: exit status 1 (failing open)
 [2025-12-27 09:56:28] [INFO] [session_start] cleaned orphaned checkpoint: session-old123
 ```
 
 **Log levels:**
+
 - `DEBUG` - Verbose debugging (only with `BUMPER_LANES_DEBUG=1`)
 - `INFO` - Operational events (checkpoint cleanup, etc.)
 - `WARN` - Fail-open errors that allow operations but indicate problems
@@ -93,6 +95,7 @@ See the **hook-intercept-block** skill for full documentation on implementing ne
 ## Configuration
 
 Config files (in precedence order):
+
 1. `.bumper-lanes.json` at repo root (highest priority)
 2. `~/.config/bumper-lanes/config.json` (global fallback)
 3. Built-in defaults
@@ -109,7 +112,8 @@ Config files (in precedence order):
   "threshold": 600,
   "default_view_mode": "tree",
   "default_view_opts": "--width 80 --depth 3",
-  "show_diff_viz": true
+  "show_diff_viz": true,
+  "statusline_auto_setup": false
 }
 ```
 
@@ -117,6 +121,7 @@ Config files (in precedence order):
 - `default_view_mode`: Visualization mode (default: tree)
 - `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
 - `show_diff_viz`: Show diff visualization in status line (default: true)
+- `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
 
 ### Viz-Only Mode (Global)
 
@@ -226,7 +231,7 @@ go mod tidy
 
 ### Development
 
-For diff-viz development, see https://github.com/kylesnowschwartz/diff-viz
+For diff-viz development, see <https://github.com/kylesnowschwartz/diff-viz>
 
 The diff-viz source is also available at `/Users/kyle/Code/my-projects/diff-viz` for local development.
 
@@ -237,6 +242,7 @@ The diff-viz source is also available at `/Users/kyle/Code/my-projects/diff-viz`
 **CRITICAL**: Update sequence diagrams in `docs/*.mmd` when changing flows. These diagrams document the system behavior and are referenced for validation.
 
 The version sentinel (`scripts/ensure-binaries.sh`) compares `plugin.json` version against `bin/.build-version`. If they differ, binaries are rebuilt on next session start. Without a version bump:
+
 - Users won't rebuild binaries with your changes
 - Plugin marketplace won't detect updates
 

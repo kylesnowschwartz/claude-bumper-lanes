@@ -28,11 +28,13 @@ const (
 // Config represents bumper-lanes configuration.
 // Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
 // ShowDiffViz: nil=default (true), false=hide diff visualization
+// StatuslineAutoSetup: nil=default (false), true=allow session-start to configure the status line
 type Config struct {
-	Threshold       *int   `json:"threshold,omitempty"`
-	DefaultViewMode string `json:"default_view_mode,omitempty"`
-	DefaultViewOpts string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
-	ShowDiffViz     *bool  `json:"show_diff_viz,omitempty"`
+	Threshold           *int   `json:"threshold,omitempty"`
+	DefaultViewMode     string `json:"default_view_mode,omitempty"`
+	DefaultViewOpts     string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
+	ShowDiffViz         *bool  `json:"show_diff_viz,omitempty"`
+	StatuslineAutoSetup *bool  `json:"statusline_auto_setup,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -119,6 +121,9 @@ func loadMergedConfig() *Config {
 	if repo.ShowDiffViz != nil {
 		merged.ShowDiffViz = repo.ShowDiffViz
 	}
+	if repo.StatuslineAutoSetup != nil {
+		merged.StatuslineAutoSetup = repo.StatuslineAutoSetup
+	}
 
 	return merged
 }
@@ -174,6 +179,17 @@ func LoadShowDiffViz() bool {
 		return *cfg.ShowDiffViz
 	}
 	return true
+}
+
+// LoadStatuslineAutoSetup returns whether session-start may configure the
+// user's status line in ~/.claude/settings.json. Opt-in: defaults to false,
+// because it rewrites user-global settings from whatever repo runs the hook.
+func LoadStatuslineAutoSetup() bool {
+	cfg := loadMergedConfig()
+	if cfg.StatuslineAutoSetup != nil {
+		return *cfg.StatuslineAutoSetup
+	}
+	return false
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

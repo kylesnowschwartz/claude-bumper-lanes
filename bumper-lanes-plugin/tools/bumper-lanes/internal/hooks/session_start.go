@@ -72,9 +72,12 @@ func SessionStart(input *HookInput) int {
 		warnings = append(warnings, warning)
 	}
 
-	// Auto-setup status line wrapper (once per user)
-	if msg := setupStatusLineWrapper(log); msg != "" {
-		warnings = append(warnings, msg)
+	// Status line setup is opt-in (statusline_auto_setup: true) because it
+	// rewrites ~/.claude/settings.json, a user-global file.
+	if config.LoadStatuslineAutoSetup() {
+		if msg := setupStatusLineWrapper(log); msg != "" {
+			warnings = append(warnings, msg)
+		}
 	}
 
 	// Show all warnings via stderr + exit 1

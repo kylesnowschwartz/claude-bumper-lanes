@@ -13,6 +13,7 @@ func TestConfigLoading(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
 
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
@@ -82,6 +83,42 @@ func TestConfigLoading(t *testing.T) {
 	})
 }
 
+// TestLoadStatuslineAutoSetup verifies status line setup is opt-in.
+func TestLoadStatuslineAutoSetup(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+
+	t.Run("defaults to false", func(t *testing.T) {
+		os.Remove(repoPath)
+		if LoadStatuslineAutoSetup() {
+			t.Error("LoadStatuslineAutoSetup() = true, want false (opt-in default)")
+		}
+	})
+
+	t.Run("repo config opts in", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"statusline_auto_setup": true}`), 0644)
+		defer os.Remove(repoPath)
+		if !LoadStatuslineAutoSetup() {
+			t.Error("LoadStatuslineAutoSetup() = false, want true (config)")
+		}
+	})
+
+	t.Run("explicit false stays false", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"statusline_auto_setup": false}`), 0644)
+		defer os.Remove(repoPath)
+		if LoadStatuslineAutoSetup() {
+			t.Error("LoadStatuslineAutoSetup() = true, want false")
+		}
+	})
+}
+
 // TestGitWorktreeDetection verifies GetGitDir works in worktrees.
 // Worktrees have .git as a file pointing to the real git dir.
 func TestGitWorktreeDetection(t *testing.T) {
@@ -126,6 +163,7 @@ func TestEmptyRepoNoHEAD(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
 
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
