@@ -115,7 +115,8 @@ Config files (in precedence order):
   "default_view_mode": "tree",
   "default_view_opts": "--width 80 --depth 3",
   "show_diff_viz": true,
-  "statusline_auto_setup": false
+  "statusline_auto_setup": false,
+  "reset_on": "commit"
 }
 ```
 
@@ -123,6 +124,7 @@ Config files (in precedence order):
 - `default_view_mode`: Visualization mode (default: tree)
 - `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
 - `show_diff_viz`: Show diff visualization in status line (default: true)
+- `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
 
 ### Viz-Only Mode (Global)

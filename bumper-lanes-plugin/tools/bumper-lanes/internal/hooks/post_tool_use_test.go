@@ -195,6 +195,30 @@ func TestGitCommitPattern(t *testing.T) {
 	}
 }
 
+func TestNoVerifyPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{"long flag", "git commit --no-verify -m 'x'", true},
+		{"short flag", "git commit -n -m 'x'", true},
+		{"bundled short flag", "git commit -an -m 'x'", true},
+		{"plain commit", "git commit -m 'x'", false},
+		{"quiet commit", "git commit -q -m 'x'", false},
+		{"amend", "git commit --amend", false},
+		{"no-edit", "git commit --amend --no-edit", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := noVerifyPattern.MatchString(tt.command); got != tt.want {
+				t.Errorf("noVerifyPattern.MatchString(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestPostToolUseRouting(t *testing.T) {
 	t.Run("Write routes to file handler", func(t *testing.T) {
 		input := &HookInput{
@@ -442,6 +466,99 @@ func TestHandleBashCommit(t *testing.T) {
 		reloaded, _ := state.Load(sessionID)
 		if reloaded.BaselineTree != "old-tree-sha" {
 			t.Errorf("BaselineTree = %q, want unchanged (no success evidence)", reloaded.BaselineTree)
+		}
+	})
+
+	t.Run("reset_on=human never resets on commit", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+		os.WriteFile(".bumper-lanes.json", []byte(`{"reset_on": "human"}`), 0644)
+
+		sessionID := "test-bash-human-policy"
+		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
+		sess.Score = 100
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit -m 'ok'"},
+			ToolResult:    json.RawMessage(`"[main abc1234] ok\n 1 file changed, 1 insertion(+)"`),
+		}
+
+		PostToolUse(input)
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.BaselineTree != "old-tree-sha" {
+			t.Errorf("BaselineTree = %q, want unchanged under reset_on=human", reloaded.BaselineTree)
+		}
+		if reloaded.Score != 100 {
+			t.Errorf("Score = %d, want 100 (unchanged)", reloaded.Score)
+		}
+	})
+
+	t.Run("reset_on=verified-commit refuses --no-verify", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+		os.WriteFile(".bumper-lanes.json", []byte(`{"reset_on": "verified-commit"}`), 0644)
+
+		sessionID := "test-bash-noverify"
+		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
+		sess.Score = 100
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit --no-verify -m 'sneaky'"},
+			ToolResult:    json.RawMessage(`"[main abc1234] sneaky\n 1 file changed, 1 insertion(+)"`),
+		}
+
+		PostToolUse(input)
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.BaselineTree != "old-tree-sha" {
+			t.Errorf("BaselineTree = %q, want unchanged when hooks bypassed", reloaded.BaselineTree)
+		}
+	})
+
+	t.Run("reset_on=verified-commit resets on hook-verified commit", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+		os.WriteFile(".bumper-lanes.json", []byte(`{"reset_on": "verified-commit"}`), 0644)
+
+		sessionID := "test-bash-verified-ok"
+		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
+		sess.Score = 100
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PostToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit -m 'clean'"},
+			ToolResult:    json.RawMessage(`"[main abc1234] clean\n 1 file changed, 1 insertion(+)"`),
+		}
+
+		PostToolUse(input)
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.BaselineTree == "old-tree-sha" {
+			t.Errorf("BaselineTree unchanged, want reset for verified commit")
 		}
 	})
 

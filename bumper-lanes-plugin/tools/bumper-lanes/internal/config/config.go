@@ -25,16 +25,34 @@ const (
 	ValidModes = "tree smart sparkline-tree hotpath icicle brackets gauge depth stat"
 )
 
+// Reset policies control when a git commit made through the Bash tool
+// auto-resets the review budget.
+const (
+	// ResetOnCommit resets after any commit with success evidence.
+	ResetOnCommit = "commit"
+	// ResetOnVerifiedCommit additionally refuses commits that bypass
+	// hooks with --no-verify / -n.
+	ResetOnVerifiedCommit = "verified-commit"
+	// ResetOnHuman never auto-resets on Claude's commits; only a human
+	// /bumper-reset (or a clean tree) restores the budget.
+	ResetOnHuman = "human"
+
+	// DefaultResetOn is the default reset policy.
+	DefaultResetOn = ResetOnCommit
+)
+
 // Config represents bumper-lanes configuration.
 // Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
 // ShowDiffViz: nil=default (true), false=hide diff visualization
 // StatuslineAutoSetup: nil=default (false), true=allow session-start to configure the status line
+// ResetOn: ""=default ("commit"); one of "commit", "verified-commit", "human"
 type Config struct {
 	Threshold           *int   `json:"threshold,omitempty"`
 	DefaultViewMode     string `json:"default_view_mode,omitempty"`
 	DefaultViewOpts     string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
 	ShowDiffViz         *bool  `json:"show_diff_viz,omitempty"`
 	StatuslineAutoSetup *bool  `json:"statusline_auto_setup,omitempty"`
+	ResetOn             string `json:"reset_on,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -124,6 +142,9 @@ func loadMergedConfig() *Config {
 	if repo.StatuslineAutoSetup != nil {
 		merged.StatuslineAutoSetup = repo.StatuslineAutoSetup
 	}
+	if repo.ResetOn != "" {
+		merged.ResetOn = repo.ResetOn
+	}
 
 	return merged
 }
@@ -190,6 +211,18 @@ func LoadStatuslineAutoSetup() bool {
 		return *cfg.StatuslineAutoSetup
 	}
 	return false
+}
+
+// LoadResetOn returns the configured commit auto-reset policy.
+// Unknown values fall back to the default rather than silently
+// disabling resets.
+func LoadResetOn() string {
+	cfg := loadMergedConfig()
+	switch cfg.ResetOn {
+	case ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman:
+		return cfg.ResetOn
+	}
+	return DefaultResetOn
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

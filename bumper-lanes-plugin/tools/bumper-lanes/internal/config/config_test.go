@@ -119,6 +119,44 @@ func TestLoadStatuslineAutoSetup(t *testing.T) {
 	})
 }
 
+// TestLoadResetOn verifies the commit auto-reset policy loading.
+func TestLoadResetOn(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+
+	t.Run("defaults to commit", func(t *testing.T) {
+		os.Remove(repoPath)
+		if got := LoadResetOn(); got != ResetOnCommit {
+			t.Errorf("LoadResetOn() = %q, want %q (default)", got, ResetOnCommit)
+		}
+	})
+
+	t.Run("loads configured policies", func(t *testing.T) {
+		for _, policy := range []string{ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman} {
+			os.WriteFile(repoPath, []byte(`{"reset_on": "`+policy+`"}`), 0644)
+			if got := LoadResetOn(); got != policy {
+				t.Errorf("LoadResetOn() = %q, want %q", got, policy)
+			}
+		}
+		os.Remove(repoPath)
+	})
+
+	t.Run("unknown value falls back to default", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"reset_on": "never-heard-of-it"}`), 0644)
+		defer os.Remove(repoPath)
+		if got := LoadResetOn(); got != DefaultResetOn {
+			t.Errorf("LoadResetOn() = %q, want %q (fallback)", got, DefaultResetOn)
+		}
+	})
+}
+
 // TestGitWorktreeDetection verifies GetGitDir works in worktrees.
 // Worktrees have .git as a file pointing to the real git dir.
 func TestGitWorktreeDetection(t *testing.T) {

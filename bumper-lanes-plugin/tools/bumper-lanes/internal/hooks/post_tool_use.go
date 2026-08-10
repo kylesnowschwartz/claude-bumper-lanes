@@ -40,6 +40,10 @@ func PostToolUse(input *HookInput) (exitCode int) {
 // "[branch abc1234] subject" or the diffstat line "N file(s) changed".
 var commitSucceededPattern = regexp.MustCompile(`\[[^\]\n]+\b[0-9a-f]{7,40}\]|files? changed`)
 
+// noVerifyPattern matches commits that bypass hooks: --no-verify or the
+// short form -n (alone or bundled, e.g. -an).
+var noVerifyPattern = regexp.MustCompile(`--no-verify\b|\s-[a-zA-Z]*n[a-zA-Z]*\b`)
+
 // handleBashCommit detects git commits and auto-resets baseline.
 func handleBashCommit(input *HookInput) int {
 	log := logging.New(input.SessionID, "post_tool_use")
@@ -52,6 +56,19 @@ func handleBashCommit(input *HookInput) int {
 	// Check if this is a git commit command
 	if !gitCommitPattern.MatchString(input.ToolInput.Command) {
 		return 0
+	}
+
+	// Apply the reset policy before checking for success evidence.
+	switch config.LoadResetOn() {
+	case config.ResetOnHuman:
+		log.Info("reset_on=human - commit does not reset baseline")
+		return 0
+	case config.ResetOnVerifiedCommit:
+		if noVerifyPattern.MatchString(input.ToolInput.Command) {
+			log.Info("reset_on=verified-commit and commit bypasses hooks - baseline not reset")
+			WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget.")
+			return 0
+		}
 	}
 
 	// A commit-shaped command is not a committed change: pre-commit hooks can
