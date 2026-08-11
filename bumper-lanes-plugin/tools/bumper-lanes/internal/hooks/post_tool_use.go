@@ -160,11 +160,15 @@ func handleWriteEdit(input *HookInput) int {
 	pct := (freshScore * 100) / sess.ThresholdLimit
 
 	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
+	remaining := sess.ThresholdLimit - freshScore
+	if remaining < 0 {
+		remaining = 0
+	}
 	if pct >= 90 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: review budget at %d%% (%d/%d pts). Finish the current increment and pause for review - do not start new work.", pct, freshScore, sess.ThresholdLimit))
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %d/%d review-budget pts remain (%d%% used). Finish the current increment and pause for review; do not start new work.", remaining, sess.ThresholdLimit, pct))
 		return 0
 	} else if pct >= 70 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: review budget at %d%% (%d/%d pts). Plan to wrap up the current increment soon.", pct, freshScore, sess.ThresholdLimit))
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %d/%d review-budget pts remain (%d%% used). Fit the rest of this increment in the remaining budget; defer anything new.", remaining, sess.ThresholdLimit, pct))
 		return 0
 	}
 

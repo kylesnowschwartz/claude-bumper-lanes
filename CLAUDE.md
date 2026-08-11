@@ -33,6 +33,7 @@ Defense-in-depth hook system with three layers:
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining
 - UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
+- Budget messages use scope-contract framing (points remaining, not points spent); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes status --widget=indicator` before large edits and size increments to the remaining budget
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
 ## Auto-Reset Triggers

@@ -117,9 +117,13 @@ func emitBudgetRecap(sess *state.SessionState, source string) int {
 		return 0
 	}
 	pct := (sess.Score * 100) / sess.ThresholdLimit
+	remaining := sess.ThresholdLimit - sess.Score
+	if remaining < 0 {
+		remaining = 0
+	}
 	msg := fmt.Sprintf(
-		"bumper-lanes: review budget %d/%d pts used (%d%%), preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
-		sess.Score, sess.ThresholdLimit, pct, source)
+		"bumper-lanes: %d/%d review-budget pts remain (%d%% used), preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
+		remaining, sess.ThresholdLimit, pct, source)
 	WriteContext("SessionStart", msg)
 	return 0
 }

@@ -77,7 +77,7 @@ func TestSessionStartPreservesStateOnCompactAndResume(t *testing.T) {
 			if !sess.StopTriggered {
 				t.Errorf("stop_triggered cleared on %s, want preserved", source)
 			}
-			if !strings.Contains(out, "additionalContext") || !strings.Contains(out, "400/600") {
+			if !strings.Contains(out, "additionalContext") || !strings.Contains(out, "200/600 review-budget pts remain") {
 				t.Errorf("recap missing from output on %s: %q", source, out)
 			}
 		})
