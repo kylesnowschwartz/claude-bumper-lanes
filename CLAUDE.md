@@ -73,6 +73,10 @@ Session logs are written to `~/.claude/logs/bumper-lanes/session-{session_id}.lo
 
 **Why file logging?** Claude Code's hook stderr handling is unreliable for exit code 0. Stderr only reaches Claude when exit code is 2 (blocking errors). File logging provides reliable debugging visibility.
 
+## Event Log (Instrument)
+
+Lifecycle events append to `{git-dir}/bumper-checkpoints/events.jsonl`, one JSON object per line: `{ts, session_id, event, score, limit, cause?, tripwire?}`. Events: `session_start | trip | reset | pause | resume | tripwire`. Reset entries carry the score at reset time (the size of the increment that just ended) and a cause (`manual | commit | verified-commit | clean-tree | branch`). Append-only, best-effort (never blocks the operation being recorded), no UI — analyze ad hoc with `jq`. This is the measuring instrument for design hypotheses and threshold calibration.
+
 ## Hook-Intercept-Block Pattern
 
 All slash commands use the "hook-intercept-block" pattern for instant execution without Claude API calls. This pattern intercepts user prompts via UserPromptSubmit hook, executes logic directly in Go, and returns `decision: "block"` with a `reason` message - bypassing the Claude API entirely.

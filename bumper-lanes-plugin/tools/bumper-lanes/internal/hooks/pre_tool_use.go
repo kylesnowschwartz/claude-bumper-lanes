@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -102,9 +103,13 @@ func PreToolUse(input *HookInput) (exitCode int) {
 
 		if currentTree == headTree {
 			// Tree is clean - auto-reset baseline and clear flag
+			scoreAtReset := sess.Score
 			currentBranch := GetCurrentBranch()
 			sess.ResetBaseline(currentTree, currentBranch)
 			sess.Save()
+			if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseCleanTree}); err != nil {
+				log.Warn("failed to append event: %v", err)
+			}
 
 			// Provide feedback to user and Claude
 			fmt.Fprintf(os.Stderr, "✓ Baseline auto-reset (external commit detected). Budget restored.\n")

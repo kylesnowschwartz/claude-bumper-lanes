@@ -403,6 +403,27 @@ func TestHandleBashCommit(t *testing.T) {
 		if reloaded.Score != 0 {
 			t.Errorf("Score = %d, want 0 (reset)", reloaded.Score)
 		}
+
+		// Reset must be recorded in the event log with score-at-reset
+		data, err := os.ReadFile(filepath.Join(tmpDir, ".git", "bumper-checkpoints", "events.jsonl"))
+		if err != nil {
+			t.Fatalf("events.jsonl not written: %v", err)
+		}
+		var entry struct {
+			Event string `json:"event"`
+			Score int    `json:"score"`
+			Cause string `json:"cause"`
+		}
+		lastLine := strings.TrimSpace(string(data))
+		if i := strings.LastIndex(lastLine, "\n"); i >= 0 {
+			lastLine = lastLine[i+1:]
+		}
+		if err := json.Unmarshal([]byte(lastLine), &entry); err != nil {
+			t.Fatalf("events.jsonl line not valid JSON: %v", err)
+		}
+		if entry.Event != "reset" || entry.Cause != "commit" || entry.Score != 100 {
+			t.Errorf("event = %+v, want reset/commit with score 100", entry)
+		}
 	})
 
 	t.Run("failed commit does not reset baseline", func(t *testing.T) {

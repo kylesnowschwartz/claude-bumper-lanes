@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -59,7 +60,8 @@ func handleBashCommit(input *HookInput) int {
 	}
 
 	// Apply the reset policy before checking for success evidence.
-	switch config.LoadResetOn() {
+	policy := config.LoadResetOn()
+	switch policy {
 	case config.ResetOnHuman:
 		log.Info("reset_on=human - commit does not reset baseline")
 		return 0
@@ -97,10 +99,19 @@ func handleBashCommit(input *HookInput) int {
 	}
 
 	// Reset baseline
+	scoreAtReset := sess.Score
 	currentBranch := GetCurrentBranch()
 	sess.ResetBaseline(currentTree, currentBranch)
 	if err := sess.Save(); err != nil {
 		return 0
+	}
+
+	cause := events.CauseCommit
+	if policy == config.ResetOnVerifiedCommit {
+		cause = events.CauseVerifiedCommit
+	}
+	if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: cause}); err != nil {
+		log.Warn("failed to append event: %v", err)
 	}
 
 	// Output feedback

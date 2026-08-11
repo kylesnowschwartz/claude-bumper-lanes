@@ -3,6 +3,7 @@ package hooks
 import (
 	"fmt"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -23,6 +24,8 @@ func Reset(sessionID string) error {
 
 	// Get current branch
 	currentBranch := GetCurrentBranch()
+
+	events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual})
 
 	// Reset baseline
 	sess.ResetBaseline(newTree, currentBranch)

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -72,6 +73,14 @@ func SessionStart(input *HookInput) int {
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to save session state: %v (failing open)", err)
 		return 0 // Fail open
+	}
+
+	source := input.Source
+	if source == "" {
+		source = "startup"
+	}
+	if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.SessionStart, Score: 0, Limit: threshold, Cause: source}); err != nil {
+		log.Warn("failed to append event: %v", err)
 	}
 
 	// Collect warnings to show user (exit 1 with stderr shows warnings)

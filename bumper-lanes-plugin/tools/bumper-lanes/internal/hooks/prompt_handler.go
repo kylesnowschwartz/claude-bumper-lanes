@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -135,6 +136,8 @@ func handleReset(sessionID string) int {
 		return 0
 	}
 
+	events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual})
+
 	// Reset score FIRST for immediate statusline update
 	sess.Score = 0
 	sess.StopTriggered = false
@@ -172,6 +175,7 @@ func handlePause(sessionID string) int {
 	if !saveOrBlock(sess) {
 		return 0
 	}
+	events.Append(events.Entry{SessionID: sessionID, Event: events.Pause, Score: sess.Score, Limit: sess.ThresholdLimit})
 
 	blockPrompt("Enforcement paused. Changes still tracked.\nUse /bumper-resume to re-enable.")
 	return 0
@@ -188,6 +192,7 @@ func handleResume(sessionID string) int {
 	if !saveOrBlock(sess) {
 		return 0
 	}
+	events.Append(events.Entry{SessionID: sessionID, Event: events.Resume, Score: sess.Score, Limit: sess.ThresholdLimit})
 
 	blockPrompt(fmt.Sprintf("Enforcement resumed. Score: %d/%d", sess.Score, sess.ThresholdLimit))
 	return 0

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -108,8 +109,12 @@ func Stop(input *HookInput) error {
 			log.Warn("failed to capture current tree for branch reset: %v (failing open)", err)
 			return nil
 		}
+		scoreAtReset := sess.Score
 		sess.ResetBaseline(currentTree, currentBranch)
 		sess.Save()
+		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseBranch}); err != nil {
+			log.Warn("failed to append event: %v", err)
+		}
 
 		// Output branch switch message
 		resp := StopResponse{
@@ -161,9 +166,16 @@ func Stop(input *HookInput) error {
 	}
 
 	// Over threshold - set stop_triggered and block
+	wasTripped := sess.StopTriggered
 	sess.SetStopTriggered(true)
 	sess.SetScore(freshScore)
 	sess.Save()
+	// Log the trip transition only, not every blocked Stop while tripped.
+	if !wasTripped {
+		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Trip, Score: freshScore, Limit: sess.ThresholdLimit}); err != nil {
+			log.Warn("failed to append event: %v", err)
+		}
+	}
 
 	// Format breakdown message (stats are already from baseline)
 	pct := (freshScore * 100) / sess.ThresholdLimit
