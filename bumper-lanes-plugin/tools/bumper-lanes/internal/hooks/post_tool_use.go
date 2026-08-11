@@ -174,22 +174,34 @@ func handleWriteEdit(input *HookInput) int {
 	result := scoring.Calculate(stats)
 	freshScore := result.Score
 
-	// Update state with fresh score
+	// Tripwires fire at any score: small edits in high-risk classes
+	// (CI, dependencies, harness config, test skips) get named immediately.
+	freshTripwires := sess.AddTripwires(detectTripwires(stats, sess.BaselineTree))
+
+	// Update state with fresh score (and any new tripwires)
 	sess.SetScore(freshScore)
 	sess.Save()
 
-	// Calculate percentage
-	pct := (freshScore * 100) / sess.ThresholdLimit
-
-	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
-	if pct >= 90 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %s. Finish the current increment and pause for review; do not start new work.", budgetLine(freshScore, sess.ThresholdLimit)))
-		return 0
-	} else if pct >= 70 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %s. Fit the rest of this increment in the remaining budget; defer anything new.", budgetLine(freshScore, sess.ThresholdLimit)))
-		return 0
+	var messages []string
+	for _, hit := range freshTripwires {
+		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Tripwire, Score: freshScore, Limit: sess.ThresholdLimit, Tripwire: hit}); err != nil {
+			log.Warn("failed to append event: %v", err)
+		}
+	}
+	if len(freshTripwires) > 0 {
+		messages = append(messages, fmt.Sprintf("bumper-lanes TRIPWIRE: %s - high-risk change class. Point this out to the user for review regardless of budget.", strings.Join(freshTripwires, ", ")))
 	}
 
-	// Under 70% - silent
+	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
+	pct := (freshScore * 100) / sess.ThresholdLimit
+	if pct >= 90 {
+		messages = append(messages, fmt.Sprintf("bumper-lanes: %s. Finish the current increment and pause for review; do not start new work.", budgetLine(freshScore, sess.ThresholdLimit)))
+	} else if pct >= 70 {
+		messages = append(messages, fmt.Sprintf("bumper-lanes: %s. Fit the rest of this increment in the remaining budget; defer anything new.", budgetLine(freshScore, sess.ThresholdLimit)))
+	}
+
+	if len(messages) > 0 {
+		WriteContext("PostToolUse", strings.Join(messages, "\n"))
+	}
 	return 0
 }

@@ -41,18 +41,54 @@ const (
 	DefaultResetOn = ResetOnCommit
 )
 
+// DefaultTripwirePaths are glob patterns for files whose every change is a
+// review-worthy decision regardless of size: CI definitions, dependency
+// manifests, agent-harness config, and schema migrations.
+var DefaultTripwirePaths = []string{
+	".github/workflows/**",
+	".gitlab-ci.yml",
+	".circleci/**",
+	"Jenkinsfile",
+	"go.mod",
+	"package.json",
+	"Gemfile",
+	"requirements.txt",
+	"pyproject.toml",
+	"Cargo.toml",
+	".claude/settings*.json",
+	"**/hooks.json",
+	"db/migrate/**",
+	"**/migrations/**",
+}
+
+// DefaultTripwirePatterns are substrings that, appearing on an added line,
+// signal a silently weakened test suite.
+var DefaultTripwirePatterns = []string{
+	"t.Skip",
+	"it.skip",
+	"test.skip",
+	"describe.skip",
+	"xit(",
+	"xdescribe(",
+	"@pytest.mark.skip",
+	"@unittest.skip",
+}
+
 // Config represents bumper-lanes configuration.
 // Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
 // ShowDiffViz: nil=default (true), false=hide diff visualization
 // StatuslineAutoSetup: nil=default (false), true=allow session-start to configure the status line
 // ResetOn: ""=default ("commit"); one of "commit", "verified-commit", "human"
+// TripwirePaths/TripwirePatterns: nil=defaults, empty list=disabled
 type Config struct {
-	Threshold           *int   `json:"threshold,omitempty"`
-	DefaultViewMode     string `json:"default_view_mode,omitempty"`
-	DefaultViewOpts     string `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
-	ShowDiffViz         *bool  `json:"show_diff_viz,omitempty"`
-	StatuslineAutoSetup *bool  `json:"statusline_auto_setup,omitempty"`
-	ResetOn             string `json:"reset_on,omitempty"`
+	Threshold           *int      `json:"threshold,omitempty"`
+	DefaultViewMode     string    `json:"default_view_mode,omitempty"`
+	DefaultViewOpts     string    `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
+	ShowDiffViz         *bool     `json:"show_diff_viz,omitempty"`
+	StatuslineAutoSetup *bool     `json:"statusline_auto_setup,omitempty"`
+	ResetOn             string    `json:"reset_on,omitempty"`
+	TripwirePaths       *[]string `json:"tripwire_paths,omitempty"`
+	TripwirePatterns    *[]string `json:"tripwire_patterns,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -145,6 +181,12 @@ func loadMergedConfig() *Config {
 	if repo.ResetOn != "" {
 		merged.ResetOn = repo.ResetOn
 	}
+	if repo.TripwirePaths != nil {
+		merged.TripwirePaths = repo.TripwirePaths
+	}
+	if repo.TripwirePatterns != nil {
+		merged.TripwirePatterns = repo.TripwirePatterns
+	}
 
 	return merged
 }
@@ -223,6 +265,26 @@ func LoadResetOn() string {
 		return cfg.ResetOn
 	}
 	return DefaultResetOn
+}
+
+// LoadTripwirePaths returns the configured tripwire path globs.
+// nil config = defaults; an explicit empty list disables path tripwires.
+func LoadTripwirePaths() []string {
+	cfg := loadMergedConfig()
+	if cfg.TripwirePaths != nil {
+		return *cfg.TripwirePaths
+	}
+	return DefaultTripwirePaths
+}
+
+// LoadTripwirePatterns returns the configured added-line tripwire patterns.
+// nil config = defaults; an explicit empty list disables pattern tripwires.
+func LoadTripwirePatterns() []string {
+	cfg := loadMergedConfig()
+	if cfg.TripwirePatterns != nil {
+		return *cfg.TripwirePatterns
+	}
+	return DefaultTripwirePatterns
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

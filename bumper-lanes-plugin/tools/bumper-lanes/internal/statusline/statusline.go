@@ -140,7 +140,7 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 
 		// Format bumper indicator (capture for both full line and standalone use)
 		// viewMode included to force status line refresh when mode changes
-		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage, viewMode)
+		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage, viewMode, len(sess.Tripwires) > 0)
 		parts = append(parts, bumperIndicator)
 
 		// Get diff tree visualization (only if should show)
@@ -183,9 +183,16 @@ func isGitDirty() bool {
 // formatBumperStatus produces a traffic light gauge for bumper-lanes status.
 // Progressive reveal: ▂ green <70%, ▂▄ +yellow 70-90%, ▂▄█ +red >90% or tripped.
 // viewMode is included to force status line refresh when mode changes.
-func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string) string {
+// hasTripwires appends a red "⚠" marking a high-risk change class in the
+// current increment.
+func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string, hasTripwires bool) string {
 	if viewMode == "" {
 		viewMode = "tree"
+	}
+
+	tripwireGlyph := ""
+	if hasTripwires {
+		tripwireGlyph = fmt.Sprintf(" %s⚠%s", colorRed, colorReset)
 	}
 
 	// Disabled state shows text in blue
@@ -195,13 +202,13 @@ func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode 
 
 	// Paused state shows text instead of bar
 	if stateStr == "paused" {
-		return fmt.Sprintf("%sPaused%s [%s]", colorYellow, colorReset, viewMode)
+		return fmt.Sprintf("%sPaused%s%s [%s]", colorYellow, colorReset, tripwireGlyph, viewMode)
 	}
 
 	// Build 5-char traffic light bar
 	bar := formatTrafficLightBar(percentage, stateStr == "tripped")
 
-	return fmt.Sprintf("%s [%s]", bar, viewMode)
+	return fmt.Sprintf("%s%s [%s]", bar, tripwireGlyph, viewMode)
 }
 
 // formatTrafficLightBar returns a colored traffic light gauge with percentage.

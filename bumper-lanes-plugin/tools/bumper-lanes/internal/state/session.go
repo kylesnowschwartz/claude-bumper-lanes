@@ -35,6 +35,11 @@ type SessionState struct {
 	// PostToolUse treats a moved HEAD as the evidence that the commit
 	// succeeded. Empty means no commit is pending.
 	HeadBeforeCommit string `json:"head_before_commit,omitempty"`
+
+	// Tripwires are the zero-threshold hits detected in the current
+	// increment (tripwire file paths, "pattern (file)" for added lines).
+	// Cleared on baseline reset.
+	Tripwires []string `json:"tripwires,omitempty"`
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -220,14 +225,33 @@ func (s *SessionState) SetScore(score int) {
 }
 
 // ResetBaseline resets the baseline to a new tree SHA.
-// Clears score and stop_triggered.
+// Clears score, stop_triggered, and tripwires.
 func (s *SessionState) ResetBaseline(newTree, newBranch string) {
 	s.BaselineTree = newTree
 	s.Score = 0
 	s.StopTriggered = false
+	s.Tripwires = nil
 	if newBranch != "" {
 		s.BaselineBranch = newBranch
 	}
+}
+
+// AddTripwires records tripwire hits, returning only the ones not already
+// known so callers warn once per hit per increment.
+func (s *SessionState) AddTripwires(hits []string) []string {
+	known := make(map[string]bool, len(s.Tripwires))
+	for _, t := range s.Tripwires {
+		known[t] = true
+	}
+	var fresh []string
+	for _, h := range hits {
+		if !known[h] {
+			known[h] = true
+			s.Tripwires = append(s.Tripwires, h)
+			fresh = append(fresh, h)
+		}
+	}
+	return fresh
 }
 
 // SetViewMode sets the visualization mode.

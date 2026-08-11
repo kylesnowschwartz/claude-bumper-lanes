@@ -178,6 +178,10 @@ func Stop(input *HookInput) error {
 	}
 
 	// Format breakdown message (stats are already from baseline)
+	tripwireLine := ""
+	if len(sess.Tripwires) > 0 {
+		tripwireLine = fmt.Sprintf("\n⚠ Tripwires in this increment (review these first): %s\n", strings.Join(sess.Tripwires, ", "))
+	}
 	pct := (freshScore * 100) / sess.ThresholdLimit
 	reason := fmt.Sprintf(`
 
@@ -188,12 +192,12 @@ Score: %d / %d points (%d%%)
 - Edit additions: %d lines (1.3×)
 - Files touched: %d
 - Scatter penalty: %d pts
-
+%s
 Ask the User: Would you like to conduct a structured, manual review?
 
 This workflow ensures incremental code review at predictable checkpoints.
 
-`, freshScore, sess.ThresholdLimit, pct, result.NewAdditions, result.EditAdditions, result.FilesTouched, result.ScatterPenalty)
+`, freshScore, sess.ThresholdLimit, pct, result.NewAdditions, result.EditAdditions, result.FilesTouched, result.ScatterPenalty, tripwireLine)
 
 	// Build response - see function doc comment for explanation of these confusing semantics
 	resp := StopResponse{

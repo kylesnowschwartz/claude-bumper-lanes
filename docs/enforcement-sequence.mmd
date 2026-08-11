@@ -113,6 +113,13 @@ sequenceDiagram
 %% - 70%: remaining-points line - fit the current increment, defer new work
 %% - 90%: remaining-points line - finish and pause for review
 %%
+%% TRIPWIRES (zero-threshold lanes, checked on every Write/Edit)
+%% - Changed files matching tripwire_paths globs, or added lines matching
+%%   tripwire_patterns, are named immediately at ANY score: once via
+%%   additionalContext, in the Stop trip message, as a red ⚠ in the
+%%   indicator, and as a `tripwire` event in events.jsonl.
+%% - internal/hooks/tripwire.go; cleared on baseline reset.
+%%
 %% PAIN POINTS
 %% 1. Warnings visible but muted - status line could surface escalation better
 %% 2. Pause accumulates unbounded score - can be huge on resume

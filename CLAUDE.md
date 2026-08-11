@@ -123,7 +123,9 @@ Config files (in precedence order):
   "default_view_opts": "--width 80 --depth 3",
   "show_diff_viz": true,
   "statusline_auto_setup": false,
-  "reset_on": "commit"
+  "reset_on": "commit",
+  "tripwire_paths": [".github/workflows/**", "go.mod", "..."],
+  "tripwire_patterns": ["t.Skip", "it.skip", "..."]
 }
 ```
 
@@ -133,6 +135,7 @@ Config files (in precedence order):
 - `show_diff_viz`: Show diff visualization in status line (default: true)
 - `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
+- `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Omit for defaults (`config.DefaultTripwirePaths`/`DefaultTripwirePatterns`); empty list disables. Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
 
 ### Viz-Only Mode (Global)
 
