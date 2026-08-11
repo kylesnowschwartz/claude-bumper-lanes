@@ -30,6 +30,7 @@ User Commands (called via bash in command files):
   resume <session>  Re-enable enforcement
   view <session>    Set visualization mode
   config            Show/set threshold configuration
+  budget [session]  Print remaining review budget (latest session if omitted)
 
 Status Line Widget:
   status [--widget=TYPE]  Output bumper-lanes status (reads JSON from stdin)
@@ -75,6 +76,8 @@ func main() {
 		err = cmdView(args)
 	case "config":
 		err = cmdConfig(args)
+	case "budget":
+		err = cmdBudget(args)
 	case "status":
 		err = cmdStatus(args)
 	case "handle-prompt":
@@ -211,6 +214,15 @@ func cmdConfig(args []string) error {
 		return hooks.ConfigSet(args[1])
 	}
 	return fmt.Errorf("usage: bumper-lanes config [show|set <value>]")
+}
+
+func cmdBudget(args []string) error {
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if len(args) >= 1 {
+		sessionID = args[0]
+	}
+	// Empty sessionID is fine: Budget falls back to the latest session.
+	return hooks.Budget(sessionID)
 }
 
 // Prompt handler (UserPromptSubmit hook)

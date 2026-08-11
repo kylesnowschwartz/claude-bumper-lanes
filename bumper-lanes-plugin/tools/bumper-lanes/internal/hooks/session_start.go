@@ -91,12 +91,13 @@ func SessionStart(input *HookInput) int {
 		warnings = append(warnings, warning)
 	}
 
-	// Status line setup is opt-in (statusline_auto_setup: true) because it
-	// rewrites ~/.claude/settings.json, a user-global file.
-	if config.LoadStatuslineAutoSetup() {
-		if msg := setupStatusLineWrapper(log); msg != "" {
-			warnings = append(warnings, msg)
-		}
+	// Fresh status line installation is opt-in (statusline_auto_setup: true)
+	// because it rewrites ~/.claude/settings.json, a user-global file.
+	// Repairing an already-installed bumper-lanes wrapper or binary path
+	// always runs: the user opted in by installing, and a plugin update
+	// that moves the binary would otherwise silently break their status line.
+	if msg := setupStatusLineWrapper(log, config.LoadStatuslineAutoSetup()); msg != "" {
+		warnings = append(warnings, msg)
 	}
 
 	// Show all warnings via stderr + exit 1
@@ -116,14 +117,9 @@ func emitBudgetRecap(sess *state.SessionState, source string) int {
 	if sess.Paused || sess.ThresholdLimit == 0 {
 		return 0
 	}
-	pct := (sess.Score * 100) / sess.ThresholdLimit
-	remaining := sess.ThresholdLimit - sess.Score
-	if remaining < 0 {
-		remaining = 0
-	}
 	msg := fmt.Sprintf(
-		"bumper-lanes: %d/%d review-budget pts remain (%d%% used), preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
-		remaining, sess.ThresholdLimit, pct, source)
+		"bumper-lanes: %s, preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
+		budgetLine(sess.Score, sess.ThresholdLimit), source)
 	WriteContext("SessionStart", msg)
 	return 0
 }
@@ -168,10 +164,11 @@ func hasStatusLineConfigured() bool {
 	return ok && cmdStr != ""
 }
 
-// setupStatusLineWrapper generates a wrapper script and updates settings.json.
-// Returns a message to show to user, or empty string if no action needed.
+// setupStatusLineWrapper repairs an existing bumper-lanes status line setup
+// and, when allowInstall is true, installs one from scratch. Returns a
+// message to show to user, or empty string if no action needed.
 // This is idempotent - checks actual state each time rather than caching.
-func setupStatusLineWrapper(log *logging.Logger) string {
+func setupStatusLineWrapper(log *logging.Logger, allowInstall bool) string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Warn("failed to get home dir for status line setup: %v (failing open)", err)
@@ -222,6 +219,12 @@ func setupStatusLineWrapper(log *logging.Logger) string {
 		return "[bumper-lanes] Updated status line for new plugin version. Restart session to activate."
 	}
 
+	// Everything below installs from scratch, which rewrites the user-global
+	// settings file - only with explicit opt-in.
+	if !allowInstall {
+		return ""
+	}
+
 	// No existing status line - point directly at binary (outputs full status line)
 	if currentCmd == "" {
 		binaryPath, err := os.Executable()
@@ -229,7 +232,7 @@ func setupStatusLineWrapper(log *logging.Logger) string {
 			return fmt.Sprintf("[bumper-lanes] Couldn't find binary path: %v", err)
 		}
 		if err := updateSettingsWithJq(homeDir, binaryPath); err != nil {
-			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", err)
+			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nManual setup: point statusLine.command in ~/.claude/settings.json at the bumper-lanes binary.", err)
 		}
 		return "[bumper-lanes] Status line configured! Restart session to see diff tree."
 	}
@@ -237,11 +240,11 @@ func setupStatusLineWrapper(log *logging.Logger) string {
 	// Existing status line - generate wrapper to preserve + extend it
 	wrapperPath := filepath.Join(homeDir, ".claude", wrapperFileName)
 	if err := generateWrapper(wrapperPath, currentCmd, homeDir); err != nil {
-		return fmt.Sprintf("[bumper-lanes] Failed to create wrapper: %v\nRun /bumper-setup-statusline for manual setup.", err)
+		return fmt.Sprintf("[bumper-lanes] Failed to create wrapper: %v\nManual setup: point statusLine.command in ~/.claude/settings.json at the bumper-lanes binary.", err)
 	}
 
 	if err := updateSettingsWithJq(homeDir, wrapperPath); err != nil {
-		return fmt.Sprintf("[bumper-lanes] Wrapper created at %s\nCouldn't update settings: %v\nRun /bumper-setup-statusline for manual setup.", wrapperPath, err)
+		return fmt.Sprintf("[bumper-lanes] Wrapper created at %s\nCouldn't update settings: %v\nManual setup: point statusLine.command at that wrapper.", wrapperPath, err)
 	}
 
 	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree. Restart session to activate.\nOriginal: %s", currentCmd)

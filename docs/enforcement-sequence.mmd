@@ -20,12 +20,12 @@ sequenceDiagram
     Claude->>Claude: Edit another.ts
     PTU->>Sess: calculate score
     Sess-->>PTU: 280/400 (70%)
-    PTU-->>Claude: stderr: NOTICE 70% - wrap up soon
+    PTU-->>Claude: additionalContext: 120/400 pts remain (70% used) - fit this increment, defer anything new
 
     Claude->>Claude: Write more.ts
     PTU->>Sess: calculate score
     Sess-->>PTU: 360/400 (90%)
-    PTU-->>Claude: stderr: WARNING 90% - complete work
+    PTU-->>Claude: additionalContext: 40/400 pts remain (90% used) - finish and pause for review
 
     %% === THRESHOLD EXCEEDED ===
     Claude->>Stop: (tries to finish turn)
@@ -108,10 +108,10 @@ sequenceDiagram
 %% - Pause: internal/hooks/prompt_handler.go:118-131
 %% - Resume: internal/hooks/prompt_handler.go:134-147
 %%
-%% FUEL GAUGE TIERS
+%% FUEL GAUGE TIERS (delivered via hookSpecificOutput.additionalContext, exit 0)
 %% - <70%: Silent
-%% - 70%: NOTICE - wrap up current task
-%% - 90%: WARNING - complete work, ask about checkpoint
+%% - 70%: remaining-points line - fit the current increment, defer new work
+%% - 90%: remaining-points line - finish and pause for review
 %%
 %% PAIN POINTS
 %% 1. Warnings visible but muted - status line could surface escalation better

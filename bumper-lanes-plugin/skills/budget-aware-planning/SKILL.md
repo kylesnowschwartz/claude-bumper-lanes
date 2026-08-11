@@ -22,12 +22,12 @@ plan increments that fit it, rather than working until the meter trips.
 Check the remaining budget before starting a multi-file change:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes status --widget=indicator
+${CLAUDE_PLUGIN_ROOT}/bin/bumper-lanes budget
 ```
 
-Output like `active (450/600 - 75%)` means 150 points (~110 edited lines)
-remain. Size the next increment to finish inside that remainder, including
-tests.
+Output like `150/600 review-budget pts remain (75% used)` means about 110
+edited lines remain. Size the next increment to finish inside that
+remainder, including tests.
 
 ## Planning rules
 

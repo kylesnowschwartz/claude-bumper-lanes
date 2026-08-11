@@ -125,8 +125,8 @@ func injectBudgetContext(sessionID string) {
 		return
 	}
 	WriteContext("UserPromptSubmit", fmt.Sprintf(
-		"bumper-lanes: %d/%d review-budget pts remain (%d%% used). Plan work that fits the remaining budget, or ask before expanding scope.",
-		sess.ThresholdLimit-sess.Score, sess.ThresholdLimit, pct))
+		"bumper-lanes: %s. Plan work that fits the remaining budget, or ask before expanding scope.",
+		budgetLine(sess.Score, sess.ThresholdLimit)))
 }
 
 // handleReset captures new baseline and resets score.

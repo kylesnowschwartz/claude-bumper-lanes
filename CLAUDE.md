@@ -33,7 +33,9 @@ Defense-in-depth hook system with three layers:
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining
 - UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
-- Budget messages use scope-contract framing (points remaining, not points spent); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes status --widget=indicator` before large edits and size increments to the remaining budget
+- Budget messages use scope-contract framing (points remaining, clamped at 0, via one shared `budgetLine` helper); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes budget` before large edits and size increments to the remaining budget
+- `bumper-lanes budget [session]` prints the plain-text remaining budget; with no usable session id it falls back to the most recently active session, so it works from Claude's Bash tool (no statusline JSON on stdin required)
+- Statusline setup: fresh installs require `statusline_auto_setup: true`; repair of an already-installed wrapper/binary path runs unconditionally so plugin updates don't strand a dead path
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
 ## Auto-Reset Triggers
@@ -47,8 +49,8 @@ Baseline resets automatically in these scenarios:
    - Cost: ~125ms per Write/Edit when StopTriggered=true (rare)
 
 2. **Claude's git commit** (via Bash tool)
-   - Detects: Regex matches `git commit` command patterns
-   - Location: `post_tool_use.go:41-81`
+   - Detects: PreToolUse records HEAD before a commit-shaped Bash command (`pre_tool_use.go:recordHeadBeforeCommit`); PostToolUse resets only if HEAD moved (`post_tool_use.go:handleBashCommit`). Regex decides when to record; HEAD movement is the evidence — rejected or no-op commits leave HEAD in place and do not reset.
+   - Gated by `reset_on` policy (`--no-verify` detection is scoped to the commit segment of compound commands)
 
 3. **Branch switch**
    - Detects: Branch name changed since baseline
