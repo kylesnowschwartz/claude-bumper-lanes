@@ -3,6 +3,7 @@ package hooks
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
@@ -37,15 +38,33 @@ func PostToolUse(input *HookInput) (exitCode int) {
 	}
 }
 
-// commitSucceededPattern matches git commit success output: the summary line
-// "[branch abc1234] subject" or the diffstat line "N file(s) changed".
-var commitSucceededPattern = regexp.MustCompile(`\[[^\]\n]+\b[0-9a-f]{7,40}\]|files? changed`)
-
-// noVerifyPattern matches commits that bypass hooks: --no-verify or the
-// short form -n (alone or bundled, e.g. -an).
+// noVerifyPattern matches hook-bypassing flags: --no-verify or the short
+// form -n (alone or bundled, e.g. -an). Applied only to the git commit
+// segment of the command (see commitSegment), not the whole pipeline.
 var noVerifyPattern = regexp.MustCompile(`--no-verify\b|\s-[a-zA-Z]*n[a-zA-Z]*\b`)
 
+// commitSegment returns the shell segment containing the git commit
+// invocation: from the match to the next command separator. This keeps
+// no-verify detection from misreading flags of other commands in a
+// pipeline (e.g. `git commit -m x && git log -n 1`).
+func commitSegment(command string) string {
+	loc := gitCommitPattern.FindStringIndex(command)
+	if loc == nil {
+		return ""
+	}
+	segment := command[loc[0]:]
+	for _, sep := range []string{"&&", "||", ";", "|", "\n"} {
+		if i := strings.Index(segment, sep); i >= 0 {
+			segment = segment[:i]
+		}
+	}
+	return segment
+}
+
 // handleBashCommit detects git commits and auto-resets baseline.
+// The evidence that a commit landed is HEAD moving between PreToolUse
+// (which recorded it in HeadBeforeCommit) and now - a rejected or no-op
+// commit leaves HEAD in place, and a quiet one still moves it.
 func handleBashCommit(input *HookInput) int {
 	log := logging.New(input.SessionID, "post_tool_use")
 
@@ -59,34 +78,37 @@ func handleBashCommit(input *HookInput) int {
 		return 0
 	}
 
-	// Apply the reset policy before checking for success evidence.
+	// Load session state
+	sess, err := state.Load(input.SessionID)
+	if err != nil {
+		log.Warn("failed to load session (bash commit): %v (failing open)", err)
+		return 0 // No session - fail open
+	}
+
+	// Consume the pending-commit record regardless of outcome.
+	headBefore := sess.HeadBeforeCommit
+	if headBefore != "" {
+		sess.HeadBeforeCommit = ""
+		sess.Save()
+	}
+
+	if headBefore == "" || GetHeadCommit() == headBefore {
+		log.Info("HEAD did not move - commit did not land, baseline not reset")
+		return 0
+	}
+
+	// Apply the reset policy now that the commit is proven.
 	policy := config.LoadResetOn()
 	switch policy {
 	case config.ResetOnHuman:
 		log.Info("reset_on=human - commit does not reset baseline")
 		return 0
 	case config.ResetOnVerifiedCommit:
-		if noVerifyPattern.MatchString(input.ToolInput.Command) {
+		if noVerifyPattern.MatchString(commitSegment(input.ToolInput.Command)) {
 			log.Info("reset_on=verified-commit and commit bypasses hooks - baseline not reset")
 			WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget.")
 			return 0
 		}
-	}
-
-	// A commit-shaped command is not a committed change: pre-commit hooks can
-	// reject it. Reset only on evidence of success in the tool result; when
-	// evidence is absent (rejected commit, or `git commit -q`), keep counting -
-	// the clean-tree recovery paths handle a genuinely committed tree later.
-	if !commitSucceededPattern.MatchString(input.ToolResultText()) {
-		log.Info("commit command without success evidence - baseline not reset")
-		return 0
-	}
-
-	// Load session state
-	sess, err := state.Load(input.SessionID)
-	if err != nil {
-		log.Warn("failed to load session (bash commit): %v (failing open)", err)
-		return 0 // No session - fail open
 	}
 
 	// Capture current tree including untracked files
@@ -160,15 +182,11 @@ func handleWriteEdit(input *HookInput) int {
 	pct := (freshScore * 100) / sess.ThresholdLimit
 
 	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
-	remaining := sess.ThresholdLimit - freshScore
-	if remaining < 0 {
-		remaining = 0
-	}
 	if pct >= 90 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %d/%d review-budget pts remain (%d%% used). Finish the current increment and pause for review; do not start new work.", remaining, sess.ThresholdLimit, pct))
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %s. Finish the current increment and pause for review; do not start new work.", budgetLine(freshScore, sess.ThresholdLimit)))
 		return 0
 	} else if pct >= 70 {
-		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %d/%d review-budget pts remain (%d%% used). Fit the rest of this increment in the remaining budget; defer anything new.", remaining, sess.ThresholdLimit, pct))
+		WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: %s. Fit the rest of this increment in the remaining budget; defer anything new.", budgetLine(freshScore, sess.ThresholdLimit)))
 		return 0
 	}
 

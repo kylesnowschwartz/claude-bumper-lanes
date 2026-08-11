@@ -13,24 +13,40 @@ sequenceDiagram
     %% ============================================================
     %% CASE 1: Claude commits via Bash tool
     %% ============================================================
-    Note over User,Sess: Scenario 1: Claude commits
+    Note over User,Sess: Scenario 1: Claude commits (HEAD-evidence detection)
     User->>Claude: finish up and commit
     Claude->>Claude: (score at 350/400)
 
+    %% PreToolUse records HEAD before the commit-shaped command runs
+    Claude->>PreTU: (about to run Bash: git commit)
+    PreTU->>PreTU: (regex matches git commit)
+    PreTU->>Git: rev-parse HEAD
+    Git-->>PreTU: abc123
+    PreTU->>Sess: head_before_commit = abc123
+
     %% Claude commits via Bash tool
     Claude->>Git: git commit -m "feat: add feature"
-    Git-->>Claude: committed abc123
+    Git-->>Claude: committed def456
 
-    %% PostToolUse fires for Bash
+    %% PostToolUse fires for Bash: HEAD moved = commit proven
     PTU->>PTU: (regex matches git commit)
-    PTU->>Git: CaptureTree()
-    Git-->>PTU: tree SHA def456
+    PTU->>Git: rev-parse HEAD
+    Git-->>PTU: def456 (!= abc123 - commit landed)
+    PTU->>Sess: clear head_before_commit
 
-    %% Reset baseline to committed state
-    PTU->>Sess: baseline = def456
-    PTU->>Sess: score = 0
-    PTU-->>Claude: stderr: Auto-reset. Fresh budget: 400 pts.
-    Claude-->>User: Committed. Fresh budget now.
+    alt reset_on = human
+        PTU->>PTU: (no auto-reset; only /bumper-reset or clean tree)
+    else reset_on = verified-commit AND command has --no-verify/-n
+        PTU-->>Claude: additionalContext: budget NOT reset (hooks bypassed)
+    else commit proven, policy allows
+        PTU->>Git: CaptureTree()
+        Git-->>PTU: tree SHA def456
+        PTU->>Sess: baseline = def456, score = 0
+        PTU-->>Claude: additionalContext: Auto-reset. Fresh budget: 400 pts.
+        Claude-->>User: Committed. Fresh budget now.
+    end
+
+    Note over PreTU,PTU: Rejected commit (pre-commit hook) leaves HEAD in place - no reset, budget keeps counting
 
     %% ============================================================
     %% CASE 2: PreToolUse auto-reset (v3.7.0)
@@ -42,7 +58,7 @@ sequenceDiagram
     User->>Claude: continue working
 
     %% Claude attempts Write - PreToolUse fires BEFORE execution
-    Claude->>PreTU as PreToolUse: (wants to Write file)
+    Claude->>PreTU: (wants to Write file)
 
     %% PreToolUse checks state
     PreTU->>Sess: Load session
@@ -89,7 +105,7 @@ sequenceDiagram
     User->>Claude: continue working
 
     %% Claude attempts Write - PreToolUse fires BEFORE execution
-    Claude->>PreTU as PreToolUse: (wants to Write file)
+    Claude->>PreTU: (wants to Write file)
 
     %% PreToolUse checks state
     PreTU->>Sess: Load session
@@ -133,10 +149,11 @@ sequenceDiagram
 %% VALIDATION REFERENCES
 %% ============================================================
 %% Scenario 1 (Claude commits):
-%% - Commit detection: internal/hooks/post_tool_use.go:gitCommitPattern
-%% - Tree capture: internal/hooks/post_tool_use.go:handleBashCommit (line 64)
-%% - Reset call: internal/hooks/post_tool_use.go:handleBashCommit (line 72)
-%% - Feedback: internal/hooks/post_tool_use.go:handleBashCommit (line 79)
+%% - Commit-shaped command detection: internal/hooks/post_tool_use.go:gitCommitPattern
+%% - HEAD recording: internal/hooks/pre_tool_use.go:recordHeadBeforeCommit
+%% - HEAD-moved evidence + reset policy: internal/hooks/post_tool_use.go:handleBashCommit
+%% - reset_on policy (commit | verified-commit | human): internal/config/config.go:LoadResetOn
+%% - no-verify detection scoped to the commit segment: internal/hooks/post_tool_use.go:commitSegment
 %%
 %% Scenario 2 (PreToolUse auto-reset on clean tree, v3.7.0):
 %% - StopTriggered check: internal/hooks/pre_tool_use.go:88
@@ -158,6 +175,8 @@ sequenceDiagram
 %% COMMIT PATTERN REGEX (Scenario 1)
 %% Matches: git commit, git -C /path commit, git --git-dir=/x commit
 %% Rejects: prose like "use git to commit"
+%% The regex only decides WHEN to record/check; the reset decision rests on
+%% HEAD moving between PreToolUse and PostToolUse, never on output scraping.
 %%
 %% BENEFITS
 %% 1. No manual /bumper-reset needed after ANY commit (Claude or external)

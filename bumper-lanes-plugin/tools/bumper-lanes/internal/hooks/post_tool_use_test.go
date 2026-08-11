@@ -195,7 +195,7 @@ func TestGitCommitPattern(t *testing.T) {
 	}
 }
 
-func TestNoVerifyPattern(t *testing.T) {
+func TestNoVerifyDetection(t *testing.T) {
 	tests := []struct {
 		name    string
 		command string
@@ -208,12 +208,16 @@ func TestNoVerifyPattern(t *testing.T) {
 		{"quiet commit", "git commit -q -m 'x'", false},
 		{"amend", "git commit --amend", false},
 		{"no-edit", "git commit --amend --no-edit", false},
+		{"-n in later pipeline command", "git commit -m 'x' && git log -n 1", false},
+		{"-n after pipe", "git commit -m 'x' | head -n 20", false},
+		{"-n after semicolon", "git commit -m 'x'; echo -n done", false},
+		{"no-verify in commit segment of compound", "git add -u && git commit --no-verify -m 'x' && git push", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := noVerifyPattern.MatchString(tt.command); got != tt.want {
-				t.Errorf("noVerifyPattern.MatchString(%q) = %v, want %v", tt.command, got, tt.want)
+			if got := noVerifyPattern.MatchString(commitSegment(tt.command)); got != tt.want {
+				t.Errorf("noVerify(commitSegment(%q)) = %v, want %v", tt.command, got, tt.want)
 			}
 		})
 	}
@@ -338,70 +342,70 @@ func TestNotebookEditUpdatesScore(t *testing.T) {
 	}
 }
 
+// gitCommit runs git commit in the current directory and fails the test on error.
+func gitCommit(t *testing.T, args ...string) {
+	t.Helper()
+	if err := exec.Command("git", append([]string{"commit"}, args...)...).Run(); err != nil {
+		t.Fatalf("git commit %v failed: %v", args, err)
+	}
+}
+
 func TestHandleBashCommit(t *testing.T) {
 	// Skip if not in a git repo
 	if !IsGitRepo() {
 		t.Skip("Not in a git repo")
 	}
 
-	t.Run("auto-resets baseline on git commit", func(t *testing.T) {
-		// Create a temp git repo for testing
+	t.Run("auto-resets baseline when HEAD moved", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
 
-		// Save and restore current dir
 		origDir, _ := os.Getwd()
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		// Create session with old baseline
 		sessionID := "test-bash-commit"
 		sess, err := state.New(sessionID, "old-tree-sha", "main", 400)
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
-		sess.Score = 100 // Some accumulated score
+		sess.Score = 100
+		sess.HeadBeforeCommit = GetHeadCommit() // what PreToolUse records
 		if err := sess.Save(); err != nil {
 			t.Fatalf("Failed to save session: %v", err)
 		}
 
-		// Create a checkpoint dir in this temp repo
-		checkpointDir := filepath.Join(tmpDir, ".git", "bumper-checkpoints")
-		os.MkdirAll(checkpointDir, 0755)
+		// Actually commit so HEAD moves (quiet: evidence is HEAD, not output)
+		os.WriteFile("committed.txt", []byte("x\n"), 0644)
+		exec.Command("git", "add", "committed.txt").Run()
+		gitCommit(t, "-q", "-m", "landed")
 
-		// Simulate a successful commit (result carries git's summary line)
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'test commit'"},
-			ToolResult:    json.RawMessage(`"[main abc1234] test commit\n 1 file changed, 1 insertion(+)"`),
+			ToolInput:     &ToolInput{Command: "git commit -q -m 'landed'"},
 		}
 
-		exitCode := PostToolUse(input)
-		// Should return 2 (to ensure stderr reaches Claude)
-		if exitCode != 0 {
-			t.Errorf("PostToolUse(git commit) = %d, want 0 (additionalContext channel)", exitCode)
+		if exitCode := PostToolUse(input); exitCode != 0 {
+			t.Errorf("PostToolUse(git commit) = %d, want 0", exitCode)
 		}
 
-		// Verify session was reset
 		reloaded, err := state.Load(sessionID)
 		if err != nil {
 			t.Fatalf("Failed to reload session: %v", err)
 		}
 
-		// BaselineTree should now be the current HEAD tree
-		cmd := exec.Command("git", "rev-parse", "HEAD^{tree}")
-		output, _ := cmd.Output()
-		expectedTree := string(output)[:len(output)-1] // trim newline
-
+		output, _ := exec.Command("git", "rev-parse", "HEAD^{tree}").Output()
+		expectedTree := strings.TrimSpace(string(output))
 		if reloaded.BaselineTree != expectedTree {
 			t.Errorf("BaselineTree = %q, want %q (HEAD^{tree})", reloaded.BaselineTree, expectedTree)
 		}
-
-		// Score should be reset to 0
 		if reloaded.Score != 0 {
 			t.Errorf("Score = %d, want 0 (reset)", reloaded.Score)
+		}
+		if reloaded.HeadBeforeCommit != "" {
+			t.Errorf("HeadBeforeCommit = %q, want cleared", reloaded.HeadBeforeCommit)
 		}
 
 		// Reset must be recorded in the event log with score-at-reset
@@ -426,7 +430,7 @@ func TestHandleBashCommit(t *testing.T) {
 		}
 	})
 
-	t.Run("failed commit does not reset baseline", func(t *testing.T) {
+	t.Run("rejected commit (HEAD unmoved) does not reset baseline", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
 
@@ -440,14 +444,15 @@ func TestHandleBashCommit(t *testing.T) {
 			t.Fatalf("Failed to create session: %v", err)
 		}
 		sess.Score = 100
+		sess.HeadBeforeCommit = GetHeadCommit()
 		sess.Save()
 
+		// No commit performed: HEAD stays put (as after a pre-commit rejection)
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'rejected'"},
-			ToolResult:    json.RawMessage(`"pre-commit hook failed: lint errors\nerror: commit aborted"`),
+			ToolInput:     &ToolInput{Command: "git diff --stat && git commit -m 'rejected'"},
 		}
 
 		if exitCode := PostToolUse(input); exitCode != 0 {
@@ -461,9 +466,12 @@ func TestHandleBashCommit(t *testing.T) {
 		if reloaded.Score != 100 {
 			t.Errorf("Score = %d, want 100 (unchanged)", reloaded.Score)
 		}
+		if reloaded.HeadBeforeCommit != "" {
+			t.Errorf("HeadBeforeCommit = %q, want cleared after the attempt", reloaded.HeadBeforeCommit)
+		}
 	})
 
-	t.Run("commit with no tool result does not reset baseline", func(t *testing.T) {
+	t.Run("commit without recorded pre-HEAD does not reset baseline", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
 
@@ -471,22 +479,22 @@ func TestHandleBashCommit(t *testing.T) {
 		defer os.Chdir(origDir)
 		os.Chdir(tmpDir)
 
-		sessionID := "test-bash-quiet-commit"
+		sessionID := "test-bash-no-prehead"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
-		sess.Save()
+		sess.Save() // HeadBeforeCommit never recorded
 
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -q -m 'quiet'"},
+			ToolInput:     &ToolInput{Command: "git commit -m 'unproven'"},
 		}
 
 		PostToolUse(input)
 		reloaded, _ := state.Load(sessionID)
 		if reloaded.BaselineTree != "old-tree-sha" {
-			t.Errorf("BaselineTree = %q, want unchanged (no success evidence)", reloaded.BaselineTree)
+			t.Errorf("BaselineTree = %q, want unchanged (no evidence)", reloaded.BaselineTree)
 		}
 	})
 
@@ -503,14 +511,16 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-human-policy"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
+		sess.HeadBeforeCommit = GetHeadCommit()
 		sess.Save()
+
+		gitCommit(t, "--allow-empty", "-m", "ok") // HEAD moves: real evidence
 
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
 			ToolInput:     &ToolInput{Command: "git commit -m 'ok'"},
-			ToolResult:    json.RawMessage(`"[main abc1234] ok\n 1 file changed, 1 insertion(+)"`),
 		}
 
 		PostToolUse(input)
@@ -536,14 +546,16 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-noverify"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
+		sess.HeadBeforeCommit = GetHeadCommit()
 		sess.Save()
+
+		gitCommit(t, "--allow-empty", "--no-verify", "-m", "sneaky")
 
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
 			ToolInput:     &ToolInput{Command: "git commit --no-verify -m 'sneaky'"},
-			ToolResult:    json.RawMessage(`"[main abc1234] sneaky\n 1 file changed, 1 insertion(+)"`),
 		}
 
 		PostToolUse(input)
@@ -566,20 +578,64 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-verified-ok"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
+		sess.HeadBeforeCommit = GetHeadCommit()
 		sess.Save()
+
+		gitCommit(t, "--allow-empty", "-m", "clean")
 
 		input := &HookInput{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
 			ToolInput:     &ToolInput{Command: "git commit -m 'clean'"},
-			ToolResult:    json.RawMessage(`"[main abc1234] clean\n 1 file changed, 1 insertion(+)"`),
 		}
 
 		PostToolUse(input)
 		reloaded, _ := state.Load(sessionID)
 		if reloaded.BaselineTree == "old-tree-sha" {
 			t.Errorf("BaselineTree unchanged, want reset for verified commit")
+		}
+	})
+
+	t.Run("PreToolUse records HEAD for commit-shaped Bash commands", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		origDir, _ := os.Getwd()
+		defer os.Chdir(origDir)
+		os.Chdir(tmpDir)
+
+		sessionID := "test-pre-records-head"
+		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
+		sess.Save()
+
+		input := &HookInput{
+			HookEventName: "PreToolUse",
+			ToolName:      "Bash",
+			SessionID:     sessionID,
+			ToolInput:     &ToolInput{Command: "git commit -m 'about to run'"},
+		}
+		if exitCode := PreToolUse(input); exitCode != 0 {
+			t.Errorf("PreToolUse(Bash commit) = %d, want 0 (never blocks Bash)", exitCode)
+		}
+
+		reloaded, _ := state.Load(sessionID)
+		if reloaded.HeadBeforeCommit != GetHeadCommit() {
+			t.Errorf("HeadBeforeCommit = %q, want current HEAD %q", reloaded.HeadBeforeCommit, GetHeadCommit())
+		}
+
+		// Non-commit Bash must not record
+		sess2, _ := state.New("test-pre-no-record", "old-tree-sha", "main", 400)
+		sess2.Save()
+		PreToolUse(&HookInput{
+			HookEventName: "PreToolUse",
+			ToolName:      "Bash",
+			SessionID:     "test-pre-no-record",
+			ToolInput:     &ToolInput{Command: "git status"},
+		})
+		reloaded2, _ := state.Load("test-pre-no-record")
+		if reloaded2.HeadBeforeCommit != "" {
+			t.Errorf("HeadBeforeCommit = %q for non-commit command, want empty", reloaded2.HeadBeforeCommit)
 		}
 	})
 

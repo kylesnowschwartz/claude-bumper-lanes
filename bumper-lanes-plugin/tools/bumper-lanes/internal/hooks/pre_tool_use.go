@@ -53,6 +53,10 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	switch input.ToolName {
 	case "Write", "Edit", "MultiEdit", "NotebookEdit":
 		// Proceed with threshold check
+	case "Bash":
+		// Never blocked; only used to record commit evidence.
+		recordHeadBeforeCommit(input, log)
+		return 0
 	default:
 		return 0
 	}
@@ -176,6 +180,27 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	}
 
 	return 0 // Exit 0 for JSON output
+}
+
+// recordHeadBeforeCommit stores HEAD ahead of a commit-shaped Bash command,
+// so PostToolUse can prove the commit landed by seeing HEAD move. Regex on
+// the command only decides whether to record; the reset decision itself
+// rests on HEAD evidence, never on output scraping.
+func recordHeadBeforeCommit(input *HookInput, log *logging.Logger) {
+	if input.ToolInput == nil || !gitCommitPattern.MatchString(input.ToolInput.Command) {
+		return
+	}
+	if !IsGitRepo() {
+		return
+	}
+	sess, err := state.Load(input.SessionID)
+	if err != nil {
+		return // No session - nothing to reset later anyway
+	}
+	sess.HeadBeforeCommit = GetHeadCommit()
+	if err := sess.Save(); err != nil {
+		log.Warn("failed to record pre-commit HEAD: %v", err)
+	}
 }
 
 // formatBlockReason creates the denial message shown to Claude.

@@ -29,6 +29,12 @@ type SessionState struct {
 	ViewMode            string `json:"view_mode,omitempty"`
 	ViewOpts            string `json:"view_opts,omitempty"`              // Additional flags like "--width 100"
 	ShowDiffVizOverride *bool  `json:"show_diff_viz_override,omitempty"` // nil=use config, true=force show
+
+	// HeadBeforeCommit is the HEAD commit SHA recorded by PreToolUse when a
+	// commit-shaped Bash command is about to run ("none" on an unborn branch).
+	// PostToolUse treats a moved HEAD as the evidence that the commit
+	// succeeded. Empty means no commit is pending.
+	HeadBeforeCommit string `json:"head_before_commit,omitempty"`
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -152,6 +158,41 @@ func New(sessionID, baselineTree, baselineBranch string, thresholdLimit int) (*S
 		StopTriggered:  false,
 		Paused:         false,
 	}, nil
+}
+
+// LoadLatest reads the most recently modified session state in the
+// checkpoint directory. Used by CLI commands that run without a session id
+// (e.g. `bumper-lanes budget` invoked from Claude's Bash tool).
+func LoadLatest() (*SessionState, error) {
+	checkpointDir, err := GetCheckpointDir()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(checkpointDir)
+	if err != nil {
+		return nil, ErrNoSession
+	}
+
+	var latestID string
+	var latestMod time.Time
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "session-") || strings.HasSuffix(name, ".tmp") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestMod) {
+			latestMod = info.ModTime()
+			latestID = strings.TrimPrefix(name, "session-")
+		}
+	}
+	if latestID == "" {
+		return nil, ErrNoSession
+	}
+	return Load(latestID)
 }
 
 // Delete removes the session state file.
