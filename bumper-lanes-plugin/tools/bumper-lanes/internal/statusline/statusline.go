@@ -104,43 +104,58 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	parts = append(parts, fmt.Sprintf("%s%s%s", colorCost, cost, colorReset))
 
 	// Bumper-lanes widget (if active)
-	var stateStr string
-	var score, limit, percentage int
-	var bumperIndicator string
-
-	sess, err := state.Load(input.SessionID)
-	if err == nil {
-		score = sess.Score
-		limit = sess.ThresholdLimit
-		if limit > 0 {
-			percentage = (score * 100) / limit
-		}
-
-		// Determine state
-		if sess.ThresholdLimit == 0 {
-			stateStr = "disabled"
-		} else if sess.Paused {
-			stateStr = "paused"
-		} else if sess.StopTriggered {
-			stateStr = "tripped"
-		} else {
-			stateStr = "active"
-		}
-
-		bumperIndicator = formatBumperStatus(stateStr, percentage, len(sess.Tripwires) > 0, sess.NetLines)
-		parts = append(parts, bumperIndicator)
+	out := renderBumperWidget(input.SessionID)
+	if out.BumperIndicator != "" {
+		parts = append(parts, out.BumperIndicator)
 	}
+	out.StatusLine = strings.Join(parts, " | ")
 
 	log.Debug("render completed in %v", time.Since(start))
+	return out, nil
+}
 
-	return &StatusOutput{
-		StatusLine:      strings.Join(parts, " | "),
-		BumperIndicator: bumperIndicator,
-		State:           stateStr,
-		Score:           score,
-		Limit:           limit,
-		Percentage:      percentage,
-	}, nil
+// RenderIndicator produces only the bumper gauge from cached session state.
+// This is the path generated statusline wrappers call per refresh: it skips
+// the model/branch/cost widgets, so the only git subprocess is the git-dir
+// lookup inside state.Load.
+func RenderIndicator(input *StatusInput) (*StatusOutput, error) {
+	if input.Workspace.CurrentDir != "" {
+		origDir, _ := os.Getwd()
+		if err := os.Chdir(input.Workspace.CurrentDir); err == nil {
+			defer os.Chdir(origDir)
+		}
+	}
+	return renderBumperWidget(input.SessionID), nil
+}
+
+// renderBumperWidget formats the gauge from cached session state only.
+func renderBumperWidget(sessionID string) *StatusOutput {
+	out := &StatusOutput{}
+
+	sess, err := state.Load(sessionID)
+	if err != nil {
+		return out
+	}
+
+	out.Score = sess.Score
+	out.Limit = sess.ThresholdLimit
+	if out.Limit > 0 {
+		out.Percentage = (out.Score * 100) / out.Limit
+	}
+
+	// Determine state
+	if sess.ThresholdLimit == 0 {
+		out.State = "disabled"
+	} else if sess.Paused {
+		out.State = "paused"
+	} else if sess.StopTriggered {
+		out.State = "tripped"
+	} else {
+		out.State = "active"
+	}
+
+	out.BumperIndicator = formatBumperStatus(out.State, out.Percentage, len(sess.Tripwires) > 0, sess.NetLines)
+	return out
 }
 
 // getGitBranch returns current branch name or empty string.

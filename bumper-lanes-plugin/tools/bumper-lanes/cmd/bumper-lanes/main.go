@@ -226,7 +226,18 @@ func cmdStatus(args []string) error {
 		return err
 	}
 
-	output, err := statusline.Render(input)
+	// Pre-v4 wrappers still ask for the removed diff-tree widget: output
+	// nothing without paying for a render.
+	if widget == "diff-tree" {
+		return nil
+	}
+
+	// The indicator widget skips the model/branch/cost work entirely.
+	render := statusline.Render
+	if widget == statusline.WidgetIndicator {
+		render = statusline.RenderIndicator
+	}
+	output, err := render(input)
 	if err != nil {
 		return err
 	}

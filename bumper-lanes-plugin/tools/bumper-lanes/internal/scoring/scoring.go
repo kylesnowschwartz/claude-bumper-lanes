@@ -15,7 +15,7 @@ type WeightedScore struct {
 	EditAdditions  int `json:"edit_additions"` // Lines added in edited files
 	FilesTouched   int `json:"files_touched"`  // Number of files changed
 	ScatterPenalty int `json:"scatter"`        // Penalty for touching many files
-	NetLines       int `json:"net_lines"`      // Additions minus deletions across the whole diff
+	NetLines       int `json:"net_lines"`      // Additions minus deletions, excluding generated files
 }
 
 // Scoring constants (match threshold-calculator.sh)
@@ -68,13 +68,14 @@ func isGenerated(path string) bool {
 // Generated files (lockfiles, codegen, vendored) score zero: their churn
 // is mechanical, and billing it is how gates get uninstalled.
 func Calculate(stats *diff.StatsJSON) *WeightedScore {
-	var newAdd, editAdd int
+	var newAdd, editAdd, netLines int
 	var filesWithAdditions int // Only count files that add lines (not pure deletions)
 
 	for _, f := range stats.Files {
 		if isGenerated(f.Path) {
 			continue
 		}
+		netLines += f.Adds - f.Dels
 		if f.Adds > 0 {
 			filesWithAdditions++
 			if f.New {
@@ -104,6 +105,6 @@ func Calculate(stats *diff.StatsJSON) *WeightedScore {
 		EditAdditions:  editAdd,
 		FilesTouched:   filesWithAdditions, // Only files with additions
 		ScatterPenalty: scatter,
-		NetLines:       stats.Totals.Adds - stats.Totals.Dels,
+		NetLines:       netLines,
 	}
 }

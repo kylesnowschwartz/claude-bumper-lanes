@@ -171,7 +171,7 @@ bumper-lanes status --widget=all
 bumper-lanes status --widget=indicator
 ```
 
-The gauge appends a red `⚠` when a tripwire fired this increment and a green line count (e.g. `-42 lines`) when the increment is net-negative. Both read cached session state — no git calls on the statusline path.
+The gauge appends a red `⚠` when a tripwire fired this increment and a green line count (e.g. `-42 lines`) when the increment is net-negative. The indicator widget reads cached session state only — no branch/dirty/diff git calls (just the git-dir lookup inside state load); the full `all` line additionally runs the cheap branch and dirty checks. Net lines exclude generated files, matching the scorer.
 
 ### Custom Status Line Example
 

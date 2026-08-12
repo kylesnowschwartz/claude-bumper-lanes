@@ -110,6 +110,7 @@ func handleReset(sessionID string) int {
 	sess.Score = 0
 	sess.NetLines = 0
 	sess.StopTriggered = false
+	sess.Tripwires = nil
 	if !saveOrBlock(sess) {
 		return 0
 	}
@@ -176,7 +177,11 @@ func handleDiff(sessionID string) int {
 		return 0
 	}
 
-	rendered := renderBaselineDiff(sess.BaselineTree)
+	rendered, err := renderBaselineDiff(sess.BaselineTree)
+	if err != nil {
+		blockPrompt(fmt.Sprintf("Error rendering diff: %v", err))
+		return 0
+	}
 	if rendered == "" {
 		blockPrompt("No changes against the review baseline.")
 		return 0
@@ -190,11 +195,16 @@ func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
 		threshold := config.LoadThreshold()
-		configPath := config.GetConfigPath()
 
+		// Attribute the source by which config files exist (repo overrides
+		// global), matching ConfigShow - an explicit value equal to the
+		// default is still attributed to its file.
 		source := "default"
-		if configPath != "" && (threshold != config.DefaultThreshold || threshold == 0) {
-			source = configPath
+		if globalPath := config.GetGlobalConfigPath(); globalPath != "" && fileExists(globalPath) {
+			source = globalPath
+		}
+		if repoPath := config.GetConfigPath(); repoPath != "" && fileExists(repoPath) {
+			source = repoPath
 		}
 
 		var thresholdStr string
