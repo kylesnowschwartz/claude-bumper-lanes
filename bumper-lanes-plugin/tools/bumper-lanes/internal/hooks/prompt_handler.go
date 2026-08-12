@@ -208,12 +208,9 @@ func handleConfig(sessionID, args string) int {
 		}
 
 		var thresholdStr string
-		switch {
-		case threshold == 0:
+		if threshold == 0 {
 			thresholdStr = "disabled"
-		case threshold >= 1500:
-			thresholdStr = fmt.Sprintf("%d points (near the 2000 cap - trips will be rare)", threshold)
-		default:
+		} else {
 			thresholdStr = fmt.Sprintf("%d points", threshold)
 		}
 
