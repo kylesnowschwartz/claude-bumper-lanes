@@ -1,9 +1,10 @@
-// Package statusline provides a complete status line for Claude Code.
-// Outputs model, git branch, cost, and bumper-lanes widget.
+// Package statusline provides a status line for Claude Code.
+// Outputs model, git branch, cost, and the one-line bumper-lanes indicator.
+// Rich diff visualizations live in the diff-viz CLI and the on-demand
+// /bumper-diff command, not in this ambient surface.
 package statusline
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,13 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
-	"github.com/kylesnowschwartz/diff-viz/v2/diff"
-	"github.com/kylesnowschwartz/diff-viz/v2/render"
-
-	diffvizconfig "github.com/kylesnowschwartz/diff-viz/v2/config"
 )
 
 // StatusInput is the JSON payload from Claude Code's status line hook.
@@ -39,10 +35,8 @@ type StatusInput struct {
 type StatusOutput struct {
 	// StatusLine is the full status text (model | dir | branch | cost | bumper)
 	StatusLine string
-	// BumperIndicator is just the bumper-lanes piece (e.g., "active (125/400 - 31%)")
+	// BumperIndicator is just the bumper-lanes piece (e.g., "▂ 31%")
 	BumperIndicator string
-	// DiffTree is the multi-line diff visualization (may be empty)
-	DiffTree string
 	// State is the bumper-lanes state: "active", "tripped", "paused", or "" (inactive)
 	State string
 	// Score is the current diff score
@@ -66,6 +60,9 @@ const (
 
 // Render produces a complete status line from Claude Code's status input.
 // Returns StatusOutput with formatted text ready for display.
+// The bumper indicator uses the cached session score: it is recomputed from
+// the baseline diff on every Write/Edit and Stop, which keeps the line
+// truthful without paying a working-tree capture (~60-110ms) per refresh.
 func Render(input *StatusInput) (*StatusOutput, error) {
 	start := time.Now()
 	log := logging.New(input.SessionID, "statusline")
@@ -109,12 +106,10 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	// Bumper-lanes widget (if active)
 	var stateStr string
 	var score, limit, percentage int
-	var diffTree string
 	var bumperIndicator string
 
 	sess, err := state.Load(input.SessionID)
 	if err == nil {
-		// Use cached score (updated by PostToolUse hook on Write/Edit)
 		score = sess.Score
 		limit = sess.ThresholdLimit
 		if limit > 0 {
@@ -132,22 +127,8 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 			stateStr = "active"
 		}
 
-		// Get view mode (needed for both indicator and diff tree)
-		viewMode := sess.GetViewMode()
-		if viewMode == "" {
-			viewMode = config.LoadViewMode()
-		}
-
-		// Format bumper indicator (capture for both full line and standalone use)
-		// viewMode included to force status line refresh when mode changes
-		bumperIndicator = formatBumperStatus(stateStr, score, limit, percentage, viewMode, len(sess.Tripwires) > 0)
+		bumperIndicator = formatBumperStatus(stateStr, percentage, len(sess.Tripwires) > 0, sess.NetLines)
 		parts = append(parts, bumperIndicator)
-
-		// Get diff tree visualization (only if should show)
-		if sess.ShouldShowDiffViz() {
-			viewOpts := sess.GetViewOpts()
-			diffTree = getDiffTree(viewMode, viewOpts)
-		}
 	}
 
 	log.Debug("render completed in %v", time.Since(start))
@@ -155,7 +136,6 @@ func Render(input *StatusInput) (*StatusOutput, error) {
 	return &StatusOutput{
 		StatusLine:      strings.Join(parts, " | "),
 		BumperIndicator: bumperIndicator,
-		DiffTree:        diffTree,
 		State:           stateStr,
 		Score:           score,
 		Limit:           limit,
@@ -180,35 +160,33 @@ func isGitDirty() bool {
 	return err != nil // non-zero exit = dirty
 }
 
-// formatBumperStatus produces a traffic light gauge for bumper-lanes status.
-// Progressive reveal: ▂ green <70%, ▂▄ +yellow 70-90%, ▂▄█ +red >90% or tripped.
-// viewMode is included to force status line refresh when mode changes.
-// hasTripwires appends a red "⚠" marking a high-risk change class in the
-// current increment.
-func formatBumperStatus(stateStr string, score, limit, percentage int, viewMode string, hasTripwires bool) string {
-	if viewMode == "" {
-		viewMode = "tree"
-	}
-
+// formatBumperStatus produces the one-line bumper-lanes indicator.
+// Progressive traffic light: ▂ green <70%, ▂▄ +yellow 70-90%, ▂▄█ +red >90%
+// or tripped. A red ⚠ marks tripwire hits in the current increment. A
+// net-negative increment (tree shrank) is shown in green: subtraction is
+// rewarded with visibility, never with spendable budget.
+func formatBumperStatus(stateStr string, percentage int, hasTripwires bool, netLines int) string {
 	tripwireGlyph := ""
 	if hasTripwires {
 		tripwireGlyph = fmt.Sprintf(" %s⚠%s", colorRed, colorReset)
 	}
+	netGlyph := ""
+	if netLines < 0 {
+		netGlyph = fmt.Sprintf(" %s%d lines%s", colorGreen, netLines, colorReset)
+	}
 
 	// Disabled state shows text in blue
 	if stateStr == "disabled" {
-		return fmt.Sprintf("%sDisabled%s [%s]", colorBlue, colorReset, viewMode)
+		return fmt.Sprintf("%sDisabled%s", colorBlue, colorReset)
 	}
 
 	// Paused state shows text instead of bar
 	if stateStr == "paused" {
-		return fmt.Sprintf("%sPaused%s%s [%s]", colorYellow, colorReset, tripwireGlyph, viewMode)
+		return fmt.Sprintf("%sPaused%s%s", colorYellow, colorReset, tripwireGlyph)
 	}
 
-	// Build 5-char traffic light bar
 	bar := formatTrafficLightBar(percentage, stateStr == "tripped")
-
-	return fmt.Sprintf("%s%s [%s]", bar, tripwireGlyph, viewMode)
+	return bar + tripwireGlyph + netGlyph
 }
 
 // formatTrafficLightBar returns a colored traffic light gauge with percentage.
@@ -246,112 +224,6 @@ func formatTrafficLightBar(percentage int, tripped bool) string {
 	return fmt.Sprintf("%s %d%%", bar, percentage)
 }
 
-// getDiffTree uses diff-viz library to render the tree visualization.
-// Uses diff-viz config system for per-mode defaults from .bumper-lanes.json.
-func getDiffTree(viewMode, viewOpts string) string {
-	if viewMode == "" {
-		viewMode = "tree"
-	}
-
-	// Get current diff stats (working tree vs HEAD)
-	stats, _, err := diff.GetAllStats()
-	if err != nil || stats.TotalFiles == 0 {
-		return ""
-	}
-
-	// Load diff-viz config from .bumper-lanes.json (ignores bumper-specific fields)
-	configPath := config.GetConfigPath()
-	cfg, _ := diffvizconfig.Load(configPath) // nil cfg is fine, Resolve handles it
-
-	// Parse CLI-style overrides from viewOpts (legacy support)
-	var cliFlags *diffvizconfig.ModeConfig
-	if viewOpts != "" {
-		cliFlags = &diffvizconfig.ModeConfig{}
-		for _, opt := range strings.Fields(viewOpts) {
-			if strings.HasPrefix(opt, "--width=") {
-				var w int
-				fmt.Sscanf(opt, "--width=%d", &w)
-				cliFlags.Width = &w
-			} else if strings.HasPrefix(opt, "--depth=") {
-				var d int
-				fmt.Sscanf(opt, "--depth=%d", &d)
-				cliFlags.Depth = &d
-			} else if strings.HasPrefix(opt, "--expand=") {
-				var e int
-				fmt.Sscanf(opt, "--expand=%d", &e)
-				cliFlags.Expand = &e
-			}
-		}
-	}
-
-	// Resolve config: global defaults < mode defaults < config file < CLI flags
-	resolved := cfg.Resolve(viewMode, cliFlags)
-
-	// Render to buffer
-	var buf bytes.Buffer
-	useColor := true
-	renderer := getRenderer(viewMode, &buf, useColor, resolved)
-	renderer.Render(stats)
-
-	// Trim trailing whitespace, preserve leading
-	result := strings.TrimRight(buf.String(), " \t\n\r")
-	if result == "No changes" {
-		return ""
-	}
-	return result
-}
-
-// diffRenderer is a local interface matching diff-viz's renderer pattern.
-type diffRenderer interface {
-	Render(stats *diff.DiffStats)
-}
-
-// getRenderer returns the appropriate renderer for the given mode.
-// Uses resolved config from diff-viz config system for per-mode settings.
-func getRenderer(mode string, buf *bytes.Buffer, useColor bool, cfg diffvizconfig.ResolvedConfig) diffRenderer {
-	switch mode {
-	case "tree":
-		return render.NewTreeRenderer(buf, useColor)
-	case "smart":
-		r := render.NewSmartSparklineRenderer(buf, useColor)
-		r.Width = cfg.Width
-		r.MaxDepth = cfg.Depth
-		return r
-	case "sparkline-tree":
-		r := render.NewSparklineTreeRenderer(buf, useColor)
-		r.MaxDepth = cfg.Depth
-		r.N = cfg.N
-		return r
-	case "hotpath":
-		r := render.NewHotpathRenderer(buf, useColor)
-		r.MaxDepth = cfg.Depth
-		return r
-	case "icicle":
-		r := render.NewIcicleRenderer(buf, useColor)
-		r.Width = cfg.Width
-		r.MaxDepth = cfg.Depth
-		return r
-	case "brackets":
-		r := render.NewBracketsRenderer(buf, useColor)
-		r.Width = cfg.Width
-		r.ExpandDepth = cfg.Expand
-		return r
-	case "gauge":
-		r := render.NewGaugeRenderer(buf, useColor)
-		r.Width = cfg.Width
-		return r
-	case "depth":
-		r := render.NewDepthRenderer(buf, useColor)
-		r.MaxDepth = cfg.Depth
-		r.Width = cfg.Width
-		return r
-	case "stat":
-		return render.NewStatRenderer(buf, nil)
-	default:
-		return render.NewTreeRenderer(buf, useColor)
-	}
-}
-
 // ParseInput parses JSON input from stdin.
 func ParseInput(data []byte) (*StatusInput, error) {
 	var input StatusInput
@@ -363,26 +235,26 @@ func ParseInput(data []byte) (*StatusInput, error) {
 
 // Widget types for selective output.
 const (
-	WidgetAll       = "all"       // Full status line + diff tree (default)
+	WidgetAll       = "all"       // Full status line (default)
 	WidgetIndicator = "indicator" // Just the bumper-lanes indicator
-	WidgetDiffTree  = "diff-tree" // Just the diff visualization
 )
 
 // FormatOutput converts StatusOutput to the final string output.
-// Widget selects which component to output: "all", "indicator", or "diff-tree".
-// Applies non-breaking space conversion for Claude Code compatibility.
+// Widget selects which component to output: "all" or "indicator".
+// "diff-tree" is accepted for wrappers generated before v4 and returns
+// nothing: the visualization moved to the /bumper-diff command.
 func FormatOutput(out *StatusOutput, widget string) string {
 	switch widget {
 	case WidgetIndicator:
 		return out.FormatIndicator()
-	case WidgetDiffTree:
-		return out.FormatDiffTree()
+	case "diff-tree":
+		return ""
 	default:
 		return out.FormatAll()
 	}
 }
 
-// FormatIndicator returns just the bumper-lanes indicator (e.g., "active (125/400 - 31%)").
+// FormatIndicator returns just the bumper-lanes indicator (e.g., "▂ 31%").
 func (out *StatusOutput) FormatIndicator() string {
 	if out.BumperIndicator == "" {
 		return ""
@@ -390,41 +262,10 @@ func (out *StatusOutput) FormatIndicator() string {
 	return out.BumperIndicator + "\n"
 }
 
-// FormatDiffTree returns just the diff visualization with non-breaking space handling.
-func (out *StatusOutput) FormatDiffTree() string {
-	if out.DiffTree == "" {
-		return ""
-	}
-	return formatDiffTreeLines(out.DiffTree)
-}
-
-// FormatAll returns the full status line plus diff tree.
+// FormatAll returns the full status line.
 func (out *StatusOutput) FormatAll() string {
 	if out.StatusLine == "" {
 		return ""
 	}
-
-	var result strings.Builder
-	result.WriteString(out.StatusLine)
-	result.WriteString("\n")
-
-	if out.DiffTree != "" {
-		result.WriteString(formatDiffTreeLines(out.DiffTree))
-	}
-
-	return result.String()
-}
-
-// formatDiffTreeLines applies non-breaking space conversion for Claude Code compatibility.
-func formatDiffTreeLines(diffTree string) string {
-	var result strings.Builder
-	lines := strings.Split(diffTree, "\n")
-	for _, line := range lines {
-		// Replace spaces with non-breaking space (U+00A0)
-		line = strings.ReplaceAll(line, " ", "\u00A0")
-		result.WriteString("\033[0m")
-		result.WriteString(line)
-		result.WriteString("\n")
-	}
-	return result.String()
+	return out.StatusLine + "\n"
 }

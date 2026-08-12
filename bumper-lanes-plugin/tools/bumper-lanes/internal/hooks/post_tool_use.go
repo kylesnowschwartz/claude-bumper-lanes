@@ -180,6 +180,7 @@ func handleWriteEdit(input *HookInput) int {
 
 	// Update state with fresh score (and any new tripwires)
 	sess.SetScore(freshScore)
+	sess.NetLines = result.NetLines
 	sess.Save()
 
 	var messages []string

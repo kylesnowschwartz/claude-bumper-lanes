@@ -96,9 +96,9 @@ See the **hook-intercept-block** skill for full documentation on implementing ne
 | Command | Statusline Refresh |
 |---------|-------------------|
 | `/bumper-pause` (no arg) | Immediate (~20ms) |
-| `/bumper-view tree` (with arg) | Delayed until user interaction |
+| `/bumper-config 300` (with arg) | Delayed until user interaction |
 
-**Workaround**: Use separate no-arg commands for each option (e.g., `/bumper-tree`, `/bumper-icicle`) instead of a single command with arguments (`/bumper-view <mode>`).
+**Workaround**: Prefer no-arg commands where the option set is small.
 
 **Tracked**: [anthropics/claude-code#15275](https://github.com/anthropics/claude-code/issues/15275)
 
@@ -120,9 +120,6 @@ Config files (in precedence order):
 ```json
 {
   "threshold": 600,
-  "default_view_mode": "tree",
-  "default_view_opts": "--width 80 --depth 3",
-  "show_diff_viz": true,
   "statusline_auto_setup": false,
   "reset_on": "commit",
   "tripwire_paths": [".github/workflows/**", "go.mod", "..."],
@@ -131,16 +128,13 @@ Config files (in precedence order):
 ```
 
 - `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 600). Run `/bumper-reset` after changing.
-- `default_view_mode`: Visualization mode (default: tree)
-- `default_view_opts`: Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`)
-- `show_diff_viz`: Show diff visualization in status line (default: true)
 - `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
 - `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Omit for defaults (`config.DefaultTripwirePaths`/`DefaultTripwirePatterns`); empty list disables. Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
 
-### Viz-Only Mode (Global)
+### Disabling Globally
 
-For diff visualization without threshold enforcement across all repos:
+To disable enforcement across all repos:
 
 ```bash
 mkdir -p ~/.config/bumper-lanes
@@ -153,7 +147,7 @@ Individual repos can override with their own `.bumper-lanes.json`.
 
 ```
 bumper-lanes-plugin/
-├── bin/               # Built binaries (bumper-lanes, git-diff-tree)
+├── bin/               # Built binary (bumper-lanes)
 ├── tools/
 │   └── bumper-lanes/  # Hook handler and commands (Go)
 ├── commands/          # Slash command definitions
@@ -170,15 +164,14 @@ The `bumper-lanes status` command supports modular widgets for integration with 
 ### Widget Modes
 
 ```bash
-# Full output: status line + diff visualization (default)
+# Full status line: model | dir | branch | cost | bumper gauge (default)
 bumper-lanes status --widget=all
 
-# Just the threshold gauge: "active (125/400 - 31%)"
+# Just the bumper gauge: traffic-light bar + percentage
 bumper-lanes status --widget=indicator
-
-# Just the diff tree visualization
-bumper-lanes status --widget=diff-tree
 ```
+
+The gauge appends a red `⚠` when a tripwire fired this increment and a green line count (e.g. `-42 lines`) when the increment is net-negative. Both read cached session state — no git calls on the statusline path.
 
 ### Custom Status Line Example
 
@@ -203,28 +196,15 @@ The `statusline.StatusOutput` struct exposes components for Go integrations:
 ```go
 type StatusOutput struct {
     StatusLine      string // Full line: model | dir | branch | cost | bumper
-    BumperIndicator string // Just: "active (125/400 - 31%)"
-    DiffTree        string // The visualization
-    State           string // "active", "tripped", "paused", or ""
+    BumperIndicator string // Just the gauge, e.g. "▂ 31%"
+    State           string // "active", "tripped", "paused", "disabled", or ""
     Score, Limit, Percentage int
 }
 ```
 
 ## Diff Visualization
 
-Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library dependency.
-
-### Available Modes (diff-viz v2.4.0)
-
-- `tree` - Indented file tree with +/- stats (default)
-- `smart` - Multi-column table sorted by magnitude
-- `sparkline-tree` - Rainbow sidebar tree with sparkline bars
-- `hotpath` - Hot trail view (follows largest child at each level)
-- `icicle` - Horizontal area chart
-- `brackets` - Nested `[dir file]` single-line
-- `gauge` - Progress gauge showing change magnitude
-- `depth` - Nested gauges showing change distribution by depth
-- `stat` - Native git diff --stat output
+Diff calculation and the on-demand `/bumper-diff` tree render are provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library dependency. `/bumper-diff` renders the working tree vs the review baseline (fixed tree mode, no color) directly in the transcript. Rich standalone modes live in the diff-viz CLI (`git-diff-tree`), which is no longer bundled with the plugin.
 
 ### Updating diff-viz
 

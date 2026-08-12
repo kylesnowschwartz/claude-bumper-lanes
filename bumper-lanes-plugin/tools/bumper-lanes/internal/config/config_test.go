@@ -40,45 +40,13 @@ func TestConfigLoading(t *testing.T) {
 		}
 	})
 
-	t.Run("view mode loading", func(t *testing.T) {
-		os.Remove(repoPath)
-
-		// Default
-		if got := LoadViewMode(); got != DefaultViewMode {
-			t.Errorf("LoadViewMode() = %q, want %q (default)", got, DefaultViewMode)
-		}
-
-		// Config overrides default
-		os.WriteFile(repoPath, []byte(`{"default_view_mode": "sparkline-tree"}`), 0644)
-		defer os.Remove(repoPath)
-		if got := LoadViewMode(); got != "sparkline-tree" {
-			t.Errorf("LoadViewMode() = %q, want %q (config)", got, "sparkline-tree")
-		}
-	})
-
-	t.Run("invalid view mode falls through to default", func(t *testing.T) {
-		os.WriteFile(repoPath, []byte(`{"default_view_mode": "INVALID"}`), 0644)
+	t.Run("unknown keys are ignored", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"threshold": 200, "default_view_mode": "sparkline-tree"}`), 0644)
 		defer os.Remove(repoPath)
 
-		got := LoadViewMode()
-		if got != DefaultViewMode {
-			t.Errorf("LoadViewMode() = %q, want %q (invalid should use default)", got, DefaultViewMode)
-		}
-	})
-
-	t.Run("view opts loading", func(t *testing.T) {
-		os.Remove(repoPath)
-
-		// Default is empty
-		if got := LoadViewOpts(); got != "" {
-			t.Errorf("LoadViewOpts() = %q, want empty (default)", got)
-		}
-
-		// Config provides opts
-		os.WriteFile(repoPath, []byte(`{"default_view_opts": "--width 80 --depth 3"}`), 0644)
-		defer os.Remove(repoPath)
-		if got := LoadViewOpts(); got != "--width 80 --depth 3" {
-			t.Errorf("LoadViewOpts() = %q, want '--width 80 --depth 3' (config)", got)
+		got := LoadThreshold()
+		if got != 200 {
+			t.Errorf("LoadThreshold() = %d, want 200 (unknown keys ignored)", got)
 		}
 	})
 }
@@ -215,10 +183,10 @@ func TestEmptyRepoNoHEAD(t *testing.T) {
 		}
 	})
 
-	t.Run("LoadViewMode succeeds without HEAD", func(t *testing.T) {
-		got := LoadViewMode()
-		if got != DefaultViewMode {
-			t.Errorf("LoadViewMode() = %q, want %q", got, DefaultViewMode)
+	t.Run("LoadResetOn succeeds without HEAD", func(t *testing.T) {
+		got := LoadResetOn()
+		if got != DefaultResetOn {
+			t.Errorf("LoadResetOn() = %q, want %q", got, DefaultResetOn)
 		}
 	})
 
@@ -254,45 +222,12 @@ func setupGitRepo(t *testing.T, dir string) {
 	}
 }
 
-func TestIsValidMode(t *testing.T) {
-	tests := []struct {
-		mode  string
-		valid bool
-	}{
-		// Valid modes (diff-viz v2.0.0)
-		{"tree", true},
-		{"smart", true},
-		{"sparkline-tree", true},
-		{"hotpath", true},
-		{"icicle", true},
-		{"brackets", true},
-		{"gauge", true},
-		{"depth", true},
-		{"stat", true},
-		// Removed modes (no longer valid)
-		{"collapsed", false},
-		{"topn", false},
-		// Other invalid
-		{"invalid", false},
-		{"", false},
-		{"TREE", false}, // case sensitive
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.mode, func(t *testing.T) {
-			if got := isValidMode(tt.mode); got != tt.valid {
-				t.Errorf("isValidMode(%q) = %v, want %v", tt.mode, got, tt.valid)
-			}
-		})
-	}
-}
-
 func TestLoadConfigFile(t *testing.T) {
 	// Create temp config file
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test-config.json")
 
-	configJSON := `{"threshold": 300, "default_view_mode": "sparkline-tree"}`
+	configJSON := `{"threshold": 300, "reset_on": "human"}`
 	if err := os.WriteFile(configPath, []byte(configJSON), 0644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
@@ -305,8 +240,8 @@ func TestLoadConfigFile(t *testing.T) {
 	if cfg.Threshold == nil || *cfg.Threshold != 300 {
 		t.Errorf("Threshold = %v, want 300", cfg.Threshold)
 	}
-	if cfg.DefaultViewMode != "sparkline-tree" {
-		t.Errorf("DefaultViewMode = %q, want %q", cfg.DefaultViewMode, "sparkline-tree")
+	if cfg.ResetOn != "human" {
+		t.Errorf("ResetOn = %q, want %q", cfg.ResetOn, "human")
 	}
 }
 
@@ -381,19 +316,19 @@ func TestGlobalConfigLoading(t *testing.T) {
 		}
 	})
 
-	t.Run("merge: repo threshold with global view mode", func(t *testing.T) {
-		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100, "default_view_mode": "sparkline-tree"}`), 0644)
-		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644) // only threshold, no view mode
+	t.Run("merge: repo threshold with global reset policy", func(t *testing.T) {
+		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100, "reset_on": "human"}`), 0644)
+		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644) // only threshold, no reset policy
 		defer os.Remove(globalConfigPath)
 		defer os.Remove(repoPath)
 
 		gotThreshold := LoadThreshold()
-		gotMode := LoadViewMode()
+		gotResetOn := LoadResetOn()
 		if gotThreshold != 200 {
 			t.Errorf("LoadThreshold() = %d, want 200 (repo)", gotThreshold)
 		}
-		if gotMode != "sparkline-tree" {
-			t.Errorf("LoadViewMode() = %q, want 'sparkline-tree' (global)", gotMode)
+		if gotResetOn != ResetOnHuman {
+			t.Errorf("LoadResetOn() = %q, want %q (global)", gotResetOn, ResetOnHuman)
 		}
 	})
 

@@ -12,9 +12,9 @@ sequenceDiagram
 
     %% Show current config
     User->>CC: /bumper-config
-    CC->>Config: read threshold
+    CC->>Config: read threshold, reset_on
     Config-->>CC: (may not exist)
-    CC-->>User: Threshold: 400, Source: default
+    CC-->>User: Threshold: 600, Reset policy: commit, Source: default
 
     %% Set threshold (applies immediately)
     User->>CC: /bumper-config 300
@@ -22,39 +22,25 @@ sequenceDiagram
     CC->>Sess: update threshold_limit: 300
     CC-->>User: Threshold set to 300.
 
-    %% === VIEW MODE CONFIGURATION ===
+    %% === ON-DEMAND DIFF VIEW ===
 
-    %% Per-mode command (immediate, no opts)
-    User->>CC: /bumper-tree
-    CC->>Sess: set view_mode: tree
-    CC->>Config: persist default_view_mode: tree
-    CC-->>User: View: tree
-
-    %% View command with opts (both persisted now)
-    User->>CC: /bumper-view icicle --width 80
-    CC->>Sess: set view_mode: icicle, view_opts: --width 80
-    CC->>Config: persist view_mode + view_opts
-    CC-->>User: View mode set to: icicle --width 80
-
-    %% Show current view mode
-    User->>CC: /bumper-view
-    CC->>Sess: get view_mode
-    Sess-->>CC: icicle
-    CC-->>User: Current: icicle. Available: tree, collapsed...
+    %% Render working tree vs review baseline in the transcript
+    User->>CC: /bumper-diff
+    CC->>Sess: get baseline_tree
+    CC-->>User: tree visualization (or "No changes")
 
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - Config load: internal/config/config.go:65-78
-%% - Threshold set: internal/hooks/prompt_handler.go:209-253
-%% - View mode set: internal/hooks/prompt_handler.go:149-207
-%% - View opts storage: internal/state/session.go:29-30
-%% - Persist view: internal/hooks/view.go:63-72
+%% - Config load: internal/config/config.go (loadMergedConfig)
+%% - Threshold set: internal/hooks/prompt_handler.go (setThreshold)
+%% - Diff render: internal/hooks/diffrender.go (renderBaselineDiff)
 %%
 %% CONFIGURATION SURFACE AREA
-%% - Threshold: 50-2000 points (default 400)
-%% - View modes: tree, collapsed, smart, topn, icicle, brackets
-%% - View opts: --width N, --depth N (now persisted!)
+%% - threshold: 0 (disabled) or 50-2000 points (default 600)
+%% - reset_on: commit | verified-commit | human
+%% - statusline_auto_setup: bool (default false)
+%% - tripwire_paths / tripwire_patterns: globs and added-line substrings
 %%
 %% Config file: .bumper-lanes.json at repo root
 %% Users can add to .gitignore if they don't want to track

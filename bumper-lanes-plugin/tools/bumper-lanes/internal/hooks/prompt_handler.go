@@ -18,10 +18,7 @@ import (
 
 // Command patterns - regex only for commands that need capture groups.
 // Simple commands use matchCommand() with string matching for performance.
-var (
-	viewCmdPattern   = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-view\s*(.*)$`)
-	configCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
-)
+var configCmdPattern = regexp.MustCompile(`^/(?:claude-bumper-lanes:)?bumper-config\s*(.*)$`)
 
 // matchCommand checks if prompt matches a bumper-lanes command.
 // Handles both /bumper-X and /claude-bumper-lanes:bumper-X forms.
@@ -66,42 +63,13 @@ func HandlePrompt(input *HookInput) int {
 		return handleResume(sessionID)
 	}
 
-	// Commands with capture groups - use regex
-	if m := viewCmdPattern.FindStringSubmatch(prompt); m != nil {
-		return handleView(sessionID, strings.TrimSpace(m[1]))
-	}
-	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
-		return handleConfig(sessionID, strings.TrimSpace(m[1]))
+	if matchCommand(prompt, "bumper-diff") {
+		return handleDiff(sessionID)
 	}
 
-	// Per-mode commands (no-arg = immediate statusline refresh in Claude Code)
-	// Matches diff-viz v2.4.0 modes: tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, stat
-	if matchCommand(prompt, "bumper-tree") {
-		return handleViewMode(sessionID, "tree")
-	}
-	if matchCommand(prompt, "bumper-smart") {
-		return handleViewMode(sessionID, "smart")
-	}
-	if matchCommand(prompt, "bumper-sparkline-tree") {
-		return handleViewMode(sessionID, "sparkline-tree")
-	}
-	if matchCommand(prompt, "bumper-hotpath") {
-		return handleViewMode(sessionID, "hotpath")
-	}
-	if matchCommand(prompt, "bumper-icicle") {
-		return handleViewMode(sessionID, "icicle")
-	}
-	if matchCommand(prompt, "bumper-brackets") {
-		return handleViewMode(sessionID, "brackets")
-	}
-	if matchCommand(prompt, "bumper-gauge") {
-		return handleViewMode(sessionID, "gauge")
-	}
-	if matchCommand(prompt, "bumper-depth") {
-		return handleViewMode(sessionID, "depth")
-	}
-	if matchCommand(prompt, "bumper-stat") {
-		return handleViewMode(sessionID, "stat")
+	// Commands with capture groups - use regex
+	if m := configCmdPattern.FindStringSubmatch(prompt); m != nil {
+		return handleConfig(sessionID, strings.TrimSpace(m[1]))
 	}
 
 	// No match - let it through, injecting budget context when consumption is high
@@ -140,6 +108,7 @@ func handleReset(sessionID string) int {
 
 	// Reset score FIRST for immediate statusline update
 	sess.Score = 0
+	sess.NetLines = 0
 	sess.StopTriggered = false
 	if !saveOrBlock(sess) {
 		return 0
@@ -198,66 +167,21 @@ func handleResume(sessionID string) int {
 	return 0
 }
 
-// handleView sets or shows the visualization mode.
-// Note: /bumper-view <mode> won't trigger immediate statusline refresh due to Claude Code bug.
-// Use per-mode commands (/bumper-tree, /bumper-icicle, etc.) for instant updates.
-func handleView(sessionID, mode string) int {
-	if mode == "" {
-		// Show current mode + hint
-		currentMode := config.LoadViewMode()
-		blockPrompt(fmt.Sprintf("Current: %s\nModes: %s", currentMode, config.ValidModes))
-		return 0
-	}
-
-	// Validate mode before loading session
-	validModes := strings.Fields(config.ValidModes)
-	isValid := false
-	for _, v := range validModes {
-		if mode == v {
-			isValid = true
-			break
-		}
-	}
-	if !isValid {
-		blockPrompt(fmt.Sprintf("Invalid mode: %s\nValid modes: %s", mode, config.ValidModes))
-		return 0
-	}
-
+// handleDiff prints the diff visualization (working tree vs review
+// baseline) directly in the transcript. On-demand rendering replaces the
+// old always-on statusline visualization and its per-mode command family.
+func handleDiff(sessionID string) int {
 	sess := loadSessionOrBlock(sessionID)
 	if sess == nil {
 		return 0
 	}
 
-	sess.SetViewMode(mode)
-	sess.SetShowDiffVizOverride(true) // Force show for this session
-	if !saveOrBlock(sess) {
+	rendered := renderBaselineDiff(sess.BaselineTree)
+	if rendered == "" {
+		blockPrompt("No changes against the review baseline.")
 		return 0
 	}
-
-	// Persist to config for future sessions
-	_ = config.SaveConfig(config.Config{DefaultViewMode: mode})
-
-	blockPrompt(fmt.Sprintf("View mode set to: %s", mode))
-	return 0
-}
-
-// handleViewMode sets view mode via no-arg command (triggers immediate statusline refresh).
-// This exists because Claude Code only refreshes statusline for no-arg commands.
-// Also forces diff-viz to show for this session (overrides config.show_diff_viz=false).
-func handleViewMode(sessionID, mode string) int {
-	sess := loadSessionOrBlock(sessionID)
-	if sess == nil {
-		return 0
-	}
-
-	sess.SetViewMode(mode)
-	sess.SetShowDiffVizOverride(true) // Force show for this session
-	if !saveOrBlock(sess) {
-		return 0
-	}
-
-	_ = config.SaveConfig(config.Config{DefaultViewMode: mode})
-	blockPrompt(fmt.Sprintf("View: %s", mode))
+	blockPrompt(rendered)
 	return 0
 }
 
@@ -266,7 +190,6 @@ func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
 		threshold := config.LoadThreshold()
-		viewMode := config.LoadViewMode()
 		configPath := config.GetConfigPath()
 
 		source := "default"
@@ -280,7 +203,7 @@ func handleConfig(sessionID, args string) int {
 		} else {
 			thresholdStr = fmt.Sprintf("%d points", threshold)
 		}
-		blockPrompt(fmt.Sprintf("Threshold: %s\nView mode: %s\nSource: %s", thresholdStr, viewMode, source))
+		blockPrompt(fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, config.LoadResetOn(), source))
 		return 0
 	}
 

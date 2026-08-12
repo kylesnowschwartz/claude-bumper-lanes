@@ -62,74 +62,78 @@ func TestParseInput(t *testing.T) {
 
 func TestFormatBumperStatus(t *testing.T) {
 	tests := []struct {
-		name       string
-		state      string
-		score      int
-		limit      int
-		percentage int
-		viewMode   string
-		wantColor  string
-		wantBar    bool // true if expecting traffic light bar
-		wantText   string
+		name         string
+		state        string
+		percentage   int
+		hasTripwires bool
+		netLines     int
+		wantColor    string
+		wantBar      bool // true if expecting traffic light bar
+		wantText     string
 	}{
 		{
 			name:       "active state <70% shows green bar",
 			state:      "active",
-			score:      100,
-			limit:      400,
 			percentage: 25,
-			viewMode:   "tree",
 			wantColor:  colorGreen,
 			wantBar:    true,
 		},
 		{
 			name:       "active state 70-90% shows yellow bar",
 			state:      "active",
-			score:      320,
-			limit:      400,
 			percentage: 80,
-			viewMode:   "tree",
 			wantColor:  colorYellow,
 			wantBar:    true,
 		},
 		{
 			name:       "active state >90% shows red bar",
 			state:      "active",
-			score:      380,
-			limit:      400,
 			percentage: 95,
-			viewMode:   "tree",
 			wantColor:  colorRed,
 			wantBar:    true,
 		},
 		{
 			name:       "tripped state shows red bar",
 			state:      "tripped",
-			score:      450,
-			limit:      400,
 			percentage: 112,
-			viewMode:   "icicle",
 			wantColor:  colorRed,
 			wantBar:    true,
 		},
 		{
-			name:       "paused state shows yellow text",
-			state:      "paused",
-			score:      0, // score/limit ignored for paused
-			limit:      0,
-			percentage: 0,
-			viewMode:   "sparkline-tree",
-			wantColor:  colorYellow,
-			wantBar:    false,
-			wantText:   "Paused",
+			name:      "paused state shows yellow text",
+			state:     "paused",
+			wantColor: colorYellow,
+			wantText:  "Paused",
 		},
 		{
-			name:       "empty viewMode defaults to tree",
+			name:      "disabled state shows blue text",
+			state:     "disabled",
+			wantColor: colorBlue,
+			wantText:  "Disabled",
+		},
+		{
+			name:         "tripwire hit shows warning glyph",
+			state:        "active",
+			percentage:   25,
+			hasTripwires: true,
+			wantColor:    colorRed,
+			wantBar:      true,
+			wantText:     "⚠",
+		},
+		{
+			name:       "net-negative increment shows green line count",
 			state:      "active",
-			score:      50,
-			limit:      400,
-			percentage: 12,
-			viewMode:   "",
+			percentage: 10,
+			netLines:   -42,
+			wantColor:  colorGreen,
+			wantBar:    true,
+			wantText:   "-42 lines",
+		},
+		{
+			name:       "net-positive increment shows no line count",
+			state:      "active",
+			percentage: 10,
+			netLines:   42,
 			wantColor:  colorGreen,
 			wantBar:    true,
 		},
@@ -137,7 +141,7 @@ func TestFormatBumperStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatBumperStatus(tt.state, tt.score, tt.limit, tt.percentage, tt.viewMode, false)
+			got := formatBumperStatus(tt.state, tt.percentage, tt.hasTripwires, tt.netLines)
 
 			if !strings.Contains(got, tt.wantColor) {
 				t.Errorf("formatBumperStatus() missing color %q in: %s", tt.wantColor, got)
@@ -156,13 +160,8 @@ func TestFormatBumperStatus(t *testing.T) {
 			if tt.wantText != "" && !strings.Contains(got, tt.wantText) {
 				t.Errorf("formatBumperStatus() missing text %q in: %s", tt.wantText, got)
 			}
-			// Should end with [mode]
-			expectedMode := tt.viewMode
-			if expectedMode == "" {
-				expectedMode = "tree"
-			}
-			if !strings.HasSuffix(got, "["+expectedMode+"]") {
-				t.Errorf("formatBumperStatus() should end with [%s], got: %s", expectedMode, got)
+			if tt.netLines >= 0 && strings.Contains(got, "lines") {
+				t.Errorf("formatBumperStatus() should not show line count for net-positive: %s", got)
 			}
 		})
 	}
@@ -172,24 +171,19 @@ func TestFormatOutput(t *testing.T) {
 	t.Run("widget=all formats full output", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project | main | $1.23",
-			BumperIndicator: "▂ 25% [tree]",
-			DiffTree:        "├── src\n│   └── main.go +10",
+			BumperIndicator: "▂ 25%",
 		}
 
 		got := FormatOutput(out, WidgetAll)
 		if !strings.Contains(got, out.StatusLine) {
 			t.Errorf("FormatOutput(all) missing status line")
 		}
-		if !strings.Contains(got, "\033[0m") {
-			t.Errorf("FormatOutput(all) missing ANSI reset in diff tree")
-		}
 	})
 
 	t.Run("widget=indicator returns only bumper indicator", func(t *testing.T) {
 		out := &StatusOutput{
-			StatusLine:      "[Sonnet] | project | main | $1.23 | ▂ 25% [tree]",
-			BumperIndicator: "▂ 25% [tree]",
-			DiffTree:        "├── src\n│   └── main.go +10",
+			StatusLine:      "[Sonnet] | project | main | $1.23 | ▂ 25%",
+			BumperIndicator: "▂ 25%",
 		}
 
 		got := FormatOutput(out, WidgetIndicator)
@@ -203,31 +197,17 @@ func TestFormatOutput(t *testing.T) {
 		if strings.Contains(got, "Sonnet") {
 			t.Errorf("FormatOutput(indicator) should not include model name")
 		}
-		if strings.Contains(got, "├──") {
-			t.Errorf("FormatOutput(indicator) should not include diff tree")
-		}
 	})
 
-	t.Run("widget=diff-tree returns only visualization", func(t *testing.T) {
+	t.Run("widget=diff-tree from pre-v4 wrappers returns nothing", func(t *testing.T) {
 		out := &StatusOutput{
 			StatusLine:      "[Sonnet] | project",
-			BumperIndicator: "▂ 25% [tree]",
-			DiffTree:        "├── src\n│   └── main.go +10",
+			BumperIndicator: "▂ 25%",
 		}
 
-		got := FormatOutput(out, WidgetDiffTree)
-
-		// Should have diff tree with non-breaking spaces
-		if !strings.Contains(got, "│\u00A0\u00A0\u00A0└") {
-			t.Errorf("FormatOutput(diff-tree) should use non-breaking spaces, got: %q", got)
-		}
-		// Should NOT have status line
-		if strings.Contains(got, "Sonnet") {
-			t.Errorf("FormatOutput(diff-tree) should not include model name")
-		}
-		// Should NOT have bar indicator
-		if strings.Contains(got, "[tree]") {
-			t.Errorf("FormatOutput(diff-tree) should not include indicator")
+		got := FormatOutput(out, "diff-tree")
+		if got != "" {
+			t.Errorf("FormatOutput(diff-tree) = %q, want empty (removed widget)", got)
 		}
 	})
 
@@ -251,18 +231,6 @@ func TestFormatOutput(t *testing.T) {
 		got := FormatOutput(out, WidgetIndicator)
 		if got != "" {
 			t.Errorf("FormatOutput(indicator) with empty indicator = %q, want empty", got)
-		}
-	})
-
-	t.Run("handles empty diff tree", func(t *testing.T) {
-		out := &StatusOutput{
-			StatusLine: "[Sonnet] | project",
-			DiffTree:   "",
-		}
-
-		got := FormatOutput(out, WidgetDiffTree)
-		if got != "" {
-			t.Errorf("FormatOutput(diff-tree) with empty tree = %q, want empty", got)
 		}
 	})
 

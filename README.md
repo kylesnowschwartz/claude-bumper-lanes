@@ -1,12 +1,8 @@
 # Bumper Lanes
 
-Bumper lanes gives you two features native to Claude-Code:
-1. A 'Heads Up Display' of the changes Claude makes via unique git-diff visualizations in the status line
-2. A configurable circuit breaker that blocks Claude from continuing until you review and approve the accumulated changes
+Bumper lanes is a circuit breaker for Claude Code: it tracks how much code Claude has written since your last review and blocks Claude from continuing until you review and approve the accumulated changes.
 
 ![Threshold exceeded demo](assets/bumper-demo.gif)
-
-![View modes demo](assets/diff-viz-demo.gif)
 
 ## What It Does
 
@@ -17,6 +13,8 @@ When the threshold is exceeded:
 1. **Fuel gauge warnings** show escalating alerts after each Write/Edit (70% NOTICE → 90% WARNING) to you and to Claude
 2. **Stop hook** blocks Claude from continuing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after you review
+
+Beyond the size budget, **tripwires** flag high-risk change classes (CI config, dependency manifests, disabled tests) immediately, at any score.
 
 ## Installation
 
@@ -32,7 +30,7 @@ claude plugin install claude-bumper-lanes
 Work normally with Claude. If the configurable threshold is exceeded:
 
 1. Claude will be blocked from continuing
-2. Review your changes
+2. Review your changes (`/bumper-diff` shows what changed since the baseline)
 3. Optionally commit: `git add -u && git commit -m "message"` (resets the baseline automatically)
 4. Or Manually reset the baseline: `/bumper-reset`
 5. Continue working with restored budget
@@ -41,33 +39,18 @@ Work normally with Claude. If the configurable threshold is exceeded:
 
 | Command | Description |
 |---------|-------------|
+| `/bumper-diff` | Show the diff visualization (working tree vs review baseline) |
 | `/bumper-reset` | Reset baseline after reviewing changes |
 | `/bumper-pause` | Pause threshold enforcement (session only) |
 | `/bumper-resume` | Resume threshold enforcement |
 | `/bumper-config` | Show current configuration |
 | `/bumper-config <n>` | Set repo threshold (0=disabled, 50-2000) |
 
-### View Modes
+## Status Line
 
-| Command | Description |
-|---------|-------------|
-| `/bumper-tree` | Indented file tree with +/- stats |
-| `/bumper-smart` | Multi-column table sorted by magnitude |
-| `/bumper-sparkline-tree` | Rainbow sidebar tree with sparkline bars |
-| `/bumper-hotpath` | Hot trail view (follows largest child) |
-| `/bumper-icicle` | Horizontal area chart |
-| `/bumper-brackets` | Nested `[dir file]` single-line |
-| `/bumper-gauge` | Progress gauge showing change magnitude |
-| `/bumper-depth` | Nested gauges by depth level |
-| `/bumper-stat` | Native git diff --stat output |
+The status line shows a one-line gauge: a traffic-light bar with the percentage of budget spent, a red ⚠ when a tripwire fired, and a green line count when the increment is net-negative (the tree shrank).
 
-## Status Line Setup
-
-Status line is **auto-configured** on first session. No manual setup needed, though you may want to tweak if you use a custom setup.
-
-If you need to configure manually:
-
-Auto-setup writes this to `~/.claude/settings.json`:
+Status line setup is **opt-in**: set `"statusline_auto_setup": true` in your config and the plugin configures `~/.claude/settings.json` on session start. Or configure manually:
 
 ```json
 {
@@ -79,15 +62,13 @@ Auto-setup writes this to `~/.claude/settings.json`:
 }
 ```
 
-The path is versioned and changes on plugin updates—auto-setup handles this automatically.
+For custom status lines, `bumper-lanes status --widget=indicator` prints just the bumper gauge.
 
-**Want just the diff visualization?** Install [diff-viz](https://github.com/kylesnowschwartz/diff-viz) globally:
+**Want rich diff visualizations?** Use `/bumper-diff` in a session, or install [diff-viz](https://github.com/kylesnowschwartz/diff-viz) globally for standalone use:
 
 ```bash
 go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
 ```
-
-Then use `git-diff-tree` directly in your custom status line scripts. This optionally gives you the tree visualization without the threshold enforcement as well.
 
 ### Opting Out of Auto-Setup
 
@@ -109,39 +90,24 @@ Config files (in precedence order):
 ```json
 {
   "threshold": 400,
-  "default_view_mode": "tree",
-  "default_view_opts": "--width 80 --depth 3",
-  "show_diff_viz": true
+  "reset_on": "commit",
+  "statusline_auto_setup": false
 }
 ```
 
 | Field | Description |
 |-------|-------------|
 | `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 600) |
-| `default_view_mode` | Visualization mode (default: tree) |
-| `default_view_opts` | Options passed to diff-viz renderer (e.g., `--width 80 --depth 3`) |
-| `show_diff_viz` | Show diff visualization in status line (default: true) |
+| `reset_on` | When Claude's git commits auto-reset the budget: `commit` (default), `verified-commit` (refuses `--no-verify`), or `human` (never) |
+| `statusline_auto_setup` | Allow session start to configure the status line (default: false) |
+| `tripwire_paths` | Glob patterns whose changes are flagged at any score (defaults cover CI, dependency manifests, migrations) |
+| `tripwire_patterns` | Added-line substrings that are flagged at any score (defaults cover test-skip idioms) |
 
-**Available view modes:** tree, smart, sparkline-tree, hotpath, icicle, brackets, gauge, depth, stat
+### Disabling Enforcement
 
-### Viz-Only Mode (Global Config)
-
-Want the diff visualization without threshold enforcement? Create a global config:
-
-```bash
-mkdir -p ~/.config/bumper-lanes
-echo '{"threshold": 0}' > ~/.config/bumper-lanes/config.json
-```
-
-This disables enforcement across all repos while keeping the status line diff visualization. Individual repos can override with their own `.bumper-lanes.json`.
+Set `"threshold": 0` in `.bumper-lanes.json` to disable for a specific repo, or in the global config to disable everywhere. Individual repos can override the global config.
 
 Run `/bumper-config` to see which config files are active.
-
-### Other Options
-
-**Disabling per-repo:** Set `"threshold": 0` in `.bumper-lanes.json` to disable for a specific repo.
-
-**Hiding diff visualization:** Set `"show_diff_viz": false` to hide the diff tree from the status line. Running any view command (`/bumper-tree`, etc.) restores it for the current session.
 
 ### Weighted Scoring
 
@@ -149,6 +115,7 @@ Run `/bumper-config` to see which config files are active.
 - **Edits to existing files**: 1.3x weight (harder to review)
 - **Scatter penalty**: Extra points when touching many files
 - **Deletions**: Not counted (removing code is good)
+- **Generated files** (lockfiles, codegen, vendored): Not counted
 
 ## Requirements
 
@@ -160,9 +127,8 @@ Run `/bumper-config` to see which config files are active.
 
 ```
 bumper-lanes-plugin/
-├── bin/                    # Built binaries (auto-generated)
-│   ├── bumper-lanes        # Hook handler
-│   └── git-diff-tree       # Diff visualization (from diff-viz)
+├── bin/                    # Built binary (auto-generated)
+│   └── bumper-lanes        # Hook handler
 ├── scripts/
 │   └── ensure-binaries.sh  # Auto-builds on first run
 ├── tools/
@@ -172,4 +138,4 @@ bumper-lanes-plugin/
     └── hooks.json          # Hook configuration
 ```
 
-Diff visualization is provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz).
+Diff calculation and visualization are provided by [diff-viz](https://github.com/kylesnowschwartz/diff-viz), imported as a Go library.

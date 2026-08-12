@@ -82,6 +82,7 @@ func Stop(input *HookInput) error {
 		if stats != nil {
 			result := scoring.Calculate(stats)
 			sess.SetScore(result.Score)
+			sess.NetLines = result.NetLines
 			sess.Save()
 		}
 		return nil
@@ -94,6 +95,7 @@ func Stop(input *HookInput) error {
 		if stats != nil {
 			result := scoring.Calculate(stats)
 			sess.SetScore(result.Score)
+			sess.NetLines = result.NetLines
 			sess.Save()
 		}
 		return nil
@@ -144,6 +146,7 @@ func Stop(input *HookInput) error {
 			// Automatic recovery: score dropped below threshold
 			sess.SetStopTriggered(false)
 			sess.SetScore(freshScore)
+			sess.NetLines = result.NetLines
 			sess.Save()
 
 			// Notify user of recovery
@@ -161,6 +164,7 @@ func Stop(input *HookInput) error {
 
 		// Normal case: update state and allow
 		sess.SetScore(freshScore)
+		sess.NetLines = result.NetLines
 		sess.Save()
 		return nil
 	}
@@ -169,6 +173,7 @@ func Stop(input *HookInput) error {
 	wasTripped := sess.StopTriggered
 	sess.SetStopTriggered(true)
 	sess.SetScore(freshScore)
+	sess.NetLines = result.NetLines
 	sess.Save()
 	// Log the trip transition only, not every blocked Stop while tripped.
 	if !wasTripped {

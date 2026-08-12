@@ -15,6 +15,7 @@ type WeightedScore struct {
 	EditAdditions  int `json:"edit_additions"` // Lines added in edited files
 	FilesTouched   int `json:"files_touched"`  // Number of files changed
 	ScatterPenalty int `json:"scatter"`        // Penalty for touching many files
+	NetLines       int `json:"net_lines"`      // Additions minus deletions across the whole diff
 }
 
 // Scoring constants (match threshold-calculator.sh)
@@ -103,5 +104,6 @@ func Calculate(stats *diff.StatsJSON) *WeightedScore {
 		EditAdditions:  editAdd,
 		FilesTouched:   filesWithAdditions, // Only files with additions
 		ScatterPenalty: scatter,
+		NetLines:       stats.Totals.Adds - stats.Totals.Dels,
 	}
 }

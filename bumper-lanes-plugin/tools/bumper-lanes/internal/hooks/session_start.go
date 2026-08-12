@@ -66,10 +66,6 @@ func SessionStart(input *HookInput) int {
 		return 0 // Fail open
 	}
 
-	// Load persisted view settings from config
-	sess.SetViewMode(config.LoadViewMode())
-	sess.SetViewOpts(config.LoadViewOpts())
-
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to save session state: %v (failing open)", err)
 		return 0 // Fail open
@@ -412,14 +408,12 @@ input=$(cat)
 # Run original status line
 echo "$input" | %s
 
-# Append bumper-lanes widgets
+# Append bumper-lanes indicator
 indicator=$(echo "$input" | "%s" status --widget=indicator 2>/dev/null || true)
-diff_tree=$(echo "$input" | "%s" status --widget=diff-tree 2>/dev/null || true)
 [[ -n "$indicator" ]] && echo "$indicator"
-[[ -n "$diff_tree" ]] && echo "$diff_tree"
 
 exit 0
-`, wrapperMarker, bumperBin, originalCmd, originalCmd, bumperBin, bumperBin)
+`, wrapperMarker, bumperBin, originalCmd, originalCmd, bumperBin)
 
 	// Write and make executable
 	if err := os.WriteFile(wrapperPath, []byte(content), 0755); err != nil {

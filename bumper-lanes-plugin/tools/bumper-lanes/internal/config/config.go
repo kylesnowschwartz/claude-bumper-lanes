@@ -13,17 +13,8 @@ import (
 	"strings"
 )
 
-const (
-	// DefaultThreshold is the default diff point threshold.
-	DefaultThreshold = 600
-
-	// DefaultViewMode is the default visualization mode.
-	DefaultViewMode = "tree"
-
-	// ValidModes lists all valid visualization modes.
-	// This should match diff-viz v2.4.0 render.ValidModes.
-	ValidModes = "tree smart sparkline-tree hotpath icicle brackets gauge depth stat"
-)
+// DefaultThreshold is the default diff point threshold.
+const DefaultThreshold = 600
 
 // Reset policies control when a git commit made through the Bash tool
 // auto-resets the review budget.
@@ -76,15 +67,11 @@ var DefaultTripwirePatterns = []string{
 
 // Config represents bumper-lanes configuration.
 // Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
-// ShowDiffViz: nil=default (true), false=hide diff visualization
 // StatuslineAutoSetup: nil=default (false), true=allow session-start to configure the status line
 // ResetOn: ""=default ("commit"); one of "commit", "verified-commit", "human"
 // TripwirePaths/TripwirePatterns: nil=defaults, empty list=disabled
 type Config struct {
 	Threshold           *int      `json:"threshold,omitempty"`
-	DefaultViewMode     string    `json:"default_view_mode,omitempty"`
-	DefaultViewOpts     string    `json:"default_view_opts,omitempty"` // e.g., "--width 80 --depth 3"
-	ShowDiffViz         *bool     `json:"show_diff_viz,omitempty"`
 	StatuslineAutoSetup *bool     `json:"statusline_auto_setup,omitempty"`
 	ResetOn             string    `json:"reset_on,omitempty"`
 	TripwirePaths       *[]string `json:"tripwire_paths,omitempty"`
@@ -166,15 +153,6 @@ func loadMergedConfig() *Config {
 	if repo.Threshold != nil {
 		merged.Threshold = repo.Threshold
 	}
-	if repo.DefaultViewMode != "" {
-		merged.DefaultViewMode = repo.DefaultViewMode
-	}
-	if repo.DefaultViewOpts != "" {
-		merged.DefaultViewOpts = repo.DefaultViewOpts
-	}
-	if repo.ShowDiffViz != nil {
-		merged.ShowDiffViz = repo.ShowDiffViz
-	}
 	if repo.StatuslineAutoSetup != nil {
 		merged.StatuslineAutoSetup = repo.StatuslineAutoSetup
 	}
@@ -205,43 +183,6 @@ func LoadThreshold() int {
 // IsDisabled returns true if the given threshold means enforcement is disabled.
 func IsDisabled(threshold int) bool {
 	return threshold == 0
-}
-
-// LoadViewMode returns the configured default view mode.
-// Checks repo config first, then global config, then returns DefaultViewMode.
-func LoadViewMode() string {
-	cfg := loadMergedConfig()
-	if cfg.DefaultViewMode != "" && isValidMode(cfg.DefaultViewMode) {
-		return cfg.DefaultViewMode
-	}
-	return DefaultViewMode
-}
-
-// LoadViewOpts returns the configured default view options (e.g., "--width 80").
-// Checks repo config first, then global config.
-func LoadViewOpts() string {
-	cfg := loadMergedConfig()
-	return cfg.DefaultViewOpts
-}
-
-// isValidMode checks if the mode is in the valid modes list.
-func isValidMode(mode string) bool {
-	for _, valid := range strings.Fields(ValidModes) {
-		if mode == valid {
-			return true
-		}
-	}
-	return false
-}
-
-// LoadShowDiffViz returns whether diff visualization should be shown.
-// Checks repo config first, then global config, then returns true (default).
-func LoadShowDiffViz() bool {
-	cfg := loadMergedConfig()
-	if cfg.ShowDiffViz != nil {
-		return *cfg.ShowDiffViz
-	}
-	return true
 }
 
 // LoadStatuslineAutoSetup returns whether session-start may configure the
@@ -316,42 +257,5 @@ func SaveRepoConfig(threshold int) error {
 	}
 
 	path := filepath.Join(repoRoot, ".bumper-lanes.json")
-	return os.WriteFile(path, data, 0644)
-}
-
-// SaveConfig writes the full config to .bumper-lanes.json, preserving existing values.
-func SaveConfig(updates Config) error {
-	repoRoot, err := getRepoRoot()
-	if err != nil {
-		return err
-	}
-
-	path := filepath.Join(repoRoot, ".bumper-lanes.json")
-
-	// Load existing config to preserve other fields
-	existing, _ := loadConfigFile(path)
-	if existing == nil {
-		existing = &Config{}
-	}
-
-	// Apply updates (non-nil pointers and non-empty strings override)
-	if updates.Threshold != nil {
-		existing.Threshold = updates.Threshold
-	}
-	if updates.DefaultViewMode != "" {
-		existing.DefaultViewMode = updates.DefaultViewMode
-	}
-	if updates.DefaultViewOpts != "" {
-		existing.DefaultViewOpts = updates.DefaultViewOpts
-	}
-	if updates.ShowDiffViz != nil {
-		existing.ShowDiffViz = updates.ShowDiffViz
-	}
-
-	data, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		return err
-	}
-
 	return os.WriteFile(path, data, 0644)
 }

@@ -1,13 +1,12 @@
 %% Status Line Render Flow: How the widget gets data and displays
 %% Render: cat statusline-render-sequence.mmd | mermaid-ascii -f -
-%% Focus: Data flow from Claude Code through bumper-lanes to diff-viz
+%% Focus: Cached-state read path - no git diff work per refresh
 
 sequenceDiagram
     participant CC as Claude Code
     participant Script as Status Script
     participant BL as bumper-lanes
     participant Sess as Session
-    participant DV as git-diff-tree
     participant Git
 
     %% Claude Code triggers status line refresh
@@ -20,59 +19,35 @@ sequenceDiagram
     %% bumper-lanes parses input
     BL->>BL: parse JSON (session_id, model, cost)
 
-    %% Load session state
+    %% Cheap git reads for branch display only
+    BL->>Git: git branch --show-current / git diff --quiet
+    Git-->>BL: branch name, dirty flag
+
+    %% Load cached session state (score computed at hook time)
     BL->>Sess: load(session_id)
-    Sess-->>BL: baseline_tree, threshold, paused, view_mode
+    Sess-->>BL: score, threshold, paused, stop_triggered, tripwires, net_lines
 
-    %% Call diff-viz for score calculation
-    BL->>DV: git-diff-tree --stats-json --baseline=abc123
-    DV->>Git: git diff-tree baseline..worktree
-    Git-->>DV: raw diff data
-    DV-->>BL: {new_additions: 50, edit_additions: 80, files: 3}
-
-    %% Apply scoring policy (bumper-lanes logic)
-    BL->>BL: score = 50*1.0 + 80*1.3 + scatter
-
-    %% Call diff-viz for visualization
-    BL->>DV: git-diff-tree --mode=tree
-    DV->>Git: git diff-tree HEAD
-    Git-->>DV: changed files
-    DV-->>BL: tree visualization ASCII
-
-    %% Format output with colors
-    BL->>BL: format indicator + colors
-    BL-->>Script: indicator + diff tree
+    %% Format the one-line indicator
+    BL->>BL: gauge = traffic-light bar + pct (+ red warning glyph, + green net lines)
+    BL-->>Script: model | dir | branch | cost | gauge
 
     %% Script outputs to Claude Code
-    Script-->>CC: multi-line status output
+    Script-->>CC: single-line status output
 
 %% ============================================================
 %% VALIDATION REFERENCES
 %% ============================================================
-%% - Status input parsing: internal/statusline/statusline.go:308-314
-%% - Session load: internal/statusline/statusline.go:106
-%% - Score calculation: internal/statusline/statusline.go:221-247
-%% - Diff tree call: internal/statusline/statusline.go:251-282
-%% - Binary lookup: internal/statusline/statusline.go:287-305
-%% - Output formatting: internal/statusline/statusline.go:326-382
-%%
-%% EXTERNAL DEPENDENCY: diff-viz
-%% - Repo: github.com/kylesnowschwartz/diff-viz
-%% - Binary: git-diff-tree
-%% - Install: go install .../diff-viz/cmd/git-diff-tree@latest
-%% - Lookup: plugin/bin/ first, then PATH
-%%
-%% TWO CALLS TO diff-viz PER RENDER
-%% 1. --stats-json: raw numbers for score (policy in bumper-lanes)
-%% 2. --mode=X: visualization (presentation from diff-viz)
+%% - Status input parsing: internal/statusline/statusline.go (ParseInput)
+%% - Session load: internal/statusline/statusline.go (Render)
+%% - Indicator formatting: internal/statusline/statusline.go (formatBumperStatus)
 %%
 %% WIDGET MODES (--widget flag)
-%% - all: full status line + diff tree (default)
-%% - indicator: just "active (125/400 - 31%)"
-%% - diff-tree: just the ASCII visualization
+%% - all: full status line (default)
+%% - indicator: just the gauge, e.g. "▂ 31%"
+%% - diff-tree: accepted from pre-v4 wrappers, outputs nothing
 %%
 %% NOTES
-%% 1. Two subprocess calls to diff-viz per render (acceptable latency)
-%% 2. Binary lookup fallback chain (plugin/bin → PATH)
-%% 3. Non-breaking space for Claude Code empty-line handling
-%% 4. Score calculated fresh each render (ensures accuracy after manual changes)
+%% 1. No baseline diff per refresh: score and net_lines are cached in
+%%    session state by the Write/Edit and Stop hooks (a working-tree
+%%    capture costs ~60-110ms and is too slow for the statusline path)
+%% 2. Rich diff visualization is on-demand via /bumper-diff

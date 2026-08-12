@@ -77,16 +77,9 @@ install-diff-viz:
     go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
     @echo "Installed: git-diff-tree (via go install)"
 
-# Copy git-diff-tree to plugin bin directory (for bundled distribution)
-bundle-diff-viz:
-    @mkdir -p bumper-lanes-plugin/bin
-    cp $(shell which git-diff-tree) bumper-lanes-plugin/bin/git-diff-tree
-    @echo "Bundled: bumper-lanes-plugin/bin/git-diff-tree"
-
 # Clean Go build artifacts
 clean-go:
     rm -f bumper-lanes-plugin/bin/bumper-lanes
-    rm -f bumper-lanes-plugin/bin/git-diff-tree
     @echo "Cleaned Go binaries"
 
 # Format Go code

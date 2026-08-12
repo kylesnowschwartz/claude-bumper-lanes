@@ -11,24 +11,23 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 )
 
 // SessionState represents the persisted state for a bumper-lanes session.
 type SessionState struct {
-	SessionID           string `json:"session_id"`
-	BaselineTree        string `json:"baseline_tree"`
-	BaselineBranch      string `json:"baseline_branch,omitempty"`
-	Score               int    `json:"score"` // Current score (fresh calculation from baseline)
-	CreatedAt           string `json:"created_at"`
-	ThresholdLimit      int    `json:"threshold_limit"`
-	RepoPath            string `json:"repo_path"`
-	StopTriggered       bool   `json:"stop_triggered"`
-	Paused              bool   `json:"paused,omitempty"`
-	ViewMode            string `json:"view_mode,omitempty"`
-	ViewOpts            string `json:"view_opts,omitempty"`              // Additional flags like "--width 100"
-	ShowDiffVizOverride *bool  `json:"show_diff_viz_override,omitempty"` // nil=use config, true=force show
+	SessionID      string `json:"session_id"`
+	BaselineTree   string `json:"baseline_tree"`
+	BaselineBranch string `json:"baseline_branch,omitempty"`
+	Score          int    `json:"score"` // Current score (fresh calculation from baseline)
+	CreatedAt      string `json:"created_at"`
+	ThresholdLimit int    `json:"threshold_limit"`
+	RepoPath       string `json:"repo_path"`
+	StopTriggered  bool   `json:"stop_triggered"`
+	Paused         bool   `json:"paused,omitempty"`
+	// NetLines is the additions-minus-deletions of the current increment,
+	// cached whenever the baseline diff is computed. Negative means the
+	// tree shrank; the statusline shows that in green.
+	NetLines int `json:"net_lines,omitempty"`
 
 	// HeadBeforeCommit is the HEAD commit SHA recorded by PreToolUse when a
 	// commit-shaped Bash command is about to run ("none" on an unborn branch).
@@ -225,10 +224,11 @@ func (s *SessionState) SetScore(score int) {
 }
 
 // ResetBaseline resets the baseline to a new tree SHA.
-// Clears score, stop_triggered, and tripwires.
+// Clears score, net lines, stop_triggered, and tripwires.
 func (s *SessionState) ResetBaseline(newTree, newBranch string) {
 	s.BaselineTree = newTree
 	s.Score = 0
+	s.NetLines = 0
 	s.StopTriggered = false
 	s.Tripwires = nil
 	if newBranch != "" {
@@ -252,48 +252,6 @@ func (s *SessionState) AddTripwires(hits []string) []string {
 		}
 	}
 	return fresh
-}
-
-// SetViewMode sets the visualization mode.
-func (s *SessionState) SetViewMode(mode string) {
-	s.ViewMode = mode
-}
-
-// GetViewMode returns the current view mode, or empty string if not set.
-func (s *SessionState) GetViewMode() string {
-	return s.ViewMode
-}
-
-// SetViewOpts sets additional view options (flags like "--width 100").
-func (s *SessionState) SetViewOpts(opts string) {
-	s.ViewOpts = opts
-}
-
-// GetViewOpts returns current view options, or empty string if not set.
-func (s *SessionState) GetViewOpts() string {
-	return s.ViewOpts
-}
-
-// SetShowDiffVizOverride sets the session-level override for showing diff visualization.
-// Used by view commands to force showing the diff tree for this session.
-func (s *SessionState) SetShowDiffVizOverride(show bool) {
-	s.ShowDiffVizOverride = &show
-}
-
-// ClearShowDiffVizOverride removes the session-level override, falling back to config.
-func (s *SessionState) ClearShowDiffVizOverride() {
-	s.ShowDiffVizOverride = nil
-}
-
-// ShouldShowDiffViz determines if diff visualization should be shown.
-// Session override (when true) takes precedence over config.
-func (s *SessionState) ShouldShowDiffViz() bool {
-	// Session override to show (from view commands) takes precedence
-	if s.ShowDiffVizOverride != nil && *s.ShowDiffVizOverride {
-		return true
-	}
-	// Fall back to config
-	return config.LoadShowDiffViz()
 }
 
 // CheckpointWarningThreshold is the number of checkpoint files that triggers a warning.

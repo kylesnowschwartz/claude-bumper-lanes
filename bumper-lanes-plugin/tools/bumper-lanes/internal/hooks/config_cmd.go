@@ -11,14 +11,12 @@ import (
 // ConfigShow displays the current threshold configuration.
 func ConfigShow() error {
 	threshold := config.LoadThreshold()
-	viewMode := config.LoadViewMode()
 
 	fmt.Printf("Threshold: %d points", threshold)
 	if config.IsDisabled(threshold) {
 		fmt.Print(" (disabled)")
 	}
 	fmt.Println()
-	fmt.Printf("Default view mode: %s\n", viewMode)
 
 	// Show source with helpful paths
 	repoPath := config.GetConfigPath()

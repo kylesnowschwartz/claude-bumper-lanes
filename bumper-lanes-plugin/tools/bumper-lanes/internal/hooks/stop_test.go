@@ -497,7 +497,7 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 			t.Fatalf("state.Load() error = %v", err)
 		}
 		loaded.SetScore(150)
-		loaded.SetViewMode("sparkline-tree")
+		loaded.NetLines = -12
 		loaded.Save()
 
 		// Simulate Stop reading state
@@ -510,8 +510,8 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 		if reloaded.Score != 150 {
 			t.Errorf("Score = %d, want 150", reloaded.Score)
 		}
-		if reloaded.GetViewMode() != "sparkline-tree" {
-			t.Errorf("ViewMode = %q, want %q", reloaded.GetViewMode(), "sparkline-tree")
+		if reloaded.NetLines != -12 {
+			t.Errorf("NetLines = %d, want -12", reloaded.NetLines)
 		}
 		if reloaded.BaselineTree != baselineTree {
 			t.Errorf("BaselineTree changed unexpectedly")

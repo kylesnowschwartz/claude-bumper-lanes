@@ -28,15 +28,13 @@ User Commands (called via bash in command files):
   reset <session>   Reset baseline after review
   pause <session>   Temporarily disable enforcement
   resume <session>  Re-enable enforcement
-  view <session>    Set visualization mode
   config            Show/set threshold configuration
   budget [session]  Print remaining review budget (latest session if omitted)
 
 Status Line Widget:
   status [--widget=TYPE]  Output bumper-lanes status (reads JSON from stdin)
-                          Types: all (default), indicator, diff-tree
+                          Types: all (default), indicator
                           Use --widget=indicator for just the threshold gauge
-                          Use --widget=diff-tree for just the visualization
 `
 
 func main() {
@@ -72,8 +70,6 @@ func main() {
 		err = cmdPause(args)
 	case "resume":
 		err = cmdResume(args)
-	case "view":
-		err = cmdView(args)
 	case "config":
 		err = cmdConfig(args)
 	case "budget":
@@ -175,35 +171,6 @@ func cmdResume(args []string) error {
 		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
 	}
 	return hooks.Resume(sessionID)
-}
-
-func cmdView(args []string) error {
-	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
-	mode := ""
-	var opts []string
-
-	// Parse args: first non-flag arg is mode, rest are flags
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "-") {
-			opts = append(opts, arg)
-		} else if mode == "" {
-			mode = arg
-		} else {
-			// Could be flag value (e.g., "100" after "--width")
-			opts = append(opts, arg)
-		}
-	}
-
-	if sessionID == "" {
-		return fmt.Errorf("no session_id: set CLAUDE_CODE_SESSION_ID or pass as arg")
-	}
-	if mode == "" {
-		// No mode provided - show current mode and available options
-		return hooks.ViewShow(sessionID)
-	}
-
-	optsStr := strings.Join(opts, " ")
-	return hooks.View(sessionID, mode, optsStr)
 }
 
 func cmdConfig(args []string) error {

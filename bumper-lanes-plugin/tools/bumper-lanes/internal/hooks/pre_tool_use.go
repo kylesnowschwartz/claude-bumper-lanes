@@ -135,6 +135,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 			// Score at or below threshold - auto-recover
 			sess.SetStopTriggered(false)
 			sess.SetScore(freshScore)
+			sess.NetLines = result.NetLines
 			sess.Save()
 
 			pct := 0
@@ -150,6 +151,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 
 		// Still over threshold - update score and fall through to blocking
 		sess.SetScore(freshScore)
+		sess.NetLines = result.NetLines
 		sess.Save()
 	}
 
