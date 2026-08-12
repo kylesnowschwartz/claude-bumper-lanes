@@ -3,6 +3,7 @@
 package scoring
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/kylesnowschwartz/diff-viz/v2/diff"
@@ -43,9 +44,9 @@ var generatedBasenames = map[string]bool{
 // generatedSuffixes mark machine-written source.
 var generatedSuffixes = []string{".lock", ".pb.go", "_generated.go", ".min.js", ".min.css"}
 
-// isGenerated reports whether a path's content is machine-written
+// IsGenerated reports whether a path's content is machine-written
 // (lockfiles, codegen output, vendored trees) and therefore free to change.
-func isGenerated(path string) bool {
+func IsGenerated(path string) bool {
 	base := path
 	if i := strings.LastIndex(path, "/"); i >= 0 {
 		base = path[i+1:]
@@ -62,6 +63,54 @@ func isGenerated(path string) bool {
 		strings.HasPrefix(path, "node_modules/") || strings.Contains(path, "/node_modules/")
 }
 
+// ModulePoints is a directory's share of the weighted score.
+type ModulePoints struct {
+	Module string // directory containing the changed files ("(root)" for top-level files)
+	Points int
+	Files  int // files with additions in this module
+}
+
+// ByModule aggregates weighted points per directory, ranked by points
+// (module path as tiebreak). Same policy as Calculate: edits 1.3x, new
+// files 1.0x, deletions free, generated files excluded. Scatter is a
+// whole-diff penalty and is not attributed to modules, so module points
+// sum to the score minus scatter (give or take per-file rounding).
+func ByModule(stats *diff.StatsJSON) []ModulePoints {
+	agg := map[string]*ModulePoints{}
+	for _, f := range stats.Files {
+		if IsGenerated(f.Path) || f.Adds == 0 {
+			continue
+		}
+		module := "(root)"
+		if i := strings.LastIndex(f.Path, "/"); i >= 0 {
+			module = f.Path[:i+1]
+		}
+		m := agg[module]
+		if m == nil {
+			m = &ModulePoints{Module: module}
+			agg[module] = m
+		}
+		weight := editFileWeight
+		if f.New {
+			weight = newFileWeight
+		}
+		m.Points += (f.Adds * weight) / 10
+		m.Files++
+	}
+
+	modules := make([]ModulePoints, 0, len(agg))
+	for _, m := range agg {
+		modules = append(modules, *m)
+	}
+	sort.Slice(modules, func(i, j int) bool {
+		if modules[i].Points != modules[j].Points {
+			return modules[i].Points > modules[j].Points
+		}
+		return modules[i].Module < modules[j].Module
+	})
+	return modules
+}
+
 // Calculate computes bumper-lanes score from raw diff stats.
 // New files get 1.0x weight, edits get 1.3x weight.
 // Deletions are ignored (they reduce complexity, not add review burden).
@@ -72,7 +121,7 @@ func Calculate(stats *diff.StatsJSON) *WeightedScore {
 	var filesWithAdditions int // Only count files that add lines (not pure deletions)
 
 	for _, f := range stats.Files {
-		if isGenerated(f.Path) {
+		if IsGenerated(f.Path) {
 			continue
 		}
 		netLines += f.Adds - f.Dels

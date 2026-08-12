@@ -32,7 +32,7 @@ sequenceDiagram
     Stop->>Sess: check score vs threshold
     Sess-->>Stop: 420/400 (105%)
     Stop->>Sess: set stop_triggered: true
-    Stop-->>Claude: BLOCKED - threshold exceeded
+    Stop-->>Claude: BLOCKED - trip packet (modules, decisions, plain file list) + OSC 9 desktop notification on fresh trip
     Stop-->>User: score breakdown + review prompt
 
     %% === USER REVIEW OPTIONS ===

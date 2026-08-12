@@ -182,27 +182,17 @@ func Stop(input *HookInput) error {
 		}
 	}
 
-	// Format breakdown message (stats are already from baseline)
-	tripwireLine := ""
-	if len(sess.Tripwires) > 0 {
-		tripwireLine = fmt.Sprintf("\n⚠ Tripwires in this increment (review these first): %s\n", strings.Join(sess.Tripwires, ", "))
-	}
+	// The trip packet presents the increment at review altitude: modules,
+	// decisions, a scripted account, and the file-level ground truth.
+	reason := buildTripPacket(sess, result, stats)
 	pct := (freshScore * 100) / sess.ThresholdLimit
-	reason := fmt.Sprintf(`
 
-⚠️  Bumper lanes: Diff threshold exceeded
-
-Score: %d / %d points (%d%%)
-- New file additions: %d lines (1.0×)
-- Edit additions: %d lines (1.3×)
-- Files touched: %d
-- Scatter penalty: %d pts
-%s
-Ask the User: Would you like to conduct a structured, manual review?
-
-This workflow ensures incremental code review at predictable checkpoints.
-
-`, freshScore, sess.ThresholdLimit, pct, result.NewAdditions, result.EditAdditions, result.FilesTouched, result.ScatterPenalty, tripwireLine)
+	// Desktop notification on the fresh trip only, so an unattended
+	// session surfaces the block once instead of on every retried stop.
+	notification := ""
+	if !wasTripped {
+		notification = tripNotification(freshScore, sess.ThresholdLimit)
+	}
 
 	// Build response - see function doc comment for explanation of these confusing semantics
 	resp := StopResponse{
@@ -218,6 +208,8 @@ This workflow ensures incremental code review at predictable checkpoints.
 		Decision: "block",
 		// Reason is shown to the user explaining why we blocked the stop
 		Reason: reason,
+		// OSC 9 desktop notification (empty when this stop was already tripped)
+		TerminalSequence: notification,
 		ThresholdData: map[string]interface{}{
 			"score":                freshScore,
 			"threshold_limit":      sess.ThresholdLimit,

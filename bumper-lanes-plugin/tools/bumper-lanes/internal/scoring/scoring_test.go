@@ -148,8 +148,8 @@ func TestIsGenerated(t *testing.T) {
 		{"vendors.go", false},
 	}
 	for _, tt := range tests {
-		if got := isGenerated(tt.path); got != tt.want {
-			t.Errorf("isGenerated(%q) = %v, want %v", tt.path, got, tt.want)
+		if got := IsGenerated(tt.path); got != tt.want {
+			t.Errorf("IsGenerated(%q) = %v, want %v", tt.path, got, tt.want)
 		}
 	}
 }

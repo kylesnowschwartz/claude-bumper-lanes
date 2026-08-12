@@ -294,13 +294,13 @@ func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 		n, _ := r.Read(buf[:])
 		outputStr := string(buf[:n])
 
-		// Should output threshold exceeded message (not recovery)
+		// Should output the trip packet (not recovery)
 		if strings.Contains(outputStr, "Auto-recovered") {
 			t.Errorf("Should NOT show recovery message when still over threshold: %s", outputStr)
 		}
 
-		if !strings.Contains(outputStr, "threshold exceeded") {
-			t.Errorf("Expected 'threshold exceeded' message, got: %s", outputStr)
+		if !strings.Contains(outputStr, "review budget tripped") {
+			t.Errorf("Expected trip packet, got: %s", outputStr)
 		}
 
 		// Verify StopTriggered remains true
