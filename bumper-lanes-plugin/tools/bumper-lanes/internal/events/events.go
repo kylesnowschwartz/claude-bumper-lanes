@@ -32,6 +32,9 @@ const (
 	CauseVerifiedCommit = "verified-commit"
 	CauseCleanTree      = "clean-tree"
 	CauseBranch         = "branch"
+	// CauseReview marks a self-review clear (on_trip: review): the agent
+	// reviewed the increment and cleared the breaker itself.
+	CauseReview = "review"
 )
 
 // Entry is one logged lifecycle event.

@@ -74,6 +74,8 @@ func main() {
 		err = cmdConfig(args)
 	case "budget":
 		err = cmdBudget(args)
+	case "review-clear":
+		err = cmdReviewClear(args)
 	case "status":
 		err = cmdStatus(args)
 	case "handle-prompt":
@@ -190,6 +192,15 @@ func cmdBudget(args []string) error {
 	}
 	// Empty sessionID is fine: Budget falls back to the latest session.
 	return hooks.Budget(sessionID)
+}
+
+func cmdReviewClear(args []string) error {
+	sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if len(args) >= 1 {
+		sessionID = args[0]
+	}
+	// Empty sessionID is fine: ReviewClear falls back to the latest session.
+	return hooks.ReviewClear(sessionID)
 }
 
 // Prompt handler (UserPromptSubmit hook)

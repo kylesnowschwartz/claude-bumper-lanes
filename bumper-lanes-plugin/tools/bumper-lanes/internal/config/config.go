@@ -33,6 +33,23 @@ const (
 	DefaultResetOn = ResetOnCommit
 )
 
+// Trip policies control what the trip packet asks for when the budget trips.
+const (
+	// OnTripBlock presents the human review packet (default).
+	OnTripBlock = "block"
+	// OnTripReview instructs the agent to self-review the increment,
+	// clear the breaker with `bumper-lanes review-clear`, then implement
+	// the findings as the next increment.
+	OnTripReview = "review"
+
+	// DefaultOnTrip is the default trip policy.
+	DefaultOnTrip = OnTripBlock
+
+	// DefaultReviewCommand names the review workflow the packet points
+	// the agent at when on_trip is "review".
+	DefaultReviewCommand = "/code-review"
+)
+
 // DefaultTripwirePaths are glob patterns for files whose every change is a
 // review-worthy decision regardless of size: CI definitions, dependency
 // manifests, agent-harness config, and schema migrations.
@@ -72,11 +89,14 @@ var DefaultTripwirePatterns = []string{
 // ResetOn: ""=default ("commit"); one of "commit", "verified-commit", "human"
 // TripwirePaths/TripwirePatterns: nil=defaults, empty list=disabled
 type Config struct {
-	Threshold           *int      `json:"threshold,omitempty"`
-	StatuslineAutoSetup *bool     `json:"statusline_auto_setup,omitempty"`
-	ResetOn             string    `json:"reset_on,omitempty"`
-	TripwirePaths       *[]string `json:"tripwire_paths,omitempty"`
-	TripwirePatterns    *[]string `json:"tripwire_patterns,omitempty"`
+	Threshold                *int      `json:"threshold,omitempty"`
+	StatuslineAutoSetup      *bool     `json:"statusline_auto_setup,omitempty"`
+	ResetOn                  string    `json:"reset_on,omitempty"`
+	OnTrip                   string    `json:"on_trip,omitempty"`
+	ReviewCommand            string    `json:"review_command,omitempty"`
+	TripwiresBlockAutoReview *bool     `json:"tripwires_block_auto_review,omitempty"`
+	TripwirePaths            *[]string `json:"tripwire_paths,omitempty"`
+	TripwirePatterns         *[]string `json:"tripwire_patterns,omitempty"`
 }
 
 // GetGitDir returns the absolute git directory path.
@@ -160,6 +180,15 @@ func loadMergedConfig() *Config {
 	if repo.ResetOn != "" {
 		merged.ResetOn = repo.ResetOn
 	}
+	if repo.OnTrip != "" {
+		merged.OnTrip = repo.OnTrip
+	}
+	if repo.ReviewCommand != "" {
+		merged.ReviewCommand = repo.ReviewCommand
+	}
+	if repo.TripwiresBlockAutoReview != nil {
+		merged.TripwiresBlockAutoReview = repo.TripwiresBlockAutoReview
+	}
 	if repo.TripwirePaths != nil {
 		merged.TripwirePaths = repo.TripwirePaths
 	}
@@ -231,11 +260,14 @@ func LoadTripwirePatterns() []string {
 
 // knownConfigKeys are the keys the current config schema understands.
 var knownConfigKeys = map[string]bool{
-	"threshold":             true,
-	"statusline_auto_setup": true,
-	"reset_on":              true,
-	"tripwire_paths":        true,
-	"tripwire_patterns":     true,
+	"threshold":                   true,
+	"statusline_auto_setup":       true,
+	"reset_on":                    true,
+	"on_trip":                     true,
+	"review_command":              true,
+	"tripwires_block_auto_review": true,
+	"tripwire_paths":              true,
+	"tripwire_patterns":           true,
 }
 
 // UnknownKeys returns the keys in a config file that the current schema does
@@ -259,6 +291,38 @@ func UnknownKeys(path string) []string {
 	}
 	sort.Strings(unknown)
 	return unknown
+}
+
+// LoadOnTrip returns the configured trip policy. Unknown values fall back
+// to the default (block) rather than silently enabling self-clearing.
+func LoadOnTrip() string {
+	cfg := loadMergedConfig()
+	switch cfg.OnTrip {
+	case OnTripBlock, OnTripReview:
+		return cfg.OnTrip
+	}
+	return DefaultOnTrip
+}
+
+// LoadReviewCommand returns the review workflow named in the self-review
+// trip packet.
+func LoadReviewCommand() string {
+	cfg := loadMergedConfig()
+	if cfg.ReviewCommand != "" {
+		return cfg.ReviewCommand
+	}
+	return DefaultReviewCommand
+}
+
+// LoadTripwiresBlockAutoReview reports whether tripwire hits exclude an
+// increment from self-review clearing (forcing the human packet).
+// Default false: the self-review covers tripwires, named as priority items.
+func LoadTripwiresBlockAutoReview() bool {
+	cfg := loadMergedConfig()
+	if cfg.TripwiresBlockAutoReview != nil {
+		return *cfg.TripwiresBlockAutoReview
+	}
+	return false
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

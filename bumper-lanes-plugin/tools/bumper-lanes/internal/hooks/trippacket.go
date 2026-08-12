@@ -21,8 +21,9 @@ func tripNotification(score, limit int) string {
 // truth presented at the altitude engineers review (modules and decisions),
 // a scripted next move for the model, and a plain-rendered file appendix.
 // The meter holds facts the model's own summary omits; pairing them is what
-// turns the stop sign into the review.
-func buildTripPacket(sess *state.SessionState, result *scoring.WeightedScore, stats *diff.StatsJSON) string {
+// turns the stop sign into the review. nextMove is one of humanNextMove,
+// reviewNextMove(...), or humanNextMove+escalationNote.
+func buildTripPacket(sess *state.SessionState, result *scoring.WeightedScore, stats *diff.StatsJSON, nextMove string) string {
 	var b strings.Builder
 	pct := (result.Score * 100) / sess.ThresholdLimit
 
@@ -54,18 +55,42 @@ func buildTripPacket(sess *state.SessionState, result *scoring.WeightedScore, st
 		}
 	}
 
-	b.WriteString(`
-Give an account of what changed at the module level and why. State whether
-the shape of this change matches what was asked for. State what you verified
-and how. Then offer the user: (a) review now, (b) /bumper-reset if already
-reviewed, or (c) split the remaining work into smaller increments.
+	b.WriteString(nextMove)
 
-Files (additions-ranked):
-`)
+	b.WriteString("\nFiles (additions-ranked):\n")
 	b.WriteString(renderPlainAppendix(stats))
 
 	return b.String()
 }
+
+// humanNextMove is the scripted move for the default (block) trip policy.
+const humanNextMove = `
+Give an account of what changed at the module level and why. State whether
+the shape of this change matches what was asked for. State what you verified
+and how. Then offer the user: (a) review now, (b) /bumper-reset if already
+reviewed, or (c) split the remaining work into smaller increments.
+`
+
+// reviewNextMove scripts the self-review flow (on_trip: review). The clear
+// happens BEFORE implementing findings so the fixes are metered as the next
+// increment rather than riding free on the reviewed one.
+func reviewNextMove(reviewCommand string) string {
+	return fmt.Sprintf(`
+Self-review is enabled (on_trip: review). Do this now, in order:
+1. Review this increment with %s, scoped to the files listed below
+   (the diff against the review baseline - /bumper-diff shows it).
+2. When the review has run, clear the breaker:
+   %s review-clear
+3. Implement the review findings as the next increment (fresh budget),
+   then continue the original task.
+`, reviewCommand, getBumperLanesBinPath())
+}
+
+// escalationNote explains why a review-policy trip is showing the human
+// packet anyway.
+const escalationNote = `
+Note: self-review was already used this cycle; this trip requires the user.
+`
 
 // newFilePaths lists non-generated new files, in stats order.
 func newFilePaths(stats *diff.StatsJSON) []string {

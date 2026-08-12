@@ -39,6 +39,12 @@ type SessionState struct {
 	// increment (tripwire file paths, "pattern (file)" for added lines).
 	// Cleared on baseline reset.
 	Tripwires []string `json:"tripwires,omitempty"`
+
+	// AutoReviews counts consecutive self-review clears (on_trip: review)
+	// since the last human-visible reset. At 1 the next trip escalates to
+	// the human packet, so the agent gets one self-review per human
+	// touchpoint. Zeroed by manual reset and commit auto-reset.
+	AutoReviews int `json:"auto_reviews,omitempty"`
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.
@@ -224,13 +230,16 @@ func (s *SessionState) SetScore(score int) {
 }
 
 // ResetBaseline resets the baseline to a new tree SHA.
-// Clears score, net lines, stop_triggered, and tripwires.
+// Clears score, net lines, stop_triggered, tripwires, and the auto-review
+// counter (every reset path except review-clear is human-visible; review-clear
+// restores its own incremented counter after calling this).
 func (s *SessionState) ResetBaseline(newTree, newBranch string) {
 	s.BaselineTree = newTree
 	s.Score = 0
 	s.NetLines = 0
 	s.StopTriggered = false
 	s.Tripwires = nil
+	s.AutoReviews = 0
 	if newBranch != "" {
 		s.BaselineBranch = newBranch
 	}

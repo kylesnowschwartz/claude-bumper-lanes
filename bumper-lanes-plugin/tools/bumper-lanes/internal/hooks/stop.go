@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
@@ -183,8 +184,21 @@ func Stop(input *HookInput) error {
 	}
 
 	// The trip packet presents the increment at review altitude: modules,
-	// decisions, a scripted account, and the file-level ground truth.
-	reason := buildTripPacket(sess, result, stats)
+	// decisions, a scripted next move, and the file-level ground truth.
+	// The next move depends on the trip policy: self-review when enabled
+	// and available this cycle, otherwise the human packet.
+	nextMove := humanNextMove
+	if config.LoadOnTrip() == config.OnTripReview {
+		switch {
+		case sess.AutoReviews >= 1:
+			nextMove = humanNextMove + escalationNote
+		case config.LoadTripwiresBlockAutoReview() && len(sess.Tripwires) > 0:
+			nextMove = humanNextMove + "\nNote: tripwires fired, so this trip requires the user (tripwires_block_auto_review).\n"
+		default:
+			nextMove = reviewNextMove(config.LoadReviewCommand())
+		}
+	}
+	reason := buildTripPacket(sess, result, stats, nextMove)
 	pct := (freshScore * 100) / sess.ThresholdLimit
 
 	// Desktop notification on the fresh trip only, so an unattended

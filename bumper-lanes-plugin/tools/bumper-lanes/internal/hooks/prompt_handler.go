@@ -111,6 +111,7 @@ func handleReset(sessionID string) int {
 	sess.NetLines = 0
 	sess.StopTriggered = false
 	sess.Tripwires = nil
+	sess.AutoReviews = 0
 	if !saveOrBlock(sess) {
 		return 0
 	}

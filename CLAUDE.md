@@ -123,6 +123,9 @@ Config files (in precedence order):
   "threshold": 600,
   "statusline_auto_setup": false,
   "reset_on": "commit",
+  "on_trip": "block",
+  "review_command": "/code-review",
+  "tripwires_block_auto_review": false,
   "tripwire_paths": [".github/workflows/**", "go.mod", "..."],
   "tripwire_patterns": ["t.Skip", "it.skip", "..."]
 }
@@ -130,6 +133,7 @@ Config files (in precedence order):
 
 - `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 600). Run `/bumper-reset` after changing.
 - `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
+- `on_trip`: What the trip packet asks for. `block` (default) = human review packet; `review` = self-review flow: the packet instructs the agent to run `review_command` on the increment, clear the breaker with `bumper-lanes review-clear` (Bash, latest-session fallback like `budget`), then implement findings against the fresh budget. Trust-based by design (the binary cannot prove a review happened) but fully auditable: every clear is a `reset` event with cause `review`. Loop guard: one self-review per human touchpoint (`sess.AutoReviews`, zeroed by manual reset/commit); the next trip escalates to the human packet. `tripwires_block_auto_review: true` additionally excludes tripwire-hit increments from self-clearing (default false: the review covers them).
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
 - `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Omit for defaults (`config.DefaultTripwirePaths`/`DefaultTripwirePatterns`); empty list disables. Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
 

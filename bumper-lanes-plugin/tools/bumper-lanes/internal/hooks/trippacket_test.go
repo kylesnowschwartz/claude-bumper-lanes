@@ -31,7 +31,7 @@ func packetFixture() (*state.SessionState, *scoring.WeightedScore, *diff.StatsJS
 
 func TestBuildTripPacket_Golden(t *testing.T) {
 	sess, result, stats := packetFixture()
-	got := buildTripPacket(sess, result, stats)
+	got := buildTripPacket(sess, result, stats, humanNextMove)
 
 	want := `
 ⚠️  Bumper lanes: review budget tripped - 579/600 pts (96%)
@@ -72,7 +72,7 @@ func TestBuildTripPacket_NoTripwiresNoNewFiles(t *testing.T) {
 	result := scoring.Calculate(stats)
 	sess := &state.SessionState{SessionID: "test", ThresholdLimit: 600}
 
-	got := buildTripPacket(sess, result, stats)
+	got := buildTripPacket(sess, result, stats, humanNextMove)
 	if strings.Contains(got, "Tripwires") {
 		t.Errorf("packet should omit tripwire section when none hit:\n%s", got)
 	}
@@ -81,6 +81,15 @@ func TestBuildTripPacket_NoTripwiresNoNewFiles(t *testing.T) {
 	}
 	if !strings.Contains(got, "650/600 pts") {
 		t.Errorf("packet missing score line:\n%s", got)
+	}
+}
+
+func TestReviewNextMove(t *testing.T) {
+	got := reviewNextMove("/code-review")
+	for _, want := range []string{"on_trip: review", "/code-review", "review-clear", "next increment"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reviewNextMove missing %q:\n%s", want, got)
+		}
 	}
 }
 
