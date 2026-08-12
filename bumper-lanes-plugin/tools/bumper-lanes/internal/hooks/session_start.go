@@ -165,6 +165,14 @@ func hasStatusLineConfigured() bool {
 // message to show to user, or empty string if no action needed.
 // This is idempotent - checks actual state each time rather than caching.
 func setupStatusLineWrapper(log *logging.Logger, allowInstall bool) string {
+	// A test process must never touch the user's status line: the repair
+	// path compares BUMPER_BIN against os.Executable(), and recording a
+	// transient go-test build path kills the gauge silently once that
+	// binary is cleaned up.
+	if isTestProcess() {
+		return ""
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Warn("failed to get home dir for status line setup: %v (failing open)", err)
@@ -273,6 +281,16 @@ func getStatusLineCommand(homeDir string) string {
 
 // isOurWrapper checks if the given command is already our generated wrapper.
 // Detects by filename match or by marker in file content.
+// isTestProcess reports whether this process is a go-test binary rather
+// than an installed bumper-lanes.
+func isTestProcess() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(exe, ".test") || strings.Contains(exe, string(filepath.Separator)+"go-build")
+}
+
 func isOurWrapper(cmd, homeDir string) bool {
 	if cmd == "" {
 		return false

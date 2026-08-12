@@ -15,6 +15,10 @@ import (
 // events reusing an existing session id (compaction, resume) keep the baseline
 // and score instead of re-baselining, and inject a budget recap.
 func TestSessionStartPreservesStateOnCompactAndResume(t *testing.T) {
+	// Isolate HOME: SessionStart's statusline setup must not see the real
+	// ~/.claude (belt to the isTestProcess guard's suspenders).
+	t.Setenv("HOME", t.TempDir())
+
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
