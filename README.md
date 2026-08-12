@@ -99,6 +99,9 @@ Config files (in precedence order):
 |-------|-------------|
 | `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 600) |
 | `reset_on` | When Claude's git commits auto-reset the budget: `commit` (default), `verified-commit` (refuses `--no-verify`), or `human` (never) |
+| `on_trip` | What tripping asks for: `block` (default) shows the review packet and waits for you; `review` instructs the agent to run a code review of the increment, clear the breaker itself (`bumper-lanes review-clear`), and implement the findings against a fresh budget. One self-review per human touchpoint — the next trip requires you. |
+| `review_command` | The review workflow named in the self-review instruction (default `/code-review`) |
+| `tripwires_block_auto_review` | When `true`, increments with tripwire hits cannot self-clear and always come to you (default `false`) |
 | `statusline_auto_setup` | Allow session start to configure the status line (default: false) |
 | `tripwire_paths` | Glob patterns whose changes are flagged at any score (defaults cover CI, dependency manifests, migrations) |
 | `tripwire_patterns` | Added-line substrings that are flagged at any score (defaults cover test-skip idioms) |

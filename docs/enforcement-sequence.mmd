@@ -33,6 +33,7 @@ sequenceDiagram
     Sess-->>Stop: 420/400 (105%)
     Stop->>Sess: set stop_triggered: true
     Stop-->>Claude: BLOCKED - trip packet (modules, decisions, plain file list) + OSC 9 desktop notification on fresh trip
+    Note over Stop,Claude: on_trip: review - packet scripts self-review instead:<br/>run review_command, then `bumper-lanes review-clear`<br/>(resets budget, cause=review), then implement findings.<br/>One self-review per human touchpoint (AutoReviews guard);<br/>next trip shows the human packet.
     Stop-->>User: score breakdown + review prompt
 
     %% === USER REVIEW OPTIONS ===
