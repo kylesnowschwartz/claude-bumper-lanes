@@ -230,7 +230,7 @@ func setupStatusLineWrapper(log *logging.Logger, allowInstall bool) string {
 		if err := updateSettingsWithJq(homeDir, binaryPath); err != nil {
 			return fmt.Sprintf("[bumper-lanes] Couldn't update settings: %v\nManual setup: point statusLine.command in ~/.claude/settings.json at the bumper-lanes binary.", err)
 		}
-		return "[bumper-lanes] Status line configured! Restart session to see diff tree."
+		return "[bumper-lanes] Status line configured! Restart session to see the budget gauge."
 	}
 
 	// Existing status line - generate wrapper to preserve + extend it
@@ -243,7 +243,7 @@ func setupStatusLineWrapper(log *logging.Logger, allowInstall bool) string {
 		return fmt.Sprintf("[bumper-lanes] Wrapper created at %s\nCouldn't update settings: %v\nManual setup: point statusLine.command at that wrapper.", wrapperPath, err)
 	}
 
-	return fmt.Sprintf("[bumper-lanes] Wrapped your status line for diff tree. Restart session to activate.\nOriginal: %s", currentCmd)
+	return fmt.Sprintf("[bumper-lanes] Wrapped your status line to append the budget gauge. Restart session to activate.\nOriginal: %s", currentCmd)
 }
 
 // getStatusLineCommand reads the current statusLine.command from settings.json.
@@ -397,7 +397,7 @@ func generateWrapper(wrapperPath, originalCmd, homeDir string) error {
 	content := fmt.Sprintf(`#!/bin/bash
 %s - DO NOT EDIT
 # BUMPER_BIN: %s
-# Wraps your status line to add bumper-lanes diff tree visualization.
+# Wraps your status line to append the bumper-lanes budget gauge.
 # Original command: %s
 # To remove: restore statusLine.command in ~/.claude/settings.json
 

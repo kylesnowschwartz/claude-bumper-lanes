@@ -245,6 +245,37 @@ func TestLoadConfigFile(t *testing.T) {
 	}
 }
 
+func TestUnknownKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	t.Run("names keys the schema does not understand", func(t *testing.T) {
+		os.WriteFile(configPath, []byte(`{"threshold": 300, "default_view_mode": "tree", "show_diff_viz": true}`), 0644)
+		got := UnknownKeys(configPath)
+		want := []string{"default_view_mode", "show_diff_viz"}
+		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+			t.Errorf("UnknownKeys() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("nil for all-known keys", func(t *testing.T) {
+		os.WriteFile(configPath, []byte(`{"threshold": 300, "reset_on": "human"}`), 0644)
+		if got := UnknownKeys(configPath); got != nil {
+			t.Errorf("UnknownKeys() = %v, want nil", got)
+		}
+	})
+
+	t.Run("nil for missing or invalid file", func(t *testing.T) {
+		if got := UnknownKeys(filepath.Join(tmpDir, "nope.json")); got != nil {
+			t.Errorf("UnknownKeys(missing) = %v, want nil", got)
+		}
+		os.WriteFile(configPath, []byte("not json"), 0644)
+		if got := UnknownKeys(configPath); got != nil {
+			t.Errorf("UnknownKeys(invalid) = %v, want nil", got)
+		}
+	})
+}
+
 func TestLoadConfigFile_Missing(t *testing.T) {
 	_, err := loadConfigFile("/nonexistent/path/config.json")
 	if err == nil {

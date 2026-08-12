@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -226,6 +227,38 @@ func LoadTripwirePatterns() []string {
 		return *cfg.TripwirePatterns
 	}
 	return DefaultTripwirePatterns
+}
+
+// knownConfigKeys are the keys the current config schema understands.
+var knownConfigKeys = map[string]bool{
+	"threshold":             true,
+	"statusline_auto_setup": true,
+	"reset_on":              true,
+	"tripwire_paths":        true,
+	"tripwire_patterns":     true,
+}
+
+// UnknownKeys returns the keys in a config file that the current schema does
+// not understand (e.g. options removed in a previous major version). Config
+// rot is otherwise silent: unknown keys are ignored by json.Unmarshal.
+// Returns nil when the file is missing or unreadable.
+func UnknownKeys(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var unknown []string
+	for key := range raw {
+		if !knownConfigKeys[key] {
+			unknown = append(unknown, key)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

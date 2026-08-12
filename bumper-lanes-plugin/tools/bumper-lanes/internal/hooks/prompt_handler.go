@@ -208,17 +208,39 @@ func handleConfig(sessionID, args string) int {
 		}
 
 		var thresholdStr string
-		if threshold == 0 {
+		switch {
+		case threshold == 0:
 			thresholdStr = "disabled"
-		} else {
+		case threshold >= 1500:
+			thresholdStr = fmt.Sprintf("%d points (near the 2000 cap - trips will be rare)", threshold)
+		default:
 			thresholdStr = fmt.Sprintf("%d points", threshold)
 		}
-		blockPrompt(fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, config.LoadResetOn(), source))
+
+		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, config.LoadResetOn(), source)
+		msg += unknownKeyWarnings()
+		blockPrompt(msg)
 		return 0
 	}
 
 	// Direct number sets config
 	return setThreshold(sessionID, args)
+}
+
+// unknownKeyWarnings names config keys the current schema does not
+// understand, per config file. Unknown keys are otherwise ignored silently,
+// so options removed across versions rot in place invisibly.
+func unknownKeyWarnings() string {
+	var warnings string
+	for _, path := range []string{config.GetConfigPath(), config.GetGlobalConfigPath()} {
+		if path == "" {
+			continue
+		}
+		if unknown := config.UnknownKeys(path); len(unknown) > 0 {
+			warnings += fmt.Sprintf("\nWarning: %s has unrecognized keys: %s", path, strings.Join(unknown, ", "))
+		}
+	}
+	return warnings
 }
 
 // setThreshold parses and saves threshold value to .bumper-lanes.json.
