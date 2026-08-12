@@ -30,6 +30,7 @@ User Commands (called via bash in command files):
   resume <session>  Re-enable enforcement
   config            Show/set threshold configuration
   budget [session]  Print remaining review budget (latest session if omitted)
+  review-clear [session]  Clear a tripped breaker after self-review (on_trip: review)
 
 Status Line Widget:
   status [--widget=TYPE]  Output bumper-lanes status (reads JSON from stdin)
