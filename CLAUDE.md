@@ -27,6 +27,7 @@ Defense-in-depth hook system with three layers:
 ## Key Implementation Details
 
 - Default threshold: 600 points (weighted scoring - edits 1.3× weight, new files 1.0×, deletions ignored)
+- Mechanical churn is free: renames report only edited lines (diff-viz `-M`), and generated files (lockfiles like `go.sum`/`*.lock`, `*.pb.go`, `*_generated.go`, minified assets, `vendor/`, `node_modules/`) score zero and skip scatter (`scoring.isGenerated`)
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PostToolUse fuel gauge tiers: 70% and 90%, delivered as `additionalContext` JSON

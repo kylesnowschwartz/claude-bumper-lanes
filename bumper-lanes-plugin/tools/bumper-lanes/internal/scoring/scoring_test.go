@@ -103,3 +103,53 @@ func TestCalculate(t *testing.T) {
 		})
 	}
 }
+
+// TestCalculateGeneratedFilesScoreZero verifies lockfile/codegen/vendored
+// churn is free: it is machine-written and nobody reviews it line by line.
+func TestCalculateGeneratedFilesScoreZero(t *testing.T) {
+	stats := &diff.StatsJSON{
+		Files: []diff.FileStatJSON{
+			{Path: "go.sum", Adds: 500},
+			{Path: "package-lock.json", Adds: 2000},
+			{Path: "vendor/dep/lib.go", Adds: 900},
+			{Path: "api/gen_generated.go", Adds: 300},
+			{Path: "assets/app.min.js", Adds: 5000},
+			{Path: "main.go", Adds: 10},
+		},
+		Totals: diff.TotalsJSON{Adds: 8710, FileCount: 6},
+	}
+
+	got := Calculate(stats)
+	if got.Score != 13 { // only main.go: 10 * 1.3; generated files excluded from score AND scatter
+		t.Errorf("Score = %d, want 13 (generated churn must be free)", got.Score)
+	}
+	if got.FilesTouched != 1 {
+		t.Errorf("FilesTouched = %d, want 1 (generated files must not count toward scatter)", got.FilesTouched)
+	}
+}
+
+func TestIsGenerated(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"go.sum", true},
+		{"tools/api/go.sum", true},
+		{"Cargo.lock", true},
+		{"flake.lock", true}, // .lock suffix
+		{"vendor/x/y.go", true},
+		{"app/node_modules/pkg/index.js", true},
+		{"api/service.pb.go", true},
+		{"models_generated.go", true},
+		{"dist/app.min.css", true},
+		{"go.mod", false},
+		{"main.go", false},
+		{"locksmith.go", false},
+		{"vendors.go", false},
+	}
+	for _, tt := range tests {
+		if got := isGenerated(tt.path); got != tt.want {
+			t.Errorf("isGenerated(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
