@@ -32,7 +32,7 @@ Defense-in-depth hook system with three layers:
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PostToolUse fuel gauge tiers: 70% and 90%, delivered as `additionalContext` JSON
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
-- The trip message is an architecture-altitude packet (`internal/hooks/trippacket.go`): weighted points by module (`scoring.ByModule`), tripwires first, new-file decision list, a scripted account for the model ("what changed at module level, does the shape match the request, what was verified"), and a file appendix in diff-viz `plain` mode; a fresh trip also emits an OSC 9 desktop notification via the hook `terminalSequence` field
+- The trip message is an architecture-altitude packet (`internal/enforce/trippacket.go`): weighted points by module (`scoring.ByModule`), tripwires first, new-file decision list, a scripted account for the model ("what changed at module level, does the shape match the request, what was verified"), and a file appendix in diff-viz `plain` mode; a fresh trip also emits an OSC 9 desktop notification via the hook `terminalSequence` field
 - Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining
 - UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
 - Budget messages use scope-contract framing (points remaining, clamped at 0, via one shared `budgetLine` helper); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes budget` before large edits and size increments to the remaining budget
@@ -46,7 +46,7 @@ Baseline resets automatically in these scenarios:
 
 1. **PreToolUse clean tree check** (NEW in v3.7.0): When threshold exceeded but tree becomes clean
    - Detects: External commits (IDE, terminal, git CLI) between Stop and next Write/Edit
-   - Location: `pre_tool_use.go:78-98`
+   - Location: `pre_tool_use.go:77-111`
    - Benefit: Eliminates manual `/bumper-reset` after external commits
    - Cost: ~125ms per Write/Edit when StopTriggered=true (rare)
 
@@ -56,7 +56,7 @@ Baseline resets automatically in these scenarios:
 
 3. **Branch switch**
    - Detects: Branch name changed since baseline
-   - Location: `stop.go:115-126`
+   - Location: `stop.go:113-136`
 
 4. **Baseline rebase over upstream commits** (not a reset - the score continues)
    - Detects: HEAD moved since the baseline was captured (`sess.BaselineHead`), e.g. a pull/rebase/merge landed mid-session

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -58,7 +59,7 @@ func TestStopCumulativeStats(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -79,7 +80,7 @@ func TestStopCumulativeStats(t *testing.T) {
 		}
 
 		// Parse the JSON response
-		var resp StopResponse
+		var resp hookio.StopResponse
 		if err := json.Unmarshal([]byte(outputStr), &resp); err != nil {
 			t.Fatalf("Failed to parse response: %v\nOutput: %s", err, outputStr)
 		}
@@ -142,7 +143,7 @@ func TestStopAllowsWhenUnderThreshold(t *testing.T) {
 		checkpointDir := filepath.Join(strings.TrimSpace(string(gitDir)), "bumper-checkpoints")
 		os.MkdirAll(checkpointDir, 0755)
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -191,7 +192,7 @@ func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -266,7 +267,7 @@ func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -323,7 +324,7 @@ func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 		checkpointDir := filepath.Join(strings.TrimSpace(string(gitDir)), "bumper-checkpoints")
 		os.MkdirAll(checkpointDir, 0755)
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -341,7 +342,7 @@ func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
 
 func TestStopSkipsWhenStopHookActive(t *testing.T) {
 	t.Run("skips when StopHookActive is true", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      "any",
 			HookEventName:  "Stop",
 			StopHookActive: true, // Already in a Stop hook
@@ -392,7 +393,7 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,
@@ -431,7 +432,7 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 		sess.Score = 10 // Way under 1000
 		sess.Save()
 
-		input := &HookInput{
+		input := &hookio.Input{
 			SessionID:      sessionID,
 			HookEventName:  "Stop",
 			StopHookActive: false,

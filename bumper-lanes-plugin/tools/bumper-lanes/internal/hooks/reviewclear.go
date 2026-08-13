@@ -5,6 +5,7 @@ import (
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -68,14 +69,14 @@ func ReviewClear(sessionID string) error {
 		return fmt.Errorf("tripwires fired this increment (%v) and tripwires_block_auto_review is set; this trip requires the user", sess.Tripwires)
 	}
 
-	newTree, err := CaptureTree()
+	newTree, err := git.CaptureTree()
 	if err != nil {
 		return fmt.Errorf("capturing baseline: %w", err)
 	}
 
 	scoreAtClear := sess.Score
 	autoReviews := sess.AutoReviews
-	sess.ResetBaseline(newTree, GetCurrentBranch(), GetHeadCommit())
+	sess.ResetBaseline(newTree, git.CurrentBranch(), git.HeadCommit())
 	sess.AutoReviews = autoReviews + 1
 	if err := sess.Save(); err != nil {
 		return fmt.Errorf("saving state: %w", err)

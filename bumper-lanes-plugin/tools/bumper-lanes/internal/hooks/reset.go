@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -17,18 +18,18 @@ func Reset(sessionID string) error {
 	}
 
 	// Capture new baseline tree
-	newTree, err := CaptureTree()
+	newTree, err := git.CaptureTree()
 	if err != nil {
 		return fmt.Errorf("failed to capture tree: %w", err)
 	}
 
 	// Get current branch
-	currentBranch := GetCurrentBranch()
+	currentBranch := git.CurrentBranch()
 
 	events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual})
 
 	// Reset baseline
-	sess.ResetBaseline(newTree, currentBranch, GetHeadCommit())
+	sess.ResetBaseline(newTree, currentBranch, git.HeadCommit())
 
 	// Save state
 	if err := sess.Save(); err != nil {

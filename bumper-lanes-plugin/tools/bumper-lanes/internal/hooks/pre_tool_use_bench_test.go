@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 )
 
 // BenchmarkPreToolUseCleanTreeCheck benchmarks the performance cost of the
@@ -29,20 +31,20 @@ func BenchmarkPreToolUseCleanTreeCheck(b *testing.B) {
 	exec.Command("git", "commit", "-m", "initial").Run()
 
 	// Verify we have a clean tree (setup for benchmark)
-	_, err := CaptureTree()
+	_, err := git.CaptureTree()
 	if err != nil {
 		b.Fatalf("Failed to capture baseline: %v", err)
 	}
 
-	if GetHeadTree() == "" {
+	if git.HeadTree() == "" {
 		b.Fatalf("No HEAD tree")
 	}
 
 	// Benchmark the check operations (this is what PreToolUse does)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		currentTree, _ := CaptureTree()
-		headTree := GetHeadTree()
+		currentTree, _ := git.CaptureTree()
+		headTree := git.HeadTree()
 		_ = currentTree == headTree
 	}
 }
@@ -63,7 +65,7 @@ func BenchmarkCaptureTreeOnly(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = CaptureTree()
+		_, _ = git.CaptureTree()
 	}
 }
 
@@ -83,7 +85,7 @@ func BenchmarkGetHeadTreeOnly(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = GetHeadTree()
+		_ = git.HeadTree()
 	}
 }
 

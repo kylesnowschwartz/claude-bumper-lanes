@@ -6,13 +6,14 @@ package hooks
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -30,24 +31,17 @@ func matchCommand(prompt, cmdName string) bool {
 	return prompt == shortForm || prompt == longForm
 }
 
-// UserPromptResponse is the JSON structure for UserPromptSubmit hook output.
-// decision="block" + reason="message" shows output to user without API call.
-type UserPromptResponse struct {
-	Decision string `json:"decision,omitempty"`
-	Reason   string `json:"reason,omitempty"`
-}
-
 // HandlePrompt handles slash commands before Claude API execution.
 // Returns exit code 0 in all cases (success or handled error).
 // Uses JSON output to stdout with decision="block" to show output.
-func HandlePrompt(input *HookInput) int {
+func HandlePrompt(input *hookio.Input) int {
 	prompt := strings.TrimSpace(input.GetPrompt())
 	if prompt == "" {
 		return 0
 	}
 
 	// Early exit if not in a git repository - bumper-lanes commands require git
-	if !IsGitRepo() {
+	if !git.IsRepo() {
 		return 0 // Pass through - not in a git repo
 	}
 
@@ -98,7 +92,7 @@ func injectBudgetContext(sessionID string) {
 	if pct < 50 {
 		return
 	}
-	if err := WriteContext("UserPromptSubmit", fmt.Sprintf(
+	if err := hookio.WriteContext("UserPromptSubmit", fmt.Sprintf(
 		"bumper-lanes: %s. Plan work that fits the remaining budget, or ask before expanding scope.",
 		budgetLine(sess.Score, sess.ThresholdLimit))); err != nil {
 		log.Warn("failed to write budget context: %v (failing open)", err)
@@ -128,7 +122,7 @@ func handleReset(sessionID string) int {
 	}
 
 	// Now do the slow git work (statusline already shows 0)
-	newTree, err := CaptureTree()
+	newTree, err := git.CaptureTree()
 	if err != nil {
 		// Score already reset - just warn about baseline
 		blockPrompt(fmt.Sprintf("Score reset. Warning: baseline capture failed: %v", err))
@@ -138,8 +132,8 @@ func handleReset(sessionID string) int {
 	// Update baseline with new tree, anchored at today's HEAD so later
 	// pulls/rebases can be forgiven (maybeRebaseBaseline)
 	sess.BaselineTree = newTree
-	sess.BaselineHead = GetHeadCommit()
-	if branch := GetCurrentBranch(); branch != "" {
+	sess.BaselineHead = git.HeadCommit()
+	if branch := git.CurrentBranch(); branch != "" {
 		sess.BaselineBranch = branch
 	}
 	saveOrLog(sess, log, "baseline save after reset")
@@ -300,7 +294,7 @@ func setThreshold(sessionID, valStr string) int {
 
 // blockPrompt outputs a JSON response that blocks the prompt and shows reason to user.
 func blockPrompt(reason string) {
-	resp := UserPromptResponse{
+	resp := hookio.UserPromptResponse{
 		Decision: "block",
 		Reason:   reason,
 	}
@@ -333,15 +327,3 @@ func saveOrBlock(sess *state.SessionState) bool {
 	}
 	return true
 }
-
-// getBumperLanesBinPath returns the path to the bumper-lanes binary.
-func getBumperLanesBinPath() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "bumper-lanes" // fallback to PATH
-	}
-	return exe
-}
-
-// hasStatusLineConfigured is also used by session_start.go
-// (imported from session_start.go)

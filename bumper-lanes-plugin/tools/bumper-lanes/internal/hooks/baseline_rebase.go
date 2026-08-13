@@ -1,13 +1,9 @@
 package hooks
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
-
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -36,7 +32,7 @@ import (
 // current HEAD without rebasing. Saves the state itself on every mutation;
 // returns true when the baseline moved.
 func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
-	head := GetHeadCommit()
+	head := git.HeadCommit()
 	if head == "none" {
 		return false
 	}
@@ -52,8 +48,8 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 		return false
 	}
 
-	oldHeadTree := revParseTree(sess.BaselineHead)
-	newHeadTree := revParseTree(head)
+	oldHeadTree := git.Tree(sess.BaselineHead)
+	newHeadTree := git.Tree(head)
 	if oldHeadTree == "" || newHeadTree == "" {
 		// The old head can vanish (rebase + gc, history rewrite); the
 		// baseline can no longer be advanced precisely. Adopt the new
@@ -71,7 +67,7 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 		return false
 	}
 
-	newBaseline, err := mergeTrees(oldHeadTree, sess.BaselineTree, newHeadTree)
+	newBaseline, err := git.MergeTrees(oldHeadTree, sess.BaselineTree, newHeadTree)
 	if err != nil {
 		log.Warn("baseline rebase failed (%v); baseline stays at %s (run /bumper-reset if the incoming changes were already reviewed)", err, shortSHA(sess.BaselineTree))
 		return false
@@ -100,7 +96,7 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 // policy deliberately withholds the reset. Empty when the baseline is
 // current or was never usably recorded.
 func staleBaselineNote(sess *state.SessionState) string {
-	if sess.BaselineHead == "" || sess.BaselineHead == "none" || sess.BaselineHead == GetHeadCommit() {
+	if sess.BaselineHead == "" || sess.BaselineHead == "none" || sess.BaselineHead == git.HeadCommit() {
 		return ""
 	}
 	return "\nNote: commits landed since the baseline was captured, so this score can\ninclude committed changes. Judge the increment on the files above; the user\ncan run /bumper-reset if the committed portion was already reviewed.\n"
@@ -113,49 +109,4 @@ func shortSHA(sha string) string {
 		return sha[:12]
 	}
 	return sha
-}
-
-// revParseTree resolves a commit-ish to its tree SHA, or "" on failure.
-func revParseTree(commitish string) string {
-	out, err := exec.Command("git", "rev-parse", commitish+"^{tree}").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// mergeTrees 3-way-merges trees in a temp index (base=the tree HEAD had at
-// baseline capture, ours=the baseline, theirs=the tree HEAD has now) and
-// returns the resulting tree SHA. An unmergeable index (conflicting change
-// to the same path) fails; callers keep the old baseline.
-func mergeTrees(base, ours, theirs string) (string, error) {
-	tmpIndex, err := os.CreateTemp("", "bumper-rebase-index-*")
-	if err != nil {
-		return "", err
-	}
-	tmpIndexPath := tmpIndex.Name()
-	tmpIndex.Close()
-	// read-tree -m refuses a pre-existing zero-byte index file; git must
-	// create the index itself at this path.
-	os.Remove(tmpIndexPath)
-	defer os.Remove(tmpIndexPath)
-
-	gitWithTempIndex := func(args ...string) *exec.Cmd {
-		cmd := exec.Command("git", args...)
-		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+tmpIndexPath)
-		return cmd
-	}
-
-	if out, err := gitWithTempIndex("read-tree", "-i", "-m", base, ours, theirs).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("read-tree: %s", strings.TrimSpace(string(out)))
-	}
-	out, err := gitWithTempIndex("write-tree").Output()
-	if err != nil {
-		return "", fmt.Errorf("write-tree: %w", err)
-	}
-	tree := strings.TrimSpace(string(out))
-	if tree == "" {
-		return "", fmt.Errorf("empty tree from merge")
-	}
-	return tree, nil
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hooks"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/statusline"
 )
@@ -102,7 +103,7 @@ func main() {
 // Hook command implementations
 
 func cmdSessionStart() int {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return 0 // Fail open
 	}
@@ -110,7 +111,7 @@ func cmdSessionStart() int {
 }
 
 func cmdPreToolUse() int {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return 0 // Fail open
 	}
@@ -118,7 +119,7 @@ func cmdPreToolUse() int {
 }
 
 func cmdPostToolUse() int {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return 0 // Fail open
 	}
@@ -126,7 +127,7 @@ func cmdPostToolUse() int {
 }
 
 func cmdStop() error {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return nil // Fail open
 	}
@@ -134,7 +135,7 @@ func cmdStop() error {
 }
 
 func cmdSessionEnd() error {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return nil // Fail open
 	}
@@ -207,7 +208,7 @@ func cmdReviewClear(args []string) error {
 // Prompt handler (UserPromptSubmit hook)
 
 func cmdHandlePrompt() int {
-	input, err := hooks.ReadInput()
+	input, err := hookio.Read()
 	if err != nil {
 		return 0 // Fail open
 	}

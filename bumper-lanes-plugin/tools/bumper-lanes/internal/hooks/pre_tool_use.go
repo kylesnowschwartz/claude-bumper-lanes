@@ -5,26 +5,12 @@ import (
 	"os"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
-
-// PreToolUseResponse is the JSON response for PreToolUse hooks.
-// Uses the modern hookSpecificOutput format for permission decisions.
-//
-// Exit code 0 with this JSON structure allows Claude Code to parse
-// the permission decision properly.
-type PreToolUseResponse struct {
-	HookSpecificOutput *HookSpecificOutput `json:"hookSpecificOutput,omitempty"`
-}
-
-// HookSpecificOutput contains the PreToolUse-specific output fields.
-type HookSpecificOutput struct {
-	HookEventName            string `json:"hookEventName"`
-	PermissionDecision       string `json:"permissionDecision"`                 // "allow", "deny", or "ask"
-	PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"` // Shown to Claude when denied
-}
 
 // PreToolUse handles the PreToolUse hook event.
 // It blocks file modification tools (Write, Edit, etc.) when the threshold
@@ -41,7 +27,7 @@ type HookSpecificOutput struct {
 // entirely, complementing the Stop hook which blocks turn completion.
 //
 // Returns exit code 0 for JSON output (even when blocking).
-func PreToolUse(input *HookInput) (exitCode int) {
+func PreToolUse(input *hookio.Input) (exitCode int) {
 	log := logging.New(input.SessionID, "pre_tool_use")
 
 	// Validate hook event
@@ -62,7 +48,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	}
 
 	// Check if git repo
-	if !IsGitRepo() {
+	if !git.IsRepo() {
 		return 0
 	}
 
@@ -96,14 +82,14 @@ func PreToolUse(input *HookInput) (exitCode int) {
 		// the breaker closed.
 		maybeRebaseBaseline(sess, log)
 
-		currentTree, err := CaptureTree()
+		currentTree, err := git.CaptureTree()
 		if err != nil {
 			// Fail-open: If we can't capture tree state, don't block the user
 			log.Warn("failed to capture tree for auto-recovery check: %v (failing open)", err)
 			return 0
 		}
 
-		headTree := GetHeadTree()
+		headTree := git.HeadTree()
 		if headTree == "" {
 			// Fail-open: If HEAD tree unavailable (empty repo?), don't block
 			log.Warn("HEAD tree unavailable for auto-recovery check (failing open)")
@@ -113,8 +99,8 @@ func PreToolUse(input *HookInput) (exitCode int) {
 		if currentTree == headTree {
 			// Tree is clean - auto-reset baseline and clear flag
 			scoreAtReset := sess.Score
-			currentBranch := GetCurrentBranch()
-			sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
+			currentBranch := git.CurrentBranch()
+			sess.ResetBaseline(currentTree, currentBranch, git.HeadCommit())
 			saveOrLog(sess, log, "auto-reset on clean tree")
 			if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseCleanTree}); err != nil {
 				log.Warn("failed to append event: %v", err)
@@ -126,7 +112,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 		}
 
 		// Tree is dirty - recalculate score to check if below threshold
-		// This mirrors the Stop hook's auto-recovery logic (stop.go:123-154)
+		// This mirrors the Stop hook's auto-recovery logic (stop.go:152-172)
 		stats := getStatsJSON(sess.BaselineTree)
 		if stats == nil {
 			log.Warn("failed to get diff stats for auto-recovery (failing open)")
@@ -174,15 +160,15 @@ func PreToolUse(input *HookInput) (exitCode int) {
 
 	reason := formatBlockReason(sess.Score, sess.ThresholdLimit, pct)
 
-	resp := PreToolUseResponse{
-		HookSpecificOutput: &HookSpecificOutput{
+	resp := hookio.PreToolUseResponse{
+		HookSpecificOutput: &hookio.HookSpecificOutput{
 			HookEventName:            "PreToolUse",
 			PermissionDecision:       "deny",
 			PermissionDecisionReason: reason,
 		},
 	}
 
-	if err := WriteResponse(resp); err != nil {
+	if err := hookio.Write(resp); err != nil {
 		log.Warn("failed to write response: %v", err)
 	}
 
@@ -193,18 +179,18 @@ func PreToolUse(input *HookInput) (exitCode int) {
 // so PostToolUse can prove the commit landed by seeing HEAD move. Regex on
 // the command only decides whether to record; the reset decision itself
 // rests on HEAD evidence, never on output scraping.
-func recordHeadBeforeCommit(input *HookInput, log *logging.Logger) {
+func recordHeadBeforeCommit(input *hookio.Input, log *logging.Logger) {
 	if input.ToolInput == nil || !gitCommitPattern.MatchString(input.ToolInput.Command) {
 		return
 	}
-	if !IsGitRepo() {
+	if !git.IsRepo() {
 		return
 	}
 	sess, err := state.Load(input.SessionID)
 	if err != nil {
 		return // No session - nothing to reset later anyway
 	}
-	sess.HeadBeforeCommit = GetHeadCommit()
+	sess.HeadBeforeCommit = git.HeadCommit()
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to record pre-commit HEAD: %v", err)
 	}

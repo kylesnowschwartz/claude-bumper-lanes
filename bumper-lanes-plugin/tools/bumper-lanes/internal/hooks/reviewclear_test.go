@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -24,7 +25,7 @@ func setupReviewRepo(t *testing.T, configJSON string) string {
 	os.WriteFile(".bumper-lanes.json", []byte(configJSON), 0644)
 
 	sessionID := "review-clear-test"
-	baseline, err := CaptureTree()
+	baseline, err := git.CaptureTree()
 	if err != nil {
 		t.Fatalf("CaptureTree: %v", err)
 	}
@@ -167,7 +168,7 @@ func TestReviewClear(t *testing.T) {
 			t.Fatalf("first clear: %v", err)
 		}
 		sess, _ := state.Load(sessionID)
-		tree, _ := CaptureTree()
+		tree, _ := git.CaptureTree()
 		sess.ResetBaseline(tree, "main", "") // commit/branch/manual resets route here
 		sess.Save()
 

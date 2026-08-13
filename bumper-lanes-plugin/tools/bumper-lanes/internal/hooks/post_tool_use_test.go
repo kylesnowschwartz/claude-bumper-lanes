@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -225,7 +227,7 @@ func TestNoVerifyDetection(t *testing.T) {
 
 func TestPostToolUseRouting(t *testing.T) {
 	t.Run("Write routes to file handler", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Write",
 			SessionID:     "nonexistent-session-123",
@@ -239,7 +241,7 @@ func TestPostToolUseRouting(t *testing.T) {
 	})
 
 	t.Run("Edit routes to file handler", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Edit",
 			SessionID:     "nonexistent-session-456",
@@ -252,11 +254,11 @@ func TestPostToolUseRouting(t *testing.T) {
 	})
 
 	t.Run("Bash routes to commit handler", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     "nonexistent-session-789",
-			ToolInput:     &ToolInput{Command: "git status"}, // not a commit
+			ToolInput:     &hookio.ToolInput{Command: "git status"}, // not a commit
 		}
 
 		exitCode := PostToolUse(input)
@@ -267,7 +269,7 @@ func TestPostToolUseRouting(t *testing.T) {
 
 	t.Run("Other tools return 0", func(t *testing.T) {
 		for _, tool := range []string{"Read", "Glob", "Grep", "List", "Search"} {
-			input := &HookInput{
+			input := &hookio.Input{
 				HookEventName: "PostToolUse",
 				ToolName:      tool,
 				SessionID:     "any-session",
@@ -281,7 +283,7 @@ func TestPostToolUseRouting(t *testing.T) {
 	})
 
 	t.Run("Wrong hook event returns 0", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "Stop",
 			ToolName:      "Write",
 			SessionID:     "any-session",
@@ -309,7 +311,7 @@ func TestNotebookEditUpdatesScore(t *testing.T) {
 	exec.Command("git", "commit", "-m", "initial").Run()
 
 	sessionID := "test-notebookedit-score"
-	baseline, _ := CaptureTree()
+	baseline, _ := git.CaptureTree()
 	sess, err := state.New(sessionID, baseline, "main", 400)
 	if err != nil {
 		t.Fatalf("Failed to create session: %v", err)
@@ -323,7 +325,7 @@ func TestNotebookEditUpdatesScore(t *testing.T) {
 	}
 	os.WriteFile("notebook-cells.txt", []byte(content.String()), 0644)
 
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PostToolUse",
 		ToolName:      "NotebookEdit",
 		SessionID:     sessionID,
@@ -361,7 +363,7 @@ func TestHandleBashCommit(t *testing.T) {
 			t.Fatalf("Failed to create session: %v", err)
 		}
 		sess.Score = 100
-		sess.HeadBeforeCommit = GetHeadCommit() // what PreToolUse records
+		sess.HeadBeforeCommit = git.HeadCommit() // what PreToolUse records
 		if err := sess.Save(); err != nil {
 			t.Fatalf("Failed to save session: %v", err)
 		}
@@ -371,11 +373,11 @@ func TestHandleBashCommit(t *testing.T) {
 		exec.Command("git", "add", "committed.txt").Run()
 		gitCommit(t, "-q", "-m", "landed")
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -q -m 'landed'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit -q -m 'landed'"},
 		}
 
 		if exitCode := PostToolUse(input); exitCode != 0 {
@@ -435,15 +437,15 @@ func TestHandleBashCommit(t *testing.T) {
 			t.Fatalf("Failed to create session: %v", err)
 		}
 		sess.Score = 100
-		sess.HeadBeforeCommit = GetHeadCommit()
+		sess.HeadBeforeCommit = git.HeadCommit()
 		sess.Save()
 
 		// No commit performed: HEAD stays put (as after a pre-commit rejection)
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git diff --stat && git commit -m 'rejected'"},
+			ToolInput:     &hookio.ToolInput{Command: "git diff --stat && git commit -m 'rejected'"},
 		}
 
 		if exitCode := PostToolUse(input); exitCode != 0 {
@@ -475,11 +477,11 @@ func TestHandleBashCommit(t *testing.T) {
 		sess.Score = 100
 		sess.Save() // HeadBeforeCommit never recorded
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'unproven'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit -m 'unproven'"},
 		}
 
 		PostToolUse(input)
@@ -502,16 +504,16 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-human-policy"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
-		sess.HeadBeforeCommit = GetHeadCommit()
+		sess.HeadBeforeCommit = git.HeadCommit()
 		sess.Save()
 
 		gitCommit(t, "--allow-empty", "-m", "ok") // HEAD moves: real evidence
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'ok'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit -m 'ok'"},
 		}
 
 		PostToolUse(input)
@@ -537,16 +539,16 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-noverify"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
-		sess.HeadBeforeCommit = GetHeadCommit()
+		sess.HeadBeforeCommit = git.HeadCommit()
 		sess.Save()
 
 		gitCommit(t, "--allow-empty", "--no-verify", "-m", "sneaky")
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit --no-verify -m 'sneaky'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit --no-verify -m 'sneaky'"},
 		}
 
 		PostToolUse(input)
@@ -569,16 +571,16 @@ func TestHandleBashCommit(t *testing.T) {
 		sessionID := "test-bash-verified-ok"
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Score = 100
-		sess.HeadBeforeCommit = GetHeadCommit()
+		sess.HeadBeforeCommit = git.HeadCommit()
 		sess.Save()
 
 		gitCommit(t, "--allow-empty", "-m", "clean")
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'clean'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit -m 'clean'"},
 		}
 
 		PostToolUse(input)
@@ -600,29 +602,29 @@ func TestHandleBashCommit(t *testing.T) {
 		sess, _ := state.New(sessionID, "old-tree-sha", "main", 400)
 		sess.Save()
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PreToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git commit -m 'about to run'"},
+			ToolInput:     &hookio.ToolInput{Command: "git commit -m 'about to run'"},
 		}
 		if exitCode := PreToolUse(input); exitCode != 0 {
 			t.Errorf("PreToolUse(Bash commit) = %d, want 0 (never blocks Bash)", exitCode)
 		}
 
 		reloaded, _ := state.Load(sessionID)
-		if reloaded.HeadBeforeCommit != GetHeadCommit() {
-			t.Errorf("HeadBeforeCommit = %q, want current HEAD %q", reloaded.HeadBeforeCommit, GetHeadCommit())
+		if reloaded.HeadBeforeCommit != git.HeadCommit() {
+			t.Errorf("HeadBeforeCommit = %q, want current HEAD %q", reloaded.HeadBeforeCommit, git.HeadCommit())
 		}
 
 		// Non-commit Bash must not record
 		sess2, _ := state.New("test-pre-no-record", "old-tree-sha", "main", 400)
 		sess2.Save()
-		PreToolUse(&HookInput{
+		PreToolUse(&hookio.Input{
 			HookEventName: "PreToolUse",
 			ToolName:      "Bash",
 			SessionID:     "test-pre-no-record",
-			ToolInput:     &ToolInput{Command: "git status"},
+			ToolInput:     &hookio.ToolInput{Command: "git status"},
 		})
 		reloaded2, _ := state.Load("test-pre-no-record")
 		if reloaded2.HeadBeforeCommit != "" {
@@ -646,11 +648,11 @@ func TestHandleBashCommit(t *testing.T) {
 		sess.Score = 50
 		sess.Save()
 
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     sessionID,
-			ToolInput:     &ToolInput{Command: "git status"},
+			ToolInput:     &hookio.ToolInput{Command: "git status"},
 		}
 
 		exitCode := PostToolUse(input)
@@ -669,7 +671,7 @@ func TestHandleBashCommit(t *testing.T) {
 	})
 
 	t.Run("missing command fails open", func(t *testing.T) {
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PostToolUse",
 			ToolName:      "Bash",
 			SessionID:     "any",
@@ -681,4 +683,93 @@ func TestHandleBashCommit(t *testing.T) {
 			t.Errorf("PostToolUse(nil input) = %d, want 0 (fail open)", exitCode)
 		}
 	})
+}
+
+// TestTripwireDetection verifies the manual-check requirement from the
+// audit: a t.Skip insertion at a tiny score must surface immediately.
+func TestTripwireDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	// Tracked test file in the baseline
+	os.WriteFile("thing_test.go", []byte("package thing\n\nfunc TestA(t *testing.T) {\n}\n"), 0644)
+	exec.Command("git", "add", "thing_test.go").Run()
+	gitCommit(t, "-m", "baseline")
+
+	sessionID := "test-tripwires"
+	baseline, _ := git.CaptureTree()
+	sess, err := state.New(sessionID, baseline, "main", 600)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	sess.Save()
+
+	// Two-line high-risk edit: add a test skip to a tracked file...
+	os.WriteFile("thing_test.go", []byte("package thing\n\nfunc TestA(t *testing.T) {\n\tt.Skip(\"flaky\")\n}\n"), 0644)
+	// ...and touch a CI workflow (untracked - caught by the path lane)
+	os.MkdirAll(".github/workflows", 0755)
+	os.WriteFile(".github/workflows/ci.yml", []byte("on: push\n"), 0644)
+
+	input := &hookio.Input{
+		HookEventName: "PostToolUse",
+		ToolName:      "Edit",
+		SessionID:     sessionID,
+	}
+	if exitCode := PostToolUse(input); exitCode != 0 {
+		t.Errorf("PostToolUse(Edit) = %d, want 0", exitCode)
+	}
+
+	reloaded, _ := state.Load(sessionID)
+	joined := strings.Join(reloaded.Tripwires, "\n")
+	if !strings.Contains(joined, ".github/workflows/ci.yml") {
+		t.Errorf("Tripwires = %v, want CI workflow path hit", reloaded.Tripwires)
+	}
+	if !strings.Contains(joined, "t.Skip (thing_test.go)") {
+		t.Errorf("Tripwires = %v, want added-line t.Skip hit", reloaded.Tripwires)
+	}
+
+	// Second run: same hits are already known, no new ones recorded
+	before := len(reloaded.Tripwires)
+	PostToolUse(input)
+	again, _ := state.Load(sessionID)
+	if len(again.Tripwires) != before {
+		t.Errorf("Tripwires grew from %d to %d on unchanged diff, want stable", before, len(again.Tripwires))
+	}
+
+	// Reset clears them
+	again.ResetBaseline("new-tree", "main", "")
+	if len(again.Tripwires) != 0 {
+		t.Errorf("Tripwires = %v after reset, want empty", again.Tripwires)
+	}
+}
+
+func TestTripwiresDisabledByEmptyConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+	os.WriteFile(".bumper-lanes.json", []byte(`{"tripwire_paths": [], "tripwire_patterns": []}`), 0644)
+
+	sessionID := "test-tripwires-off"
+	baseline, _ := git.CaptureTree()
+	sess, _ := state.New(sessionID, baseline, "main", 600)
+	sess.Save()
+
+	os.MkdirAll(".github/workflows", 0755)
+	os.WriteFile(".github/workflows/ci.yml", []byte("on: push\n"), 0644)
+
+	PostToolUse(&hookio.Input{HookEventName: "PostToolUse", ToolName: "Edit", SessionID: sessionID})
+
+	reloaded, _ := state.Load(sessionID)
+	if len(reloaded.Tripwires) != 0 {
+		t.Errorf("Tripwires = %v with tripwires disabled, want empty", reloaded.Tripwires)
+	}
 }

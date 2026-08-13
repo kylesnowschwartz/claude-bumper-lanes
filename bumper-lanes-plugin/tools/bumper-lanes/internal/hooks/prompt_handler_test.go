@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -41,10 +42,10 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-// decodeBlockResponse parses a single UserPromptResponse JSON line.
-func decodeBlockResponse(t *testing.T, output string) UserPromptResponse {
+// decodeBlockResponse parses a single hookio.UserPromptResponse JSON line.
+func decodeBlockResponse(t *testing.T, output string) hookio.UserPromptResponse {
 	t.Helper()
-	var resp UserPromptResponse
+	var resp hookio.UserPromptResponse
 	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &resp); err != nil {
 		t.Fatalf("failed to decode response %q: %v", output, err)
 	}
@@ -81,111 +82,6 @@ func headTree(t *testing.T) string {
 }
 
 // TestGetBumperLanesBinPath verifies path detection works.
-func TestGetBumperLanesBinPath(t *testing.T) {
-	path := getBumperLanesBinPath()
-
-	// Should return non-empty string
-	if path == "" {
-		t.Error("getBumperLanesBinPath() returned empty string")
-	}
-
-	// Should be an absolute path or "bumper-lanes" fallback
-	if path != "bumper-lanes" && !filepath.IsAbs(path) {
-		t.Errorf("getBumperLanesBinPath() = %q, want absolute path or 'bumper-lanes'", path)
-	}
-}
-
-// TestHasStatusLineConfigured tests status line detection.
-// Uses temp HOME to avoid affecting real user settings.
-func TestHasStatusLineConfigured(t *testing.T) {
-	// Save and restore HOME
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-
-	t.Run(
-		"returns false when no settings file", func(t *testing.T) {
-			tmpHome := t.TempDir()
-			os.Setenv("HOME", tmpHome)
-
-			if hasStatusLineConfigured() {
-				t.Error("hasStatusLineConfigured() = true, want false when no settings")
-			}
-		},
-	)
-
-	t.Run(
-		"returns false when statusLine not configured", func(t *testing.T) {
-			tmpHome := t.TempDir()
-			os.Setenv("HOME", tmpHome)
-
-			claudeDir := filepath.Join(tmpHome, ".claude")
-			os.MkdirAll(claudeDir, 0755)
-			os.WriteFile(
-				filepath.Join(claudeDir, "settings.json"),
-				[]byte(`{"theme": "dark"}`), 0644,
-			)
-
-			if hasStatusLineConfigured() {
-				t.Error("hasStatusLineConfigured() = true, want false when statusLine absent")
-			}
-		},
-	)
-
-	t.Run(
-		"returns false when statusLine has no command", func(t *testing.T) {
-			tmpHome := t.TempDir()
-			os.Setenv("HOME", tmpHome)
-
-			claudeDir := filepath.Join(tmpHome, ".claude")
-			os.MkdirAll(claudeDir, 0755)
-			os.WriteFile(
-				filepath.Join(claudeDir, "settings.json"),
-				[]byte(`{"statusLine": {"type": "command"}}`), 0644,
-			)
-
-			if hasStatusLineConfigured() {
-				t.Error("hasStatusLineConfigured() = true, want false when command missing")
-			}
-		},
-	)
-
-	t.Run(
-		"returns false when command is empty string", func(t *testing.T) {
-			tmpHome := t.TempDir()
-			os.Setenv("HOME", tmpHome)
-
-			claudeDir := filepath.Join(tmpHome, ".claude")
-			os.MkdirAll(claudeDir, 0755)
-			os.WriteFile(
-				filepath.Join(claudeDir, "settings.json"),
-				[]byte(`{"statusLine": {"command": ""}}`), 0644,
-			)
-
-			if hasStatusLineConfigured() {
-				t.Error("hasStatusLineConfigured() = true, want false when command empty")
-			}
-		},
-	)
-
-	t.Run(
-		"returns true when command is configured", func(t *testing.T) {
-			tmpHome := t.TempDir()
-			os.Setenv("HOME", tmpHome)
-
-			claudeDir := filepath.Join(tmpHome, ".claude")
-			os.MkdirAll(claudeDir, 0755)
-			os.WriteFile(
-				filepath.Join(claudeDir, "settings.json"),
-				[]byte(`{"statusLine": {"command": "/path/to/script.sh"}}`), 0644,
-			)
-
-			if !hasStatusLineConfigured() {
-				t.Error("hasStatusLineConfigured() = false, want true when command set")
-			}
-		},
-	)
-}
-
 // TestHandlePromptNonGitRepo verifies graceful handling in non-git directories.
 func TestHandlePromptNonGitRepo(t *testing.T) {
 	origDir, err := os.Getwd()
@@ -221,7 +117,7 @@ func TestHandlePromptNonGitRepo(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(
 			tc.name, func(t *testing.T) {
-				input := &HookInput{
+				input := &hookio.Input{
 					SessionID:  "test-session-123",
 					UserPrompt: tc.prompt,
 				}
@@ -598,7 +494,7 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "/bumper-foo"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "/bumper-foo"})
 		})
 
 		if exitCode != 0 {
@@ -625,14 +521,14 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "implement the next feature"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "implement the next feature"})
 		})
 
 		if exitCode != 0 {
 			t.Errorf("HandlePrompt() = %d, want 0", exitCode)
 		}
 
-		var resp ContextResponse
+		var resp hookio.ContextResponse
 		if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &resp); err != nil {
 			t.Fatalf("failed to decode context response %q: %v", output, err)
 		}
@@ -660,7 +556,7 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "implement the next feature"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "implement the next feature"})
 		})
 
 		if exitCode != 0 {
@@ -687,7 +583,7 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "/bumper-reset"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "/bumper-reset"})
 		})
 
 		if exitCode != 0 {
@@ -722,7 +618,7 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "/claude-bumper-lanes:bumper-diff"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "/claude-bumper-lanes:bumper-diff"})
 		})
 
 		if exitCode != 0 {
@@ -749,7 +645,7 @@ func TestHandlePromptDispatch(t *testing.T) {
 
 		var exitCode int
 		output := captureStdout(t, func() {
-			exitCode = HandlePrompt(&HookInput{SessionID: sessionID, UserPrompt: "/bumper-config 250"})
+			exitCode = HandlePrompt(&hookio.Input{SessionID: sessionID, UserPrompt: "/bumper-config 250"})
 		})
 
 		if exitCode != 0 {

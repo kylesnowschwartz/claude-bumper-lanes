@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
@@ -25,7 +26,7 @@ func setupRebaseRepo(t *testing.T, configJSON string) *state.SessionState {
 		os.WriteFile(".bumper-lanes.json", []byte(configJSON), 0644)
 	}
 
-	baseline, err := CaptureTree()
+	baseline, err := git.CaptureTree()
 	if err != nil {
 		t.Fatalf("CaptureTree: %v", err)
 	}
@@ -33,7 +34,7 @@ func setupRebaseRepo(t *testing.T, configJSON string) *state.SessionState {
 	if err != nil {
 		t.Fatalf("state.New: %v", err)
 	}
-	sess.BaselineHead = GetHeadCommit()
+	sess.BaselineHead = git.HeadCommit()
 	// Uncommitted agent work: must still count after any rebase.
 	os.WriteFile("agent-work.txt", []byte("uncommitted change\n"), 0644)
 	sess.SetScore(1)
@@ -75,7 +76,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		if len(paths) != 1 || paths[0] != "agent-work.txt" {
 			t.Errorf("post-rebase diff = %v, want only agent-work.txt", paths)
 		}
-		if sess.BaselineHead != GetHeadCommit() {
+		if sess.BaselineHead != git.HeadCommit() {
 			t.Errorf("BaselineHead not advanced to current HEAD")
 		}
 	})
@@ -106,7 +107,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load after reset: %v", err)
 		}
-		if reloaded.BaselineHead != GetHeadCommit() {
+		if reloaded.BaselineHead != git.HeadCommit() {
 			t.Errorf("BaselineHead after /bumper-reset = %q, want current HEAD", reloaded.BaselineHead)
 		}
 	})
@@ -117,7 +118,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		if maybeRebaseBaseline(sess, log) {
 			t.Error("none sentinel should adopt, not rebase")
 		}
-		if sess.BaselineHead != GetHeadCommit() {
+		if sess.BaselineHead != git.HeadCommit() {
 			t.Error("none sentinel did not adopt current HEAD")
 		}
 	})
@@ -128,7 +129,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		if maybeRebaseBaseline(sess, log) {
 			t.Error("legacy state should adopt, not rebase")
 		}
-		if sess.BaselineHead != GetHeadCommit() {
+		if sess.BaselineHead != git.HeadCommit() {
 			t.Error("legacy state did not adopt current HEAD")
 		}
 	})
@@ -142,9 +143,9 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		exec.Command("git", "add", "shared.txt").Run()
 		exec.Command("git", "commit", "-q", "-m", "shared base").Run()
 		os.WriteFile("shared.txt", []byte("edit at capture time\n"), 0644)
-		baseline, _ := CaptureTree()
+		baseline, _ := git.CaptureTree()
 		sess.BaselineTree = baseline
-		sess.BaselineHead = GetHeadCommit()
+		sess.BaselineHead = git.HeadCommit()
 		sess.Save()
 
 		os.WriteFile("shared.txt", []byte("upstream edit\n"), 0644)

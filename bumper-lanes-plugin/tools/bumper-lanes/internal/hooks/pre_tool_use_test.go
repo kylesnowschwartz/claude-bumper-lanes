@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -28,7 +30,7 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 	exec.Command("git", "add", "initial.txt").Run()
 	exec.Command("git", "commit", "-m", "initial").Run()
 
-	baseline, _ := CaptureTree()
+	baseline, _ := git.CaptureTree()
 
 	// Create session with low threshold to ensure dirty changes exceed it
 	sess, err := state.New(sessionID, baseline, "main", 50) // Low threshold
@@ -56,7 +58,7 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
-			input := &HookInput{
+			input := &hookio.Input{
 				HookEventName: "PreToolUse",
 				ToolName:      tool,
 				SessionID:     sessionID,
@@ -79,7 +81,7 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 			}
 
 			// Should output JSON with permissionDecision: "deny"
-			var resp PreToolUseResponse
+			var resp hookio.PreToolUseResponse
 			if err := json.Unmarshal(output, &resp); err != nil {
 				t.Fatalf("Failed to parse JSON response: %v\nOutput: %s", err, output)
 			}
@@ -121,7 +123,7 @@ func TestPreToolUseAllowsWhenStopNotTriggered(t *testing.T) {
 		t.Fatalf("Failed to save session: %v", err)
 	}
 
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PreToolUse",
 		ToolName:      "Write",
 		SessionID:     sessionID,
@@ -174,7 +176,7 @@ func TestPreToolUseAllowsWhenPaused(t *testing.T) {
 		t.Fatalf("Failed to save session: %v", err)
 	}
 
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PreToolUse",
 		ToolName:      "Write",
 		SessionID:     sessionID,
@@ -208,7 +210,7 @@ func TestPreToolUseAllowsWhenThresholdDisabled(t *testing.T) {
 		t.Fatalf("Failed to save session: %v", err)
 	}
 
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PreToolUse",
 		ToolName:      "Write",
 		SessionID:     sessionID,
@@ -230,7 +232,7 @@ func TestPreToolUseIgnoresNonModificationTools(t *testing.T) {
 
 	for _, tool := range nonModTools {
 		t.Run(tool+" passes through", func(t *testing.T) {
-			input := &HookInput{
+			input := &hookio.Input{
 				HookEventName: "PreToolUse",
 				ToolName:      tool,
 				SessionID:     "any-session",
@@ -250,7 +252,7 @@ func TestPreToolUseFailsOpenOnMissingSession(t *testing.T) {
 
 	t.Chdir(tmpDir)
 
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PreToolUse",
 		ToolName:      "Write",
 		SessionID:     "nonexistent-session-xyz",
@@ -265,7 +267,7 @@ func TestPreToolUseFailsOpenOnMissingSession(t *testing.T) {
 }
 
 func TestPreToolUseWrongHookEvent(t *testing.T) {
-	input := &HookInput{
+	input := &hookio.Input{
 		HookEventName: "PostToolUse", // Wrong event
 		ToolName:      "Write",
 		SessionID:     "any",
@@ -297,7 +299,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		exec.Command("git", "commit", "-m", "initial").Run()
 
 		// Capture baseline
-		baseline, err := CaptureTree()
+		baseline, err := git.CaptureTree()
 		if err != nil {
 			t.Fatalf("Failed to capture baseline: %v", err)
 		}
@@ -318,14 +320,14 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		exec.Command("git", "commit", "-m", "external commit").Run()
 
 		// Verify tree is clean (matches HEAD)
-		currentTree, _ := CaptureTree()
-		headTree := GetHeadTree()
+		currentTree, _ := git.CaptureTree()
+		headTree := git.HeadTree()
 		if currentTree != headTree {
 			t.Fatalf("Setup failed: tree should be clean")
 		}
 
 		// Claude tries Write (PreToolUse should auto-reset and allow)
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PreToolUse",
 			ToolName:      "Write",
 			SessionID:     sessionID,
@@ -385,7 +387,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		exec.Command("git", "add", "initial.txt").Run()
 		exec.Command("git", "commit", "-m", "initial").Run()
 
-		baseline, _ := CaptureTree()
+		baseline, _ := git.CaptureTree()
 		sessionID := "test-pretooluse-block"
 		sess, _ := state.New(sessionID, baseline, "main", 100) // Lower threshold to ensure we exceed it
 		sess.SetStopTriggered(true)
@@ -399,7 +401,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		os.WriteFile("dirty.txt", largeContent, 0644)
 
 		// PreToolUse should block
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PreToolUse",
 			ToolName:      "Write",
 			SessionID:     sessionID,
@@ -452,7 +454,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		exec.Command("git", "add", "initial.txt").Run()
 		exec.Command("git", "commit", "-m", "initial").Run()
 
-		baseline, _ := CaptureTree()
+		baseline, _ := git.CaptureTree()
 		sessionID := "test-pretooluse-autorecovery"
 		sess, _ := state.New(sessionID, baseline, "main", 200) // Threshold: 200 points
 		sess.SetStopTriggered(true)                            // Was over threshold
@@ -463,7 +465,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		os.WriteFile("small.txt", []byte("small change\n"), 0644) // ~1 line = ~1 point
 
 		// PreToolUse should auto-recover (not block)
-		input := &HookInput{
+		input := &hookio.Input{
 			HookEventName: "PreToolUse",
 			ToolName:      "Write",
 			SessionID:     sessionID,
@@ -492,7 +494,7 @@ func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
 		// Should NOT output JSON blocking (no denial)
 		if len(output) > 0 {
 			// Check if it's a JSON denial
-			var resp PreToolUseResponse
+			var resp hookio.PreToolUseResponse
 			if err := json.Unmarshal(output, &resp); err == nil {
 				if resp.HookSpecificOutput != nil && resp.HookSpecificOutput.PermissionDecision == "deny" {
 					t.Errorf("Should not block when score drops below threshold")

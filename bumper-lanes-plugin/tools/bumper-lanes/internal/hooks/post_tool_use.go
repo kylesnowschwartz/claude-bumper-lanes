@@ -6,7 +6,10 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/enforce"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -21,7 +24,7 @@ var gitCommitPattern = regexp.MustCompile(`git\s+(-{1,2}[A-Za-z-]+([ =]("[^"]*"|
 // For Write/Edit: provides fuel gauge warnings
 // For Bash: detects git commits and auto-resets baseline
 // Feedback reaches Claude via hookSpecificOutput.additionalContext (exit 0).
-func PostToolUse(input *HookInput) (exitCode int) {
+func PostToolUse(input *hookio.Input) (exitCode int) {
 	// Validate hook event
 	if input.HookEventName != "PostToolUse" {
 		return 0
@@ -65,7 +68,7 @@ func commitSegment(command string) string {
 // The evidence that a commit landed is HEAD moving between PreToolUse
 // (which recorded it in HeadBeforeCommit) and now - a rejected or no-op
 // commit leaves HEAD in place, and a quiet one still moves it.
-func handleBashCommit(input *HookInput) int {
+func handleBashCommit(input *hookio.Input) int {
 	log := logging.New(input.SessionID, "post_tool_use")
 
 	// Need command to check
@@ -92,7 +95,7 @@ func handleBashCommit(input *HookInput) int {
 		saveOrLog(sess, log, "clear pending-commit record")
 	}
 
-	if headBefore == "" || GetHeadCommit() == headBefore {
+	if headBefore == "" || git.HeadCommit() == headBefore {
 		log.Info("HEAD did not move - commit did not land, baseline not reset")
 		return 0
 	}
@@ -106,7 +109,7 @@ func handleBashCommit(input *HookInput) int {
 	case config.ResetOnVerifiedCommit:
 		if noVerifyPattern.MatchString(commitSegment(input.ToolInput.Command)) {
 			log.Info("reset_on=verified-commit and commit bypasses hooks - baseline not reset")
-			if err := WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget."); err != nil {
+			if err := hookio.WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget."); err != nil {
 				log.Warn("failed to write context (no-verify notice): %v (failing open)", err)
 			}
 			return 0
@@ -114,9 +117,9 @@ func handleBashCommit(input *HookInput) int {
 	}
 
 	// Capture current tree including untracked files
-	// Must use CaptureTree() (same as manual reset) so pre-existing
+	// Must use git.CaptureTree() (same as manual reset) so pre-existing
 	// untracked files are included in baseline and don't get re-counted
-	currentTree, err := CaptureTree()
+	currentTree, err := git.CaptureTree()
 	if err != nil {
 		log.Warn("failed to capture tree after commit: %v (failing open)", err)
 		return 0 // Failed to capture tree - fail open
@@ -124,8 +127,8 @@ func handleBashCommit(input *HookInput) int {
 
 	// Reset baseline
 	scoreAtReset := sess.Score
-	currentBranch := GetCurrentBranch()
-	sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
+	currentBranch := git.CurrentBranch()
+	sess.ResetBaseline(currentTree, currentBranch, git.HeadCommit())
 	if err := sess.Save(); err != nil {
 		return 0
 	}
@@ -140,14 +143,14 @@ func handleBashCommit(input *HookInput) int {
 
 	// Output feedback
 	threshold := config.LoadThreshold()
-	if err := WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold)); err != nil {
+	if err := hookio.WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold)); err != nil {
 		log.Warn("failed to write context (auto-reset notice): %v (failing open)", err)
 	}
 	return 0
 }
 
 // handleWriteEdit provides fuel gauge warnings after file modifications.
-func handleWriteEdit(input *HookInput) int {
+func handleWriteEdit(input *hookio.Input) int {
 	log := logging.New(input.SessionID, "post_tool_use")
 
 	// Load session state
@@ -184,7 +187,7 @@ func handleWriteEdit(input *HookInput) int {
 
 	// Tripwires fire at any score: small edits in high-risk classes
 	// (CI, dependencies, harness config, test skips) get named immediately.
-	freshTripwires := sess.AddTripwires(detectTripwires(stats, sess.BaselineTree))
+	freshTripwires := sess.AddTripwires(enforce.DetectTripwires(stats, sess.BaselineTree))
 
 	// Update state with fresh score (and any new tripwires)
 	sess.SetScore(freshScore)
@@ -210,7 +213,7 @@ func handleWriteEdit(input *HookInput) int {
 	}
 
 	if len(messages) > 0 {
-		if err := WriteContext("PostToolUse", strings.Join(messages, "\n")); err != nil {
+		if err := hookio.WriteContext("PostToolUse", strings.Join(messages, "\n")); err != nil {
 			log.Warn("failed to write context (fuel gauge): %v (failing open)", err)
 		}
 	}

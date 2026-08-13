@@ -8,7 +8,10 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/enforce"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/scoring"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
@@ -47,12 +50,12 @@ import (
 //     accepting new work, but can still help the user review changes.
 //
 // Reference: https://docs.anthropic.com/en/docs/claude-code/hooks
-func Stop(input *HookInput) error {
+func Stop(input *hookio.Input) error {
 	// Initialize logger for this session
 	log := logging.New(input.SessionID, "stop")
 
 	// Check if this is a git repository
-	if !IsGitRepo() {
+	if !git.IsRepo() {
 		return nil
 	}
 
@@ -109,29 +112,29 @@ func Stop(input *HookInput) error {
 	maybeRebaseBaseline(sess, log)
 
 	// Detect branch switch - auto-reset baseline
-	currentBranch := GetCurrentBranch()
+	currentBranch := git.CurrentBranch()
 	if sess.BaselineBranch != "" && currentBranch != "" && sess.BaselineBranch != currentBranch {
 		// Only capture tree when actually needed (branch switch detected)
 		// This avoids ~50ms overhead on every Stop invocation
-		currentTree, err := CaptureTree()
+		currentTree, err := git.CaptureTree()
 		if err != nil {
 			log.Warn("failed to capture current tree for branch reset: %v (failing open)", err)
 			return nil
 		}
 		scoreAtReset := sess.Score
-		sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
+		sess.ResetBaseline(currentTree, currentBranch, git.HeadCommit())
 		saveOrLog(sess, log, "auto-reset on branch switch")
 		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseBranch}); err != nil {
 			log.Warn("failed to append event: %v", err)
 		}
 
 		// Output branch switch message
-		resp := StopResponse{
+		resp := hookio.StopResponse{
 			Continue:       true,
 			SystemMessage:  fmt.Sprintf("↪ Bumper lanes: Branch changed (%s → %s) — baseline auto-reset.", sess.BaselineBranch, currentBranch),
 			SuppressOutput: false,
 		}
-		return WriteResponse(resp)
+		return hookio.Write(resp)
 	}
 
 	// Get diff stats from baseline (fresh calculation, not incremental)
@@ -161,12 +164,12 @@ func Stop(input *HookInput) error {
 			if sess.ThresholdLimit > 0 {
 				pct = (freshScore * 100) / sess.ThresholdLimit
 			}
-			resp := StopResponse{
+			resp := hookio.StopResponse{
 				Continue:       true,
 				SystemMessage:  fmt.Sprintf("✓ Bumper lanes: Auto-recovered (score dropped to %d/%d - %d%%)", freshScore, sess.ThresholdLimit, pct),
 				SuppressOutput: false,
 			}
-			return WriteResponse(resp)
+			return hookio.Write(resp)
 		}
 
 		// Normal case: update state and allow
@@ -197,30 +200,30 @@ func Stop(input *HookInput) error {
 	// decisions, a scripted next move, and the file-level ground truth.
 	// The next move depends on the trip policy: self-review when enabled
 	// and available this cycle, otherwise the human packet.
-	nextMove := humanNextMove
+	nextMove := enforce.HumanNextMove
 	if policy.OnTrip == config.OnTripReview {
 		switch {
 		case policy.MaxAutoReviews >= 0 && sess.AutoReviews >= policy.MaxAutoReviews:
-			nextMove = humanNextMove + escalationNote
+			nextMove = enforce.HumanNextMove + enforce.EscalationNote
 		case policy.TripwiresBlockAutoReview && len(sess.Tripwires) > 0:
-			nextMove = humanNextMove + "\nNote: tripwires fired, so this trip requires the user (tripwires_block_auto_review).\n"
+			nextMove = enforce.HumanNextMove + "\nNote: tripwires fired, so this trip requires the user (tripwires_block_auto_review).\n"
 		default:
-			nextMove = reviewNextMove(policy.ReviewCommand)
+			nextMove = enforce.ReviewNextMove(policy.ReviewCommand)
 		}
 	}
 	nextMove += staleBaselineNote(sess)
-	reason := buildTripPacket(sess, result, stats, nextMove)
+	reason := enforce.BuildTripPacket(sess, result, stats, nextMove)
 	pct := (freshScore * 100) / sess.ThresholdLimit
 
 	// Desktop notification on the fresh trip only, so an unattended
 	// session surfaces the block once instead of on every retried stop.
 	notification := ""
 	if !wasTripped {
-		notification = tripNotification(freshScore, sess.ThresholdLimit)
+		notification = enforce.TripNotification(freshScore, sess.ThresholdLimit)
 	}
 
 	// Build response - see function doc comment for explanation of these confusing semantics
-	resp := StopResponse{
+	resp := hookio.StopResponse{
 		// continue: true = Claude can keep working (talk, read, help with review)
 		// continue: false would prevent Claude from even explaining what happened
 		Continue: true,
@@ -246,7 +249,7 @@ func Stop(input *HookInput) error {
 		},
 	}
 
-	return WriteResponse(resp)
+	return hookio.Write(resp)
 }
 
 // getStatsJSON uses diff-viz library to get stats from baseline to current tree.

@@ -1,4 +1,7 @@
-package hooks
+// Package enforce holds the trip-policy domain: tripwire detection for
+// high-risk change classes, and the trip packet presented when the review
+// budget trips.
+package enforce
 
 import (
 	"fmt"
@@ -53,11 +56,11 @@ func globToRegexp(glob string) *regexp.Regexp {
 	return regexp.MustCompile(b.String())
 }
 
-// detectTripwires returns human-readable descriptions of tripwire hits in
+// DetectTripwires returns human-readable descriptions of tripwire hits in
 // the current diff: changed files matching tripwire path globs, and added
 // lines containing tripwire patterns. stats is the already-computed diff
 // from baseline; baselineTree is used for the added-line scan.
-func detectTripwires(stats *diff.StatsJSON, baselineTree string) []string {
+func DetectTripwires(stats *diff.StatsJSON, baselineTree string) []string {
 	var hits []string
 
 	for _, pattern := range config.LoadTripwirePaths() {
