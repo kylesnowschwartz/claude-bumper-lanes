@@ -177,9 +177,21 @@ func New(sessionID, baselineTree, baselineBranch string, thresholdLimit int) (*S
 	}, nil
 }
 
+// ambiguityWindow bounds how recently a session state must have been
+// written to count as "active" for the LoadLatest guard. Active sessions
+// write state on every hook, so a concurrent session's file is always
+// fresh; an hour comfortably covers a session idling between turns without
+// letting yesterday's crashed session block the fallback.
+const ambiguityWindow = time.Hour
+
 // LoadLatest reads the most recently modified session state in the
 // checkpoint directory. Used by CLI commands that run without a session id
 // (e.g. `bumper-lanes budget` invoked from Claude's Bash tool).
+//
+// Refuses to guess between concurrent sessions: when more than one state
+// file was written inside ambiguityWindow, the caller must pass an explicit
+// session id. Guessing wrong on `review-clear` would clear another
+// session's breaker.
 func LoadLatest() (*SessionState, error) {
 	checkpointDir, err := GetCheckpointDir()
 	if err != nil {
@@ -192,6 +204,8 @@ func LoadLatest() (*SessionState, error) {
 
 	var latestID string
 	var latestMod time.Time
+	var activeIDs []string
+	cutoff := time.Now().Add(-ambiguityWindow)
 	for _, entry := range entries {
 		name := entry.Name()
 		if !strings.HasPrefix(name, "session-") || strings.HasSuffix(name, ".tmp") {
@@ -201,13 +215,20 @@ func LoadLatest() (*SessionState, error) {
 		if err != nil {
 			continue
 		}
+		id := strings.TrimPrefix(name, "session-")
+		if info.ModTime().After(cutoff) {
+			activeIDs = append(activeIDs, id)
+		}
 		if info.ModTime().After(latestMod) {
 			latestMod = info.ModTime()
-			latestID = strings.TrimPrefix(name, "session-")
+			latestID = id
 		}
 	}
 	if latestID == "" {
 		return nil, ErrNoSession
+	}
+	if len(activeIDs) > 1 {
+		return nil, fmt.Errorf("multiple active sessions in this repo (%s); pass an explicit session id", strings.Join(activeIDs, ", "))
 	}
 	return Load(latestID)
 }

@@ -43,7 +43,7 @@ func Budget(sessionID string) error {
 		sess, err = state.LoadLatest()
 	}
 	if err != nil {
-		return fmt.Errorf("no session state: %w", err)
+		return fmt.Errorf("cannot resolve a session: %w", err)
 	}
 
 	switch {
