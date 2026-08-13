@@ -42,10 +42,6 @@ func TestMatchTripwirePath(t *testing.T) {
 // TestTripwireDetection verifies the manual-check requirement from the
 // audit: a t.Skip insertion at a tiny score must surface immediately.
 func TestTripwireDetection(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
@@ -107,10 +103,6 @@ func TestTripwireDetection(t *testing.T) {
 }
 
 func TestTripwiresDisabledByEmptyConfig(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

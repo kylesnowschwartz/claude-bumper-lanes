@@ -15,10 +15,6 @@ import (
 // Expected result: <10ms per operation on modern hardware.
 // The PR claims "~60ms" but that seems too high for these operations.
 func BenchmarkPreToolUseCleanTreeCheck(b *testing.B) {
-	if !IsGitRepo() {
-		b.Skip("Not in a git repo")
-	}
-
 	// Setup temp repo with commits
 	tmpDir := b.TempDir()
 	setupBenchGitRepo(b, tmpDir)
@@ -53,10 +49,6 @@ func BenchmarkPreToolUseCleanTreeCheck(b *testing.B) {
 
 // BenchmarkCaptureTreeOnly isolates just the CaptureTree operation.
 func BenchmarkCaptureTreeOnly(b *testing.B) {
-	if !IsGitRepo() {
-		b.Skip("Not in a git repo")
-	}
-
 	tmpDir := b.TempDir()
 	setupBenchGitRepo(b, tmpDir)
 
@@ -77,10 +69,6 @@ func BenchmarkCaptureTreeOnly(b *testing.B) {
 
 // BenchmarkGetHeadTreeOnly isolates just the GetHeadTree operation.
 func BenchmarkGetHeadTreeOnly(b *testing.B) {
-	if !IsGitRepo() {
-		b.Skip("Not in a git repo")
-	}
-
 	tmpDir := b.TempDir()
 	setupBenchGitRepo(b, tmpDir)
 

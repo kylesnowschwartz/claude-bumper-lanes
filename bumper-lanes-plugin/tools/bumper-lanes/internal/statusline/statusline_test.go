@@ -1,9 +1,320 @@
 package statusline
 
 import (
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
+
+// setupTempGitRepo initializes a git repo in tmpDir with an initial commit.
+func setupTempGitRepo(t *testing.T, tmpDir string) {
+	t.Helper()
+
+	cmd := exec.Command("git", "init", "-b", "main")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+
+	configCmds := [][]string{
+		{"config", "user.name", "Test"},
+		{"config", "user.email", "test@example.com"},
+	}
+	for _, args := range configCmds {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = tmpDir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git %v failed: %v", args, err)
+		}
+	}
+
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "initial")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+}
+
+func TestRenderBumperWidget(t *testing.T) {
+	t.Run("no session file returns empty output", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Chdir(tmpDir)
+
+		out := renderBumperWidget("no-such-session")
+		if out.State != "" {
+			t.Errorf("State = %q, want empty", out.State)
+		}
+		if out.BumperIndicator != "" {
+			t.Errorf("BumperIndicator = %q, want empty", out.BumperIndicator)
+		}
+	})
+
+	t.Run("threshold limit zero means disabled", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Chdir(tmpDir)
+
+		sess, err := state.New("sess-disabled", "tree1", "main", 0)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		if err := sess.Save(); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		out := renderBumperWidget("sess-disabled")
+		if out.State != "disabled" {
+			t.Errorf("State = %q, want %q", out.State, "disabled")
+		}
+	})
+
+	t.Run("paused session", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Chdir(tmpDir)
+
+		sess, err := state.New("sess-paused", "tree1", "main", 600)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		sess.SetPaused(true)
+		if err := sess.Save(); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		out := renderBumperWidget("sess-paused")
+		if out.State != "paused" {
+			t.Errorf("State = %q, want %q", out.State, "paused")
+		}
+	})
+
+	t.Run("stop triggered means tripped", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Chdir(tmpDir)
+
+		sess, err := state.New("sess-tripped", "tree1", "main", 600)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		sess.SetStopTriggered(true)
+		sess.SetScore(650)
+		if err := sess.Save(); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		out := renderBumperWidget("sess-tripped")
+		if out.State != "tripped" {
+			t.Errorf("State = %q, want %q", out.State, "tripped")
+		}
+	})
+
+	t.Run("active state computes percentage", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			score   int
+			limit   int
+			wantPct int
+		}{
+			{"25 percent", 150, 600, 25},
+			{"50 percent", 300, 600, 50},
+			{"over 100 percent", 700, 600, 116},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				tmpDir := t.TempDir()
+				setupTempGitRepo(t, tmpDir)
+				t.Chdir(tmpDir)
+
+				sess, err := state.New("sess-active", "tree1", "main", tt.limit)
+				if err != nil {
+					t.Fatalf("state.New() error = %v", err)
+				}
+				sess.SetScore(tt.score)
+				if err := sess.Save(); err != nil {
+					t.Fatalf("Save() error = %v", err)
+				}
+
+				out := renderBumperWidget("sess-active")
+				if out.State != "active" {
+					t.Errorf("State = %q, want %q", out.State, "active")
+				}
+				if out.Percentage != tt.wantPct {
+					t.Errorf("Percentage = %d, want %d", out.Percentage, tt.wantPct)
+				}
+				if out.BumperIndicator == "" {
+					t.Errorf("BumperIndicator is empty, want non-empty")
+				}
+			})
+		}
+	})
+
+	t.Run("tripwires present", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+		t.Chdir(tmpDir)
+
+		sess, err := state.New("sess-tripwire", "tree1", "main", 600)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		sess.AddTripwires([]string{"go.mod"})
+		if err := sess.Save(); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		out := renderBumperWidget("sess-tripwire")
+		if out.State != "active" {
+			t.Errorf("State = %q, want %q", out.State, "active")
+		}
+		if !strings.Contains(out.BumperIndicator, "⚠") {
+			t.Errorf("BumperIndicator = %q, want it to contain the tripwire glyph %q", out.BumperIndicator, "⚠")
+		}
+	})
+}
+
+func TestRenderIndicator(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	sess, err := state.New("sess-indicator", "tree1", "main", 600)
+	if err != nil {
+		t.Fatalf("state.New() error = %v", err)
+	}
+	sess.SetScore(300) // 300/600 = 50%
+
+	t.Run("save session", func(t *testing.T) {
+		t.Chdir(tmpDir)
+		if err := sess.Save(); err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+	})
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+
+	input := &StatusInput{
+		SessionID: "sess-indicator",
+		Workspace: struct {
+			CurrentDir string `json:"current_dir"`
+		}{CurrentDir: tmpDir},
+	}
+
+	got, err := RenderIndicator(input)
+	if err != nil {
+		t.Fatalf("RenderIndicator() error = %v", err)
+	}
+
+	if got.State != "active" {
+		t.Errorf("RenderIndicator().State = %q, want %q", got.State, "active")
+	}
+	if !strings.Contains(got.BumperIndicator, "50%") {
+		t.Errorf("RenderIndicator().BumperIndicator = %q, want it to contain %q", got.BumperIndicator, "50%")
+	}
+
+	newDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+	if newDir != origDir {
+		t.Errorf("cwd after RenderIndicator() = %q, want %q (not restored)", newDir, origDir)
+	}
+}
+
+func TestRender(t *testing.T) {
+	t.Run("with saved session includes bumper segment", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		sess, err := state.New("sess-render", "tree1", "main", 600)
+		if err != nil {
+			t.Fatalf("state.New() error = %v", err)
+		}
+		sess.SetScore(300)
+		t.Run("save session", func(t *testing.T) {
+			t.Chdir(tmpDir)
+			if err := sess.Save(); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+		})
+
+		origDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd() error = %v", err)
+		}
+
+		input := &StatusInput{
+			SessionID: "sess-render",
+			Workspace: struct {
+				CurrentDir string `json:"current_dir"`
+			}{CurrentDir: tmpDir},
+		}
+		input.Model.DisplayName = "Sonnet"
+		input.Cost.TotalCostUSD = 1.23
+
+		out, err := Render(input)
+		if err != nil {
+			t.Fatalf("Render() error = %v", err)
+		}
+
+		if !strings.Contains(out.StatusLine, "Sonnet") {
+			t.Errorf("StatusLine missing model name: %s", out.StatusLine)
+		}
+		if !strings.Contains(out.StatusLine, "main") {
+			t.Errorf("StatusLine missing branch name: %s", out.StatusLine)
+		}
+		if !strings.Contains(out.StatusLine, "$1.23") {
+			t.Errorf("StatusLine missing cost: %s", out.StatusLine)
+		}
+		if out.BumperIndicator == "" || !strings.Contains(out.StatusLine, out.BumperIndicator) {
+			t.Errorf("StatusLine missing bumper indicator: %s", out.StatusLine)
+		}
+
+		newDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd() error = %v", err)
+		}
+		if newDir != origDir {
+			t.Errorf("cwd after Render() = %q, want %q (not restored)", newDir, origDir)
+		}
+	})
+
+	t.Run("no saved session omits bumper segment", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupTempGitRepo(t, tmpDir)
+
+		input := &StatusInput{
+			SessionID: "sess-no-state",
+			Workspace: struct {
+				CurrentDir string `json:"current_dir"`
+			}{CurrentDir: tmpDir},
+		}
+		input.Model.DisplayName = "Sonnet"
+		input.Cost.TotalCostUSD = 0.42
+
+		out, err := Render(input)
+		if err != nil {
+			t.Fatalf("Render() error = %v", err)
+		}
+
+		if !strings.Contains(out.StatusLine, "Sonnet") {
+			t.Errorf("StatusLine missing model name: %s", out.StatusLine)
+		}
+		if !strings.Contains(out.StatusLine, "$0.42") {
+			t.Errorf("StatusLine missing cost: %s", out.StatusLine)
+		}
+		if out.BumperIndicator != "" {
+			t.Errorf("BumperIndicator = %q, want empty (no session)", out.BumperIndicator)
+		}
+	})
+}
 
 func TestParseInput(t *testing.T) {
 	t.Run("parses complete input", func(t *testing.T) {

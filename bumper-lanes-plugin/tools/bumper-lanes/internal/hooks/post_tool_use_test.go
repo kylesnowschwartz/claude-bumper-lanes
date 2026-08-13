@@ -297,10 +297,6 @@ func TestPostToolUseRouting(t *testing.T) {
 // TestNotebookEditUpdatesScore verifies NotebookEdit routes to the fuel gauge
 // (the hooks.json matcher includes it; the handler must too).
 func TestNotebookEditUpdatesScore(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -351,11 +347,6 @@ func gitCommit(t *testing.T, args ...string) {
 }
 
 func TestHandleBashCommit(t *testing.T) {
-	// Skip if not in a git repo
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("auto-resets baseline when HEAD moved", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)

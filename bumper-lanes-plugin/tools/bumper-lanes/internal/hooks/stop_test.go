@@ -13,11 +13,6 @@ import (
 )
 
 func TestStopCumulativeStats(t *testing.T) {
-	// Skip if not in a git repo or binary not built
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("uses BaselineTree not PreviousTree for breakdown", func(t *testing.T) {
 		// Create a temp git repo
 		tmpDir := t.TempDir()
@@ -120,10 +115,6 @@ func TestStopCumulativeStats(t *testing.T) {
 }
 
 func TestStopAllowsWhenUnderThreshold(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("allows stop when under threshold", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
@@ -167,10 +158,6 @@ func TestStopAllowsWhenUnderThreshold(t *testing.T) {
 }
 
 func TestStopAutoRecoveryWhenScoreDrops(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("auto-recovers when stop_triggered=true and score drops below threshold", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
@@ -372,10 +359,6 @@ func TestStopSkipsWhenStopHookActive(t *testing.T) {
 // TestEndToEndThresholdDecision verifies the full flow: file changes → score → block/allow.
 // This catches regressions where scoring works but decision logic breaks.
 func TestEndToEndThresholdDecision(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("blocks when score exceeds threshold", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTempGitRepo(t, tmpDir)
@@ -466,10 +449,6 @@ func TestEndToEndThresholdDecision(t *testing.T) {
 // TestSessionStateConsistencyAcrossHooks verifies PostToolUse saves state that Stop can read.
 // Catches: forgotten Save(), format changes, path mismatches.
 func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -551,10 +530,6 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 // Regression test: Score must decrease when user deletes a file, not stay constant.
 // This was a bug when using incremental accumulation instead of fresh calculation.
 func TestScoreDecreasesWhenFileDeleted(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 

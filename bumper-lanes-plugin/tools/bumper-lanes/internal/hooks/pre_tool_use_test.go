@@ -14,10 +14,6 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 	// This is the critical regression test - PreToolUse must block
 	// file modifications when StopTriggered=true AND score still exceeds threshold
 
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -105,10 +101,6 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 }
 
 func TestPreToolUseAllowsWhenStopNotTriggered(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -162,10 +154,6 @@ func TestPreToolUseAllowsWhenStopNotTriggered(t *testing.T) {
 }
 
 func TestPreToolUseAllowsWhenPaused(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -201,10 +189,6 @@ func TestPreToolUseAllowsWhenPaused(t *testing.T) {
 }
 
 func TestPreToolUseAllowsWhenThresholdDisabled(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
 
@@ -261,9 +245,10 @@ func TestPreToolUseIgnoresNonModificationTools(t *testing.T) {
 }
 
 func TestPreToolUseFailsOpenOnMissingSession(t *testing.T) {
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	t.Chdir(tmpDir)
 
 	input := &HookInput{
 		HookEventName: "PreToolUse",
@@ -293,11 +278,6 @@ func TestPreToolUseWrongHookEvent(t *testing.T) {
 }
 
 func TestPreToolUseAutoResetOnCleanTree(t *testing.T) {
-	// Skip if not in a git repo
-	if !IsGitRepo() {
-		t.Skip("Not in a git repo")
-	}
-
 	t.Run("auto-resets when tree becomes clean after Stop triggered", func(t *testing.T) {
 		// This test verifies the fix for the timing issue:
 		// 1. Threshold exceeded → StopTriggered=true

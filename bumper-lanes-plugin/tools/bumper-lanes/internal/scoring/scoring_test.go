@@ -128,6 +128,187 @@ func TestCalculateGeneratedFilesScoreZero(t *testing.T) {
 	}
 }
 
+// TestByModuleTiebreakOrdering verifies modules with equal points are
+// ordered alphabetically by module path, per the documented tiebreak.
+func TestByModuleTiebreakOrdering(t *testing.T) {
+	stats := &diff.StatsJSON{
+		Files: []diff.FileStatJSON{
+			{Path: "dirB/file.go", Adds: 10, New: false},
+			{Path: "dirA/file.go", Adds: 10, New: false},
+		},
+	}
+
+	got := ByModule(stats)
+	if len(got) != 2 {
+		t.Fatalf("len(ByModule) = %d, want 2", len(got))
+	}
+	if got[0].Points != got[1].Points {
+		t.Fatalf("expected equal points to exercise tiebreak, got %d and %d", got[0].Points, got[1].Points)
+	}
+	if got[0].Module != "dirA/" || got[1].Module != "dirB/" {
+		t.Errorf("Modules = [%q, %q], want [\"dirA/\", \"dirB/\"] (alphabetical tiebreak)", got[0].Module, got[1].Module)
+	}
+}
+
+// TestByModuleRootLevelAttribution verifies a file with no directory prefix
+// is attributed to the "(root)" module.
+func TestByModuleRootLevelAttribution(t *testing.T) {
+	stats := &diff.StatsJSON{
+		Files: []diff.FileStatJSON{
+			{Path: "main.go", Adds: 10, New: true},
+		},
+	}
+
+	got := ByModule(stats)
+	if len(got) != 1 {
+		t.Fatalf("len(ByModule) = %d, want 1", len(got))
+	}
+	if got[0].Module != "(root)" {
+		t.Errorf("Module = %q, want \"(root)\"", got[0].Module)
+	}
+	if got[0].Points != 10 || got[0].Files != 1 {
+		t.Errorf("Points/Files = %d/%d, want 10/1", got[0].Points, got[0].Files)
+	}
+}
+
+// TestByModuleExcludesGeneratedFiles verifies generated files contribute no
+// points to any module and do not appear in the output at all.
+func TestByModuleExcludesGeneratedFiles(t *testing.T) {
+	stats := &diff.StatsJSON{
+		Files: []diff.FileStatJSON{
+			{Path: "go.sum", Adds: 500, New: false},
+			{Path: "vendor/dep/lib.go", Adds: 900, New: true},
+		},
+	}
+
+	got := ByModule(stats)
+	if len(got) != 0 {
+		t.Errorf("ByModule(generated-only) = %+v, want empty (generated files excluded entirely)", got)
+	}
+}
+
+// TestByModuleSkipsZeroAddFiles verifies files with Adds==0 (pure deletions)
+// are skipped, not attributed to their module with zero points.
+func TestByModuleSkipsZeroAddFiles(t *testing.T) {
+	stats := &diff.StatsJSON{
+		Files: []diff.FileStatJSON{
+			{Path: "dirA/removed.go", Adds: 0, Dels: 40, New: false},
+			{Path: "dirA/kept.go", Adds: 10, New: false},
+		},
+	}
+
+	got := ByModule(stats)
+	if len(got) != 1 {
+		t.Fatalf("len(ByModule) = %d, want 1 (zero-add file must be skipped)", len(got))
+	}
+	if got[0].Files != 1 {
+		t.Errorf("Files = %d, want 1 (only the file with additions counts)", got[0].Files)
+	}
+}
+
+// TestByModuleCalculateInvariant pins the documented invariant (scoring.go
+// ~71-76): module points sum to Calculate's score minus its scatter penalty.
+// Adds values are multiples of 10 throughout so per-file truncation in
+// ByModule and aggregate truncation in Calculate coincide exactly.
+func TestByModuleCalculateInvariant(t *testing.T) {
+	tests := []struct {
+		name  string
+		stats *diff.StatsJSON
+	}{
+		{
+			name:  "empty",
+			stats: &diff.StatsJSON{Files: []diff.FileStatJSON{}},
+		},
+		{
+			name: "single new file",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "pkg/new.go", Adds: 20, New: true},
+				},
+			},
+		},
+		{
+			name: "mixed new and edit across directories",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "dirA/new.go", Adds: 20, New: true},
+					{Path: "dirB/edit.go", Adds: 30, New: false},
+					{Path: "main.go", Adds: 10, New: true},
+				},
+			},
+		},
+		{
+			name: "with generated files and zero-add files mixed in",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "dirA/new.go", Adds: 20, New: true},
+					{Path: "dirB/edit.go", Adds: 30, New: false},
+					{Path: "go.sum", Adds: 500, New: false},
+					{Path: "dirC/removed.go", Adds: 0, Dels: 40, New: false},
+				},
+			},
+		},
+		{
+			name: "scatter-triggering fan-out",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "d1/a.go", Adds: 10}, {Path: "d2/b.go", Adds: 10},
+					{Path: "d3/c.go", Adds: 10}, {Path: "d4/d.go", Adds: 10},
+					{Path: "d5/e.go", Adds: 10}, {Path: "d6/f.go", Adds: 10},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calc := Calculate(tt.stats)
+			modules := ByModule(tt.stats)
+
+			var sum int
+			for _, m := range modules {
+				sum += m.Points
+			}
+
+			want := calc.Score - calc.ScatterPenalty
+			if sum != want {
+				t.Errorf("sum(ByModule points) = %d, want %d (Score %d - ScatterPenalty %d)",
+					sum, want, calc.Score, calc.ScatterPenalty)
+			}
+		})
+	}
+}
+
+// TestCalculateIntegerTruncationBoundaries pins Calculate's integer
+// truncation ((edit*13)/10) at values that don't divide evenly, so a future
+// change to the arithmetic must consciously touch this test.
+func TestCalculateIntegerTruncationBoundaries(t *testing.T) {
+	tests := []struct {
+		name      string
+		adds      int
+		wantScore int
+	}{
+		{name: "adds=1", adds: 1, wantScore: 1},    // 1*13=13, 13/10=1
+		{name: "adds=3", adds: 3, wantScore: 3},    // 3*13=39, 39/10=3
+		{name: "adds=7", adds: 7, wantScore: 9},    // 7*13=91, 91/10=9
+		{name: "adds=10", adds: 10, wantScore: 13}, // 10*13=130, 130/10=13 (evenly divisible)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stats := &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "edit.go", Adds: tt.adds, New: false},
+				},
+			}
+			got := Calculate(stats)
+			if got.Score != tt.wantScore {
+				t.Errorf("Calculate(Adds=%d edit).Score = %d, want %d", tt.adds, got.Score, tt.wantScore)
+			}
+		})
+	}
+}
+
 func TestIsGenerated(t *testing.T) {
 	tests := []struct {
 		path string
