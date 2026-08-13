@@ -39,6 +39,12 @@ func ConfigShow() error {
 		fmt.Println("Config: (using defaults)")
 		fmt.Printf("Global: %s (create for viz-only mode)\n", globalPath)
 	}
+	if config.HasPluginOptions() {
+		fmt.Println("Plugin: values set via /plugin > claude-bumper-lanes (repo file still overrides)")
+	}
+	if globalExists {
+		fmt.Printf("Note: the global file is deprecated - move these values to the plugin's settings (/plugin > claude-bumper-lanes). File support ends in v5.\n")
+	}
 
 	return nil
 }

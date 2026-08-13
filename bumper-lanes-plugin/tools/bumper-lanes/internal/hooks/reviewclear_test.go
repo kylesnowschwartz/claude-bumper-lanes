@@ -99,6 +99,20 @@ func TestReviewClear(t *testing.T) {
 		}
 	})
 
+	t.Run("stamped policy beats file config for Bash-invoked clears", func(t *testing.T) {
+		// File config says block; the hook-stamped policy says review.
+		// review-clear must honor the stamp (Bash invocations can't see
+		// plugin userConfig env vars, so the stamp is authoritative).
+		sessionID := setupReviewRepo(t, `{}`)
+		sess, _ := state.Load(sessionID)
+		sess.Policy = &state.ReviewPolicy{OnTrip: "review", MaxAutoReviews: 1, ReviewCommand: "/code-review"}
+		sess.Save()
+
+		if err := ReviewClear(sessionID); err != nil {
+			t.Errorf("stamped review policy should allow the clear, got: %v", err)
+		}
+	})
+
 	t.Run("max_auto_reviews 0 refuses every clear", func(t *testing.T) {
 		sessionID := setupReviewRepo(t, `{"on_trip": "review", "max_auto_reviews": 0}`)
 		err := ReviewClear(sessionID)

@@ -52,6 +52,23 @@ type SessionState struct {
 	// the human packet, so the agent gets one self-review per human
 	// touchpoint. Zeroed by manual reset and commit auto-reset.
 	AutoReviews int `json:"auto_reviews,omitempty"`
+
+	// Policy is the effective trip policy, stamped by hook processes.
+	// Hooks are plugin subprocesses and see the plugin's userConfig values
+	// (CLAUDE_PLUGIN_OPTION_* env); CLI commands invoked from the agent's
+	// Bash tool do not, so review-clear reads this instead. Nil on state
+	// written before the policy was stamped - callers fall back to file
+	// config.
+	Policy *ReviewPolicy `json:"review_policy,omitempty"`
+}
+
+// ReviewPolicy is the trip-policy subset of config that Bash-invoked CLI
+// commands need but cannot read from plugin env vars.
+type ReviewPolicy struct {
+	OnTrip                   string `json:"on_trip"`
+	MaxAutoReviews           int    `json:"max_auto_reviews"`
+	ReviewCommand            string `json:"review_command"`
+	TripwiresBlockAutoReview bool   `json:"tripwires_block_auto_review"`
 }
 
 // ErrNoSession is returned when the session state file doesn't exist.

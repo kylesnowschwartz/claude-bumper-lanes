@@ -84,10 +84,13 @@ This tells bumper-lanes to leave your configuration alone. The plugin will not w
 
 ## Configuration
 
-Config files (in precedence order):
-1. `.bumper-lanes.json` at repo root (highest priority)
-2. `~/.config/bumper-lanes/config.json` (global fallback)
-3. Built-in defaults
+Set your defaults when enabling the plugin: `/plugin` > claude-bumper-lanes prompts for the threshold, reset policy, trip behavior, and status line setup, and stores them in your user settings. Change them any time through the same menu.
+
+Precedence order:
+1. `.bumper-lanes.json` at repo root (highest priority - per-repo overrides)
+2. Plugin settings (set via `/plugin`, prompted at enable)
+3. `~/.config/bumper-lanes/config.json` (deprecated - support ends in v5; move values to the plugin settings)
+4. Built-in defaults
 
 ```json
 {

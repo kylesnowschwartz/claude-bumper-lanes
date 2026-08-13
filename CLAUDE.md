@@ -110,11 +110,14 @@ See the **hook-intercept-block** skill for full documentation on implementing ne
 
 ## Configuration
 
-Config files (in precedence order):
+Config sources (in precedence order):
 
 1. `.bumper-lanes.json` at repo root (highest priority)
-2. `~/.config/bumper-lanes/config.json` (global fallback)
-3. Built-in defaults
+2. Plugin `userConfig` (prompted at enable via `/plugin`; stored in `~/.claude/settings.json` `pluginConfigs`; reaches hook processes as `CLAUDE_PLUGIN_OPTION_<KEY>` env vars — `config.pluginOptionsFromEnv`)
+3. `~/.config/bumper-lanes/config.json` (deprecated global fallback — support ends in v5)
+4. Built-in defaults
+
+Bash-invoked CLI commands (`review-clear`, `budget`) never see the plugin env vars, so hooks stamp the effective trip policy into session state (`sess.Policy`, `state.ReviewPolicy`) at session-start and on every trip; `review-clear` reads the stamp first and falls back to file config. Tripwire path/pattern lists stay file-only (unpromptable as strings).
 
 ### Config Commands
 

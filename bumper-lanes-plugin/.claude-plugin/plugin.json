@@ -1,6 +1,6 @@
 {
   "name": "claude-bumper-lanes",
-  "version": "4.3.4",
+  "version": "4.4.0",
   "description": "Enforces git diff thresholds to promote disciplined code review during AI agent sessions",
   "author": {
     "name": "Kyle Snow Schwartz",
@@ -15,5 +15,49 @@
     "threshold",
     "code-review",
     "safety"
-  ]
+  ],
+  "userConfig": {
+    "threshold": {
+      "title": "Review budget (points)",
+      "type": "number",
+      "description": "Points (roughly changed lines) Claude can accumulate before being blocked for review. 0 disables, 50-2000 active. Default: 600",
+      "sensitive": false
+    },
+    "reset_on": {
+      "title": "Budget reset on commit",
+      "type": "string",
+      "description": "When Claude's own git commit restores the budget: 'commit' (default), 'verified-commit' (refuses --no-verify), or 'human' (only /bumper-reset restores)",
+      "sensitive": false
+    },
+    "on_trip": {
+      "title": "Trip behavior",
+      "type": "string",
+      "description": "What happens at the budget limit: 'block' (default - wait for your review) or 'review' (the agent reviews its own increment, clears the breaker, and implements the findings)",
+      "sensitive": false
+    },
+    "max_auto_reviews": {
+      "title": "Self-reviews per cycle",
+      "type": "number",
+      "description": "With trip behavior 'review': self-review clears allowed before a trip requires you. Default 1; -1 = unlimited (hands-off); 0 = never",
+      "sensitive": false
+    },
+    "review_command": {
+      "title": "Review command",
+      "type": "string",
+      "description": "The review workflow the agent is told to run when self-review is enabled. Default: /code-review",
+      "sensitive": false
+    },
+    "tripwires_block_auto_review": {
+      "title": "Tripwires require human review",
+      "type": "boolean",
+      "description": "Increments touching high-risk files (CI, dependencies, test skips) always come to you even with self-review enabled. Default: false",
+      "sensitive": false
+    },
+    "statusline_auto_setup": {
+      "title": "Add budget gauge to status line",
+      "type": "boolean",
+      "description": "Let the plugin add its budget gauge to your status line (edits ~/.claude/settings.json on session start). Default: false",
+      "sensitive": false
+    }
+  }
 }

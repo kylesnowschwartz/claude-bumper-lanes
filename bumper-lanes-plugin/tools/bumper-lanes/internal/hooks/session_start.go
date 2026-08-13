@@ -68,6 +68,9 @@ func SessionStart(input *HookInput) int {
 	// Anchor the baseline at today's HEAD so later pulls/rebases can be
 	// forgiven (maybeRebaseBaseline).
 	sess.BaselineHead = GetHeadCommit()
+	// Stamp the trip policy while we're in a hook process, where plugin
+	// userConfig env vars are visible (Bash-invoked CLI commands are not).
+	sess.Policy = currentReviewPolicy()
 
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to save session state: %v (failing open)", err)

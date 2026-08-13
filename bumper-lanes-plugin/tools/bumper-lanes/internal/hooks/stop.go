@@ -180,6 +180,10 @@ func Stop(input *HookInput) error {
 	sess.SetStopTriggered(true)
 	sess.SetScore(freshScore)
 	sess.NetLines = result.NetLines
+	// Stamp the effective trip policy for review-clear, which runs from
+	// the agent's Bash tool and cannot see plugin userConfig env vars.
+	policy := currentReviewPolicy()
+	sess.Policy = policy
 	sess.Save()
 	// Log the trip transition only, not every blocked Stop while tripped.
 	if !wasTripped {
@@ -193,15 +197,14 @@ func Stop(input *HookInput) error {
 	// The next move depends on the trip policy: self-review when enabled
 	// and available this cycle, otherwise the human packet.
 	nextMove := humanNextMove
-	if config.LoadOnTrip() == config.OnTripReview {
-		maxReviews := config.LoadMaxAutoReviews()
+	if policy.OnTrip == config.OnTripReview {
 		switch {
-		case maxReviews >= 0 && sess.AutoReviews >= maxReviews:
+		case policy.MaxAutoReviews >= 0 && sess.AutoReviews >= policy.MaxAutoReviews:
 			nextMove = humanNextMove + escalationNote
-		case config.LoadTripwiresBlockAutoReview() && len(sess.Tripwires) > 0:
+		case policy.TripwiresBlockAutoReview && len(sess.Tripwires) > 0:
 			nextMove = humanNextMove + "\nNote: tripwires fired, so this trip requires the user (tripwires_block_auto_review).\n"
 		default:
-			nextMove = reviewNextMove(config.LoadReviewCommand())
+			nextMove = reviewNextMove(policy.ReviewCommand)
 		}
 	}
 	nextMove += staleBaselineNote(sess)

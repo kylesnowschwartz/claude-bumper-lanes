@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -158,17 +159,21 @@ func getGlobalConfigPath() string {
 // loadMergedConfig loads config from global and repo locations, merging them.
 // Repo config values override global config values.
 // Returns an empty Config if neither file exists (never nil).
+// loadMergedConfig resolves the effective config. Precedence, lowest first:
+// legacy global file (~/.config/bumper-lanes, deprecated) < plugin config
+// (userConfig values, via CLAUDE_PLUGIN_OPTION_* env in hook processes)
+// < repo .bumper-lanes.json.
 func loadMergedConfig() *Config {
 	merged := &Config{}
 
-	// Load global config first (lower priority)
 	if globalPath := getGlobalConfigPath(); globalPath != "" {
 		if global, err := loadConfigFile(globalPath); err == nil {
 			merged = global
 		}
 	}
 
-	// Load repo config and override (higher priority)
+	overlay(merged, pluginOptionsFromEnv())
+
 	repoRoot, err := getRepoRoot()
 	if err != nil {
 		return merged
@@ -178,37 +183,101 @@ func loadMergedConfig() *Config {
 	if err != nil {
 		return merged
 	}
-
-	// Merge: repo values override global (non-nil pointers and non-empty strings)
-	if repo.Threshold != nil {
-		merged.Threshold = repo.Threshold
-	}
-	if repo.StatuslineAutoSetup != nil {
-		merged.StatuslineAutoSetup = repo.StatuslineAutoSetup
-	}
-	if repo.ResetOn != "" {
-		merged.ResetOn = repo.ResetOn
-	}
-	if repo.OnTrip != "" {
-		merged.OnTrip = repo.OnTrip
-	}
-	if repo.ReviewCommand != "" {
-		merged.ReviewCommand = repo.ReviewCommand
-	}
-	if repo.TripwiresBlockAutoReview != nil {
-		merged.TripwiresBlockAutoReview = repo.TripwiresBlockAutoReview
-	}
-	if repo.MaxAutoReviews != nil {
-		merged.MaxAutoReviews = repo.MaxAutoReviews
-	}
-	if repo.TripwirePaths != nil {
-		merged.TripwirePaths = repo.TripwirePaths
-	}
-	if repo.TripwirePatterns != nil {
-		merged.TripwirePatterns = repo.TripwirePatterns
-	}
+	overlay(merged, repo)
 
 	return merged
+}
+
+// overlay applies src's set fields (non-nil pointers, non-empty strings)
+// over dst.
+func overlay(dst, src *Config) {
+	if src.Threshold != nil {
+		dst.Threshold = src.Threshold
+	}
+	if src.StatuslineAutoSetup != nil {
+		dst.StatuslineAutoSetup = src.StatuslineAutoSetup
+	}
+	if src.ResetOn != "" {
+		dst.ResetOn = src.ResetOn
+	}
+	if src.OnTrip != "" {
+		dst.OnTrip = src.OnTrip
+	}
+	if src.ReviewCommand != "" {
+		dst.ReviewCommand = src.ReviewCommand
+	}
+	if src.TripwiresBlockAutoReview != nil {
+		dst.TripwiresBlockAutoReview = src.TripwiresBlockAutoReview
+	}
+	if src.MaxAutoReviews != nil {
+		dst.MaxAutoReviews = src.MaxAutoReviews
+	}
+	if src.TripwirePaths != nil {
+		dst.TripwirePaths = src.TripwirePaths
+	}
+	if src.TripwirePatterns != nil {
+		dst.TripwirePatterns = src.TripwirePatterns
+	}
+}
+
+// pluginOptionsFromEnv builds a Config from the CLAUDE_PLUGIN_OPTION_<KEY>
+// variables Claude Code sets in plugin subprocesses for userConfig values
+// (plugin.json). Only hook processes see them; CLI invocations from the
+// agent's Bash tool read the policy the hooks stamped into session state
+// instead. Unparseable values are ignored (the enable-time prompt is typed,
+// so these arrive well-formed).
+func pluginOptionsFromEnv() *Config {
+	cfg := &Config{}
+	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_THRESHOLD"); ok {
+		cfg.Threshold = &v
+	}
+	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_STATUSLINE_AUTO_SETUP"); ok {
+		cfg.StatuslineAutoSetup = &v
+	}
+	cfg.ResetOn = os.Getenv("CLAUDE_PLUGIN_OPTION_RESET_ON")
+	cfg.OnTrip = os.Getenv("CLAUDE_PLUGIN_OPTION_ON_TRIP")
+	cfg.ReviewCommand = os.Getenv("CLAUDE_PLUGIN_OPTION_REVIEW_COMMAND")
+	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_TRIPWIRES_BLOCK_AUTO_REVIEW"); ok {
+		cfg.TripwiresBlockAutoReview = &v
+	}
+	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_MAX_AUTO_REVIEWS"); ok {
+		cfg.MaxAutoReviews = &v
+	}
+	return cfg
+}
+
+// HasPluginOptions reports whether any plugin userConfig value is present
+// in the environment. True only in plugin subprocesses (hook processes)
+// where the user has set values via the plugin's enable-time prompts.
+func HasPluginOptions() bool {
+	for _, key := range []string{"THRESHOLD", "RESET_ON", "ON_TRIP", "MAX_AUTO_REVIEWS", "REVIEW_COMMAND", "TRIPWIRES_BLOCK_AUTO_REVIEW", "STATUSLINE_AUTO_SETUP"} {
+		if os.Getenv("CLAUDE_PLUGIN_OPTION_"+key) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func envInt(key string) (int, bool) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, false
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+func envBool(key string) (bool, bool) {
+	switch os.Getenv(key) {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	}
+	return false, false
 }
 
 // LoadThreshold returns the configured threshold value.

@@ -8,6 +8,18 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
+// currentReviewPolicy resolves the trip policy from config. In hook
+// processes this sees plugin userConfig values (CLAUDE_PLUGIN_OPTION_* env);
+// elsewhere it reads file config only.
+func currentReviewPolicy() *state.ReviewPolicy {
+	return &state.ReviewPolicy{
+		OnTrip:                   config.LoadOnTrip(),
+		MaxAutoReviews:           config.LoadMaxAutoReviews(),
+		ReviewCommand:            config.LoadReviewCommand(),
+		TripwiresBlockAutoReview: config.LoadTripwiresBlockAutoReview(),
+	}
+}
+
 // ReviewClear clears a tripped breaker after an agent self-review
 // (on_trip: review). The agent runs this from the Bash tool between
 // reviewing the increment and implementing the findings, so the fixes are
@@ -34,17 +46,25 @@ func ReviewClear(sessionID string) error {
 		return fmt.Errorf("cannot resolve a session: %w", err)
 	}
 
-	if config.LoadOnTrip() != config.OnTripReview {
-		return fmt.Errorf("review-clear requires on_trip: \"review\" in .bumper-lanes.json (current policy: %s); ask the user to review instead", config.LoadOnTrip())
+	// Bash-tool invocations don't see plugin userConfig env vars, so the
+	// policy the hooks stamped into session state is authoritative; fall
+	// back to file config for state written before stamping existed.
+	policy := sess.Policy
+	if policy == nil {
+		policy = currentReviewPolicy()
+	}
+
+	if policy.OnTrip != config.OnTripReview {
+		return fmt.Errorf("review-clear requires on_trip: \"review\" (current policy: %s); ask the user to review instead", policy.OnTrip)
 	}
 	if !sess.StopTriggered {
 		return fmt.Errorf("breaker is not tripped (score %d/%d); nothing to clear", sess.Score, sess.ThresholdLimit)
 	}
-	maxReviews := config.LoadMaxAutoReviews()
+	maxReviews := policy.MaxAutoReviews
 	if maxReviews >= 0 && sess.AutoReviews >= maxReviews {
 		return fmt.Errorf("self-review limit reached (%d of %d this cycle); this trip requires the user (/bumper-reset or a commit resets the cycle)", sess.AutoReviews, maxReviews)
 	}
-	if config.LoadTripwiresBlockAutoReview() && len(sess.Tripwires) > 0 {
+	if policy.TripwiresBlockAutoReview && len(sess.Tripwires) > 0 {
 		return fmt.Errorf("tripwires fired this increment (%v) and tripwires_block_auto_review is set; this trip requires the user", sess.Tripwires)
 	}
 

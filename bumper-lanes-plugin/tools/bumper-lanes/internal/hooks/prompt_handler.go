@@ -203,8 +203,13 @@ func handleConfig(sessionID, args string) int {
 		// global), matching ConfigShow - an explicit value equal to the
 		// default is still attributed to its file.
 		source := "default"
+		deprecation := ""
 		if globalPath := config.GetGlobalConfigPath(); globalPath != "" && fileExists(globalPath) {
 			source = globalPath
+			deprecation = fmt.Sprintf("\nNote: %s is deprecated - move these values to the plugin's settings (/plugin > claude-bumper-lanes). File support ends in v5.", globalPath)
+		}
+		if config.HasPluginOptions() {
+			source = "plugin config (/plugin > claude-bumper-lanes)"
 		}
 		if repoPath := config.GetConfigPath(); repoPath != "" && fileExists(repoPath) {
 			source = repoPath
@@ -219,6 +224,7 @@ func handleConfig(sessionID, args string) int {
 
 		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, config.LoadResetOn(), source)
 		msg += unknownKeyWarnings()
+		msg += deprecation
 		blockPrompt(msg)
 		return 0
 	}
