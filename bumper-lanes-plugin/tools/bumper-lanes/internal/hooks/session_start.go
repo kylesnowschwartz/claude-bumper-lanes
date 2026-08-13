@@ -282,16 +282,10 @@ func getStatusLineCommand(homeDir string) string {
 	return cmd
 }
 
-// isOurWrapper checks if the given command is already our generated wrapper.
-// Detects by filename match or by marker in file content.
 // isTestProcess reports whether this process is a go-test binary rather
 // than an installed bumper-lanes.
 func isTestProcess() bool {
-	exe, err := os.Executable()
-	if err != nil {
-		return false
-	}
-	return strings.HasSuffix(exe, ".test") || strings.Contains(exe, string(filepath.Separator)+"go-build")
+	return logging.IsTestProcess()
 }
 
 func isOurWrapper(cmd, homeDir string) bool {

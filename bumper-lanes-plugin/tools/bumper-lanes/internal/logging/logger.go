@@ -1,5 +1,8 @@
 // Package logging provides session-based file logging for bumper-lanes hooks.
-// Logs are written to ~/.claude/logs/bumper-lanes/session-{session_id}.log
+// Logs are written to ~/.claude/logs/bumper-lanes/{date}-session-{session_id}.log.
+// Test processes (go test binaries) log under the system temp directory
+// instead, so the operator-facing directory only ever holds real sessions;
+// files older than retentionDays are pruned once per process.
 package logging
 
 import (
@@ -42,12 +45,51 @@ var (
 func New(sessionID, source string) *Logger {
 	safeID := sanitizeSessionID(sessionID)
 	logDir := getLogDir()
-	logFile := filepath.Join(logDir, fmt.Sprintf("session-%s.log", safeID))
+	pruneOnce.Do(func() { pruneOldLogs(logDir) })
+	logFile := filepath.Join(logDir, fmt.Sprintf("%s-session-%s.log", time.Now().Format("2006-01-02"), safeID))
 
 	return &Logger{
 		sessionID: sessionID,
 		source:    source,
 		logFile:   logFile,
+	}
+}
+
+// IsTestProcess reports whether this binary is a go-test artifact. Shared
+// by every guard that must not touch user-global state from a test run
+// (log directory here, statusline wrapper in the session-start hook).
+func IsTestProcess() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(exe, ".test") || strings.Contains(exe, string(filepath.Separator)+"go-build")
+}
+
+// retentionDays bounds how long session logs are kept.
+const retentionDays = 30
+
+var pruneOnce sync.Once
+
+// pruneOldLogs removes log files past retention. Best-effort: never blocks
+// or fails the operation being logged.
+func pruneOldLogs(logDir string) {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".log") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			os.Remove(filepath.Join(logDir, entry.Name()))
+		}
 	}
 }
 
@@ -119,12 +161,17 @@ func (l *Logger) writeToFile(entry string) error {
 	return f.Sync()
 }
 
-// getLogDir returns the log directory path (~/.claude/logs/bumper-lanes)
+// getLogDir returns the log directory path (~/.claude/logs/bumper-lanes).
+// Test processes get a temp-dir sibling so go test runs never write into
+// the operator-facing directory.
 func getLogDir() string {
+	if IsTestProcess() {
+		return filepath.Join(os.TempDir(), "bumper-lanes-test-logs")
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		// Fallback to /tmp if home dir unavailable
-		return "/tmp/bumper-lanes-logs"
+		return filepath.Join(os.TempDir(), "bumper-lanes-logs")
 	}
 	return filepath.Join(homeDir, ".claude", "logs", "bumper-lanes")
 }

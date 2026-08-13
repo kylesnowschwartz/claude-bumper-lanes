@@ -65,7 +65,7 @@ Baseline resets automatically in these scenarios:
 
 ## Logging
 
-Session logs are written to `~/.claude/logs/bumper-lanes/session-{session_id}.log` for debugging fail-open errors and operational visibility.
+Session logs are written to `~/.claude/logs/bumper-lanes/{date}-session-{session_id}.log` for debugging fail-open errors and operational visibility. Logs older than 30 days are pruned automatically. Go-test binaries log under `$TMPDIR/bumper-lanes-test-logs/` instead (`logging.IsTestProcess`), so the operator directory only ever contains real sessions.
 
 **Log format:**
 
