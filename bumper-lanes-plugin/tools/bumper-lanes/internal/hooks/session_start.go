@@ -423,12 +423,19 @@ input=$(cat)
 # Run original status line
 echo "$input" | %s
 
-# Append bumper-lanes indicator
-indicator=$(echo "$input" | "%s" status --widget=indicator 2>/dev/null || true)
-[[ -n "$indicator" ]] && echo "$indicator"
+# Append bumper-lanes indicator. Failures are logged, never shown: a dead
+# gauge must be diagnosable from the log, not silently absent.
+bumper_log="$HOME/.claude/logs/bumper-lanes/$(date +%%F)-statusline.log"
+mkdir -p "${bumper_log%%/*}" 2>/dev/null || true
+if [[ -x "%s" ]]; then
+  indicator=$(echo "$input" | "%s" status --widget=indicator 2>>"$bumper_log" || true)
+  [[ -n "$indicator" ]] && echo "$indicator"
+else
+  echo "[$(date '+%%F %%T')] bumper-lanes binary missing at %s" >> "$bumper_log"
+fi
 
 exit 0
-`, wrapperMarker, bumperBin, originalCmd, originalCmd, bumperBin)
+`, wrapperMarker, bumperBin, originalCmd, originalCmd, bumperBin, bumperBin, bumperBin)
 
 	// Write and make executable
 	if err := os.WriteFile(wrapperPath, []byte(content), 0755); err != nil {

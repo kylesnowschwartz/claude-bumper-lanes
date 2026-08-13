@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 )
 
 // HookInput represents the JSON input from Claude Code hooks.
@@ -80,14 +82,20 @@ type StopResponse struct {
 }
 
 // ReadInput reads and parses hook JSON input from stdin.
+// A failure here is logged before the caller fails open: unparseable input
+// is otherwise invisible (exit 0, no output), indistinguishable from a
+// healthy no-op. Only the error and payload size are logged, never the
+// payload - tool_input can carry file contents.
 func ReadInput() (*HookInput, error) {
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
+		logging.New("unparsed-input", "read-input").Warn("reading stdin failed: %v (failing open)", err)
 		return nil, fmt.Errorf("reading stdin: %w", err)
 	}
 
 	var input HookInput
 	if err := json.Unmarshal(data, &input); err != nil {
+		logging.New("unparsed-input", "read-input").Warn("invalid hook JSON (%d bytes): %v (failing open)", len(data), err)
 		return nil, fmt.Errorf("parsing input: %w", err)
 	}
 
