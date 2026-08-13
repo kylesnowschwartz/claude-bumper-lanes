@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
 
 // setupCheckpointRepo creates a git repo (GetCheckpointDir shells out to
@@ -17,9 +18,8 @@ import (
 func setupCheckpointRepo(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	if err := exec.Command("git", "init", "-q", tmpDir).Run(); err != nil {
-		t.Fatalf("git init: %v", err)
-	}
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Chdir(tmpDir)
 
 	checkpointDir := filepath.Join(tmpDir, ".git", "bumper-checkpoints")

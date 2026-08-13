@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
 
 func TestSessionState_SaveLoad(t *testing.T) {
@@ -95,24 +96,9 @@ func TestSessionState_SetScore(t *testing.T) {
 func TestCountCheckpoints(t *testing.T) {
 	// Create temp dir and init as git repo
 	tmpDir := t.TempDir()
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Chdir(tmpDir)
-
-	// Initialize git repo
-	if err := os.WriteFile("test.txt", []byte("test"), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	runGit := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v failed: %v\n%s", args, err, out)
-		}
-	}
-	runGit("init")
-	runGit("config", "user.email", "test@test.com")
-	runGit("config", "user.name", "Test")
-	runGit("add", ".")
-	runGit("commit", "-m", "initial")
 
 	// Get the checkpoint dir
 	checkpointDir, err := GetCheckpointDir()
@@ -152,22 +138,9 @@ func TestCountCheckpoints(t *testing.T) {
 func TestCheckpointCountWarning(t *testing.T) {
 	// Create temp dir and init as git repo
 	tmpDir := t.TempDir()
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Chdir(tmpDir)
-
-	// Initialize git repo
-	runGit := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v failed: %v\n%s", args, err, out)
-		}
-	}
-	os.WriteFile("test.txt", []byte("test"), 0644)
-	runGit("init")
-	runGit("config", "user.email", "test@test.com")
-	runGit("config", "user.name", "Test")
-	runGit("add", ".")
-	runGit("commit", "-m", "initial")
 
 	checkpointDir, _ := GetCheckpointDir()
 	os.MkdirAll(checkpointDir, 0755)

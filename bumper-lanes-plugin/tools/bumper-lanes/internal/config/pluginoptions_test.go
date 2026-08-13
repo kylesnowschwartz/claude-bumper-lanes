@@ -4,13 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
 
 // TestPluginOptionsPrecedence covers the userConfig env source: legacy
 // global file < plugin options (CLAUDE_PLUGIN_OPTION_*) < repo file.
 func TestPluginOptionsPrecedence(t *testing.T) {
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	xdg := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 

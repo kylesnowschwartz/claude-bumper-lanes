@@ -6,13 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
 
 // TestConfigLoading verifies config loading from .bumper-lanes.json.
 func TestConfigLoading(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
 	t.Chdir(tmpDir)
 
@@ -53,7 +56,8 @@ func TestConfigLoading(t *testing.T) {
 // indistinguishable from an absent config.
 func TestLoadWarnings(t *testing.T) {
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Chdir(tmpDir)
 
@@ -93,7 +97,8 @@ func TestLoadWarnings(t *testing.T) {
 // TestLoadStatuslineAutoSetup verifies status line setup is opt-in.
 func TestLoadStatuslineAutoSetup(t *testing.T) {
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
 	t.Chdir(tmpDir)
 
@@ -126,7 +131,8 @@ func TestLoadStatuslineAutoSetup(t *testing.T) {
 // TestLoadResetOn verifies the commit auto-reset policy loading.
 func TestLoadResetOn(t *testing.T) {
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
 	t.Chdir(tmpDir)
 
@@ -163,7 +169,8 @@ func TestLoadResetOn(t *testing.T) {
 func TestGitWorktreeDetection(t *testing.T) {
 	// Create main repo
 	mainRepo := t.TempDir()
-	setupGitRepo(t, mainRepo)
+	testutil.IsolateGitEnv(t, mainRepo)
+	testutil.SetupTempGitRepo(t, mainRepo)
 
 	t.Chdir(mainRepo)
 
@@ -227,27 +234,6 @@ func TestEmptyRepoNoHEAD(t *testing.T) {
 			t.Error("GetGitDir() returned empty string")
 		}
 	})
-}
-
-func setupGitRepo(t *testing.T, dir string) {
-	t.Helper()
-	cmd := exec.Command("git", "init")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "init")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=test",
-		"GIT_AUTHOR_EMAIL=test@test.com",
-		"GIT_COMMITTER_NAME=test",
-		"GIT_COMMITTER_EMAIL=test@test.com",
-	)
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
 }
 
 func TestLoadConfigFile(t *testing.T) {
@@ -329,7 +315,8 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 func TestGlobalConfigLoading(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
-	setupGitRepo(t, tmpDir)
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 
 	// Create temp XDG config dir
 	xdgDir := t.TempDir()

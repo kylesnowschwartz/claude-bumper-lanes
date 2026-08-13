@@ -36,9 +36,9 @@ type Logger struct {
 // sessionIDSanitizer replaces non-alphanumeric chars (except - and _) with _
 var sessionIDSanitizer = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
 
-// New creates a logger for the given session and source component. The
-// level is decided here, from BUMPER_LANES_DEBUG, rather than at package
-// init, so tests can control it per-logger via t.Setenv before calling New.
+// New creates a logger for the given session and source component. It reads
+// BUMPER_LANES_DEBUG to decide the level at construction time, so tests can
+// control it per-logger via t.Setenv before calling New.
 func New(sessionID, source string) *Logger {
 	safeID := sanitizeSessionID(sessionID)
 	logDir := getLogDir()
@@ -154,9 +154,9 @@ func (l *Logger) LogFile() string {
 // session log file: "[timestamp] [LEVEL] [source] message", with the
 // message moved to its own line when it contains a newline. It opens and
 // closes the file on every write instead of holding it open, and relies on
-// the OS write buffer rather than fsyncing each line - this runs on every
-// hook invocation, so a per-line fsync is not affordable. If the file can't
-// be opened or written, the entry falls back to stderr.
+// the OS write buffer instead of fsyncing each line, keeping a per-hook-
+// invocation write affordable. If the file can't be opened or written, the
+// entry falls back to stderr.
 type fileHandler struct {
 	mu     sync.Mutex
 	path   string

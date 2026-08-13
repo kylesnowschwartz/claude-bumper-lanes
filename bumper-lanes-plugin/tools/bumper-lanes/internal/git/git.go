@@ -20,9 +20,11 @@ func IsRepo() bool {
 // Uses a temporary index to avoid modifying the real staging area.
 //
 // diff-viz's diff.CaptureCurrentTree implements the same temp-index
-// snapshot independently; the two are not yet consolidated into one shared
-// implementation because that would need diff-viz to depend on this
-// module (or vice versa) across the repo boundary.
+// snapshot independently, in its own repository.
+//
+// TODO: consolidate the two into one shared implementation; that needs
+// diff-viz to depend on this module (or vice versa) across the repo
+// boundary.
 func CaptureTree() (string, error) {
 	// Create temp index file
 	tmpIndex, err := os.CreateTemp("", "git-index-*")
