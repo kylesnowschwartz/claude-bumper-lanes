@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/enforce"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
@@ -159,7 +161,12 @@ func PreToolUse(input *hookio.Input) (exitCode int) {
 		pct = (sess.Score * 100) / sess.ThresholdLimit
 	}
 
-	reason := formatBlockReason(sess.Score, sess.ThresholdLimit, pct)
+	policy := sess.Policy
+	if policy == nil {
+		cfg := loadConfig(log)
+		policy = reviewPolicy(cfg)
+	}
+	reason := formatBlockReason(sess.Score, sess.ThresholdLimit, pct, policy)
 
 	resp := hookio.PreToolUseResponse{
 		HookSpecificOutput: &hookio.HookSpecificOutput{
@@ -197,16 +204,27 @@ func recordHeadBeforeCommit(input *hookio.Input, log *logging.Logger) {
 	}
 }
 
-// formatBlockReason creates the denial message shown to Claude.
-func formatBlockReason(score, limit, pct int) string {
-	return `Bumper lanes: File modifications blocked.
+// formatBlockReason creates the denial message shown to Claude. It branches
+// on the trip policy: under on_trip: review it scripts the self-review flow
+// (the tool-holder here may be a subagent that can act on it directly);
+// under block/human policies it names review-with-the-user and committing,
+// and leaves /bumper-reset to the human rather than instructing whoever
+// holds the tool to run it.
+func formatBlockReason(score, limit, pct int, policy *state.ReviewPolicy) string {
+	header := `Bumper lanes: File modifications blocked.
 
 Threshold exceeded: ` + formatScore(score, limit, pct) + `
 
-The Stop hook has already fired. To continue:
+The Stop hook has already fired. `
+
+	if policy != nil && policy.OnTrip == config.OnTripReview {
+		return header + "To continue:" + enforce.ReviewNextMove(policy.ReviewCommand) +
+			"\nThis prevents unbounded changes without review."
+	}
+
+	return header + `To continue:
 1. Review changes with the user
-2. Commit changes (baseline auto-resets), OR
-3. Run /bumper-reset to manually restore budget
+2. Commit changes (baseline auto-resets); the user can also run /bumper-reset to restore budget manually
 
 This prevents unbounded changes without review.`
 }

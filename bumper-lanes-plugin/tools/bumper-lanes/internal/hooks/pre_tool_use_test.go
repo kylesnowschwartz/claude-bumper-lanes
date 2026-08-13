@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
@@ -98,7 +99,85 @@ func TestPreToolUseBlocksWhenStopTriggered(t *testing.T) {
 			if resp.HookSpecificOutput.PermissionDecisionReason == "" {
 				t.Errorf("PreToolUse(%s) should include a reason for denial", tool)
 			}
+			reason := resp.HookSpecificOutput.PermissionDecisionReason
+			if strings.Contains(reason, "Run /bumper-reset") {
+				t.Errorf("PreToolUse(%s) reason instructs the tool-holder to run /bumper-reset, want it framed as the user's option: %q", tool, reason)
+			}
+			if !strings.Contains(reason, "Review changes with the user") {
+				t.Errorf("PreToolUse(%s) block-policy reason should name reviewing with the user, got: %q", tool, reason)
+			}
 		})
+	}
+}
+
+func TestPreToolUseBlockReasonUnderReviewPolicy(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	sessionID := "test-pretooluse-review-policy"
+
+	os.WriteFile("initial.txt", []byte("initial\n"), 0644)
+	exec.Command("git", "add", "initial.txt").Run()
+	exec.Command("git", "commit", "-m", "initial").Run()
+
+	baseline, _ := git.CaptureTree()
+
+	sess, err := state.New(sessionID, baseline, "main", 50)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	sess.SetStopTriggered(true)
+	sess.SetScore(500)
+	sess.Policy = &state.ReviewPolicy{OnTrip: "review", ReviewCommand: "/code-review"}
+	if err := sess.Save(); err != nil {
+		t.Fatalf("Failed to save session: %v", err)
+	}
+
+	largeContent := make([]byte, 0, 10000)
+	for i := 0; i < 100; i++ {
+		largeContent = append(largeContent, []byte(fmt.Sprintf("// Line %d\n", i))...)
+	}
+	os.WriteFile("dirty.txt", largeContent, 0644)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	input := &hookio.Input{
+		HookEventName: "PreToolUse",
+		ToolName:      "Write",
+		SessionID:     sessionID,
+	}
+	exitCode := PreToolUse(input)
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	output := make([]byte, 4096)
+	n, _ := r.Read(output)
+	output = output[:n]
+
+	var resp hookio.PreToolUseResponse
+	if err := json.Unmarshal(output, &resp); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v\nOutput: %s", err, output)
+	}
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+
+	reason := resp.HookSpecificOutput.PermissionDecisionReason
+	if !strings.Contains(reason, "review-clear") {
+		t.Errorf("review-policy reason should mention review-clear, got: %q", reason)
+	}
+	if !strings.Contains(reason, "/code-review") {
+		t.Errorf("review-policy reason should mention the configured review command, got: %q", reason)
+	}
+	if strings.Contains(reason, "Run /bumper-reset") {
+		t.Errorf("review-policy reason should not mention /bumper-reset, got: %q", reason)
 	}
 }
 
