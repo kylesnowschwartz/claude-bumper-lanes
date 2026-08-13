@@ -65,6 +65,9 @@ func SessionStart(input *HookInput) int {
 		log.Warn("failed to create session state: %v (failing open)", err)
 		return 0 // Fail open
 	}
+	// Anchor the baseline at today's HEAD so later pulls/rebases can be
+	// forgiven (maybeRebaseBaseline).
+	sess.BaselineHead = GetHeadCommit()
 
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to save session state: %v (failing open)", err)

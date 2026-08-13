@@ -58,6 +58,11 @@ Baseline resets automatically in these scenarios:
    - Detects: Branch name changed since baseline
    - Location: `stop.go:115-126`
 
+4. **Baseline rebase over upstream commits** (not a reset - the score continues)
+   - Detects: HEAD moved since the baseline was captured (`sess.BaselineHead`), e.g. a pull/rebase/merge landed mid-session
+   - Behavior: 3-way tree merge (`hooks/baseline_rebase.go:maybeRebaseBaseline`) advances the baseline by exactly the old-HEAD→new-HEAD delta, so upstream changes stop counting while uncommitted session work stays counted. Logged as a `rebase` event with cause `upstream`.
+   - Gated: only under `reset_on: commit`; stricter policies keep the baseline and the trip packet names the staleness. Merge conflicts fail open (baseline kept, `/bumper-reset` suggested in the session log).
+
 ## Logging
 
 Session logs are written to `~/.claude/logs/bumper-lanes/session-{session_id}.log` for debugging fail-open errors and operational visibility.
@@ -125,6 +130,7 @@ Config files (in precedence order):
   "reset_on": "commit",
   "on_trip": "block",
   "review_command": "/code-review",
+  "max_auto_reviews": 1,
   "tripwires_block_auto_review": false,
   "tripwire_paths": [".github/workflows/**", "go.mod", "..."],
   "tripwire_patterns": ["t.Skip", "it.skip", "..."]
@@ -133,7 +139,7 @@ Config files (in precedence order):
 
 - `threshold`: Diff point limit. `0` = disabled, `50-2000` = active (default: 600). Run `/bumper-reset` after changing.
 - `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
-- `on_trip`: What the trip packet asks for. `block` (default) = human review packet; `review` = self-review flow: the packet instructs the agent to run `review_command` on the increment, clear the breaker with `bumper-lanes review-clear` (Bash, latest-session fallback like `budget`), then implement findings against the fresh budget. Trust-based by design (the binary cannot prove a review happened) but fully auditable: every clear is a `reset` event with cause `review`. Loop guard: one self-review per human touchpoint (`sess.AutoReviews`, zeroed by manual reset/commit); the next trip escalates to the human packet. `tripwires_block_auto_review: true` additionally excludes tripwire-hit increments from self-clearing (default false: the review covers them).
+- `on_trip`: What the trip packet asks for. `block` (default) = human review packet; `review` = self-review flow: the packet instructs the agent to run `review_command` on the increment, clear the breaker with `bumper-lanes review-clear` (Bash, latest-session fallback like `budget`), then implement findings against the fresh budget. Trust-based by design (the binary cannot prove a review happened) but fully auditable: every clear is a `reset` event with cause `review`. Loop guard: `max_auto_reviews` self-reviews per human touchpoint (default 1; `-1` = unlimited hands-off mode, `0` = never; `sess.AutoReviews`, zeroed by manual reset/commit); past the limit the next trip escalates to the human packet. `tripwires_block_auto_review: true` additionally excludes tripwire-hit increments from self-clearing (default false: the review covers them).
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
 - `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Omit for defaults (`config.DefaultTripwirePaths`/`DefaultTripwirePatterns`); empty list disables. Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
 

@@ -124,8 +124,10 @@ func handleReset(sessionID string) int {
 		return 0
 	}
 
-	// Update baseline with new tree
+	// Update baseline with new tree, anchored at today's HEAD so later
+	// pulls/rebases can be forgiven (maybeRebaseBaseline)
 	sess.BaselineTree = newTree
+	sess.BaselineHead = GetHeadCommit()
 	if branch := GetCurrentBranch(); branch != "" {
 		sess.BaselineBranch = branch
 	}

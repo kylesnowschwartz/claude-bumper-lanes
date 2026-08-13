@@ -64,8 +64,46 @@ func TestReviewClear(t *testing.T) {
 		sess.SetStopTriggered(true)
 		sess.Save()
 		err = ReviewClear(sessionID)
-		if err == nil || !strings.Contains(err.Error(), "already used") {
+		if err == nil || !strings.Contains(err.Error(), "limit reached") {
 			t.Errorf("second clear should hit the loop guard, got: %v", err)
+		}
+	})
+
+	t.Run("max_auto_reviews -1 allows unlimited clears", func(t *testing.T) {
+		sessionID := setupReviewRepo(t, `{"on_trip": "review", "max_auto_reviews": -1}`)
+		for i := 0; i < 3; i++ {
+			if err := ReviewClear(sessionID); err != nil {
+				t.Fatalf("clear %d should be unlimited, got: %v", i+1, err)
+			}
+			sess, _ := state.Load(sessionID)
+			sess.SetScore(150)
+			sess.SetStopTriggered(true)
+			sess.Save()
+		}
+	})
+
+	t.Run("max_auto_reviews N allows N clears", func(t *testing.T) {
+		sessionID := setupReviewRepo(t, `{"on_trip": "review", "max_auto_reviews": 2}`)
+		for i := 0; i < 2; i++ {
+			if err := ReviewClear(sessionID); err != nil {
+				t.Fatalf("clear %d of 2 should pass, got: %v", i+1, err)
+			}
+			sess, _ := state.Load(sessionID)
+			sess.SetScore(150)
+			sess.SetStopTriggered(true)
+			sess.Save()
+		}
+		err := ReviewClear(sessionID)
+		if err == nil || !strings.Contains(err.Error(), "limit reached") {
+			t.Errorf("third clear should hit the limit of 2, got: %v", err)
+		}
+	})
+
+	t.Run("max_auto_reviews 0 refuses every clear", func(t *testing.T) {
+		sessionID := setupReviewRepo(t, `{"on_trip": "review", "max_auto_reviews": 0}`)
+		err := ReviewClear(sessionID)
+		if err == nil || !strings.Contains(err.Error(), "limit reached") {
+			t.Errorf("clear with limit 0 should refuse, got: %v", err)
 		}
 	})
 
@@ -116,7 +154,7 @@ func TestReviewClear(t *testing.T) {
 		}
 		sess, _ := state.Load(sessionID)
 		tree, _ := CaptureTree()
-		sess.ResetBaseline(tree, "main") // commit/branch/manual resets route here
+		sess.ResetBaseline(tree, "main", "") // commit/branch/manual resets route here
 		sess.Save()
 
 		sess, _ = state.Load(sessionID)

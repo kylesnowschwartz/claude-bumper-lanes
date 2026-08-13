@@ -100,7 +100,7 @@ func TestTripwireDetection(t *testing.T) {
 	}
 
 	// Reset clears them
-	again.ResetBaseline("new-tree", "main")
+	again.ResetBaseline("new-tree", "main", "")
 	if len(again.Tripwires) != 0 {
 		t.Errorf("Tripwires = %v after reset, want empty", again.Tripwires)
 	}

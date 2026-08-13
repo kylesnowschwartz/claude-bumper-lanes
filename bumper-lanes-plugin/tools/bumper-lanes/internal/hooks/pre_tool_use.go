@@ -91,6 +91,11 @@ func PreToolUse(input *HookInput) (exitCode int) {
 	// When Stop hook has triggered, recalculate score from baseline
 	// to handle external changes (IDE, terminal, git CLI) that reduce the diff
 	if sess.StopTriggered {
+		// Forgive commits that landed since the baseline (pull/rebase/
+		// merge) before judging recovery, so upstream churn can't hold
+		// the breaker closed.
+		maybeRebaseBaseline(sess, log)
+
 		currentTree, err := CaptureTree()
 		if err != nil {
 			// Fail-open: If we can't capture tree state, don't block the user
@@ -109,7 +114,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 			// Tree is clean - auto-reset baseline and clear flag
 			scoreAtReset := sess.Score
 			currentBranch := GetCurrentBranch()
-			sess.ResetBaseline(currentTree, currentBranch)
+			sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
 			sess.Save()
 			if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseCleanTree}); err != nil {
 				log.Warn("failed to append event: %v", err)

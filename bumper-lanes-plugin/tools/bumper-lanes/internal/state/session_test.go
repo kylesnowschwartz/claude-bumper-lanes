@@ -64,7 +64,7 @@ func TestSessionState_ResetBaseline(t *testing.T) {
 		StopTriggered: true,
 	}
 
-	state.ResetBaseline("new-tree", "feature-branch")
+	state.ResetBaseline("new-tree", "feature-branch", "new-head")
 
 	if state.BaselineTree != "new-tree" {
 		t.Errorf("BaselineTree = %q, want %q", state.BaselineTree, "new-tree")

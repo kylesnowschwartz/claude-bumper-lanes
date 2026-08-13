@@ -16,8 +16,9 @@ import (
 //
 // The clear is trust-based by design: the binary cannot prove a review
 // happened, so instead every clear is auditable - a reset event with cause
-// "review" records the increment size, and the loop guard (one self-review
-// per human touchpoint) bounds how far an unreviewed session can run.
+// "review" records the increment size, and the loop guard (max_auto_reviews
+// self-reviews per human touchpoint, default 1) bounds how far an
+// unreviewed session can run. max_auto_reviews: -1 removes the cap.
 func ReviewClear(sessionID string) error {
 	var sess *state.SessionState
 	var err error
@@ -39,8 +40,9 @@ func ReviewClear(sessionID string) error {
 	if !sess.StopTriggered {
 		return fmt.Errorf("breaker is not tripped (score %d/%d); nothing to clear", sess.Score, sess.ThresholdLimit)
 	}
-	if sess.AutoReviews >= 1 {
-		return fmt.Errorf("self-review already used this cycle; this trip requires the user (/bumper-reset or a commit resets the cycle)")
+	maxReviews := config.LoadMaxAutoReviews()
+	if maxReviews >= 0 && sess.AutoReviews >= maxReviews {
+		return fmt.Errorf("self-review limit reached (%d of %d this cycle); this trip requires the user (/bumper-reset or a commit resets the cycle)", sess.AutoReviews, maxReviews)
 	}
 	if config.LoadTripwiresBlockAutoReview() && len(sess.Tripwires) > 0 {
 		return fmt.Errorf("tripwires fired this increment (%v) and tripwires_block_auto_review is set; this trip requires the user", sess.Tripwires)
@@ -53,7 +55,7 @@ func ReviewClear(sessionID string) error {
 
 	scoreAtClear := sess.Score
 	autoReviews := sess.AutoReviews
-	sess.ResetBaseline(newTree, GetCurrentBranch())
+	sess.ResetBaseline(newTree, GetCurrentBranch(), GetHeadCommit())
 	sess.AutoReviews = autoReviews + 1
 	if err := sess.Save(); err != nil {
 		return fmt.Errorf("saving state: %w", err)
@@ -67,6 +69,12 @@ func ReviewClear(sessionID string) error {
 		Cause:     events.CauseReview,
 	})
 
-	fmt.Printf("Breaker cleared after self-review. Fresh budget: %d pts.\nImplement the review findings as the next increment. The next trip requires the user.\n", sess.ThresholdLimit)
+	nextTrip := "The next trip requires the user."
+	if maxReviews < 0 {
+		nextTrip = "Self-review remains available on the next trip (max_auto_reviews: unlimited)."
+	} else if remaining := maxReviews - sess.AutoReviews; remaining > 0 {
+		nextTrip = fmt.Sprintf("%d self-review(s) remain this cycle.", remaining)
+	}
+	fmt.Printf("Breaker cleared after self-review. Fresh budget: %d pts.\nImplement the review findings as the next increment. %s\n", sess.ThresholdLimit, nextTrip)
 	return nil
 }

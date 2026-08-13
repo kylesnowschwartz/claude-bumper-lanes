@@ -48,6 +48,14 @@ const (
 	// DefaultReviewCommand names the review workflow the packet points
 	// the agent at when on_trip is "review".
 	DefaultReviewCommand = "/code-review"
+
+	// DefaultMaxAutoReviews is the number of self-review clears allowed per
+	// human touchpoint: one, so every second trip reaches the user.
+	DefaultMaxAutoReviews = 1
+
+	// UnlimitedAutoReviews (max_auto_reviews: -1) removes the per-cycle
+	// cap: hands-off mode, where trips force a review but never a human.
+	UnlimitedAutoReviews = -1
 )
 
 // DefaultTripwirePaths are glob patterns for files whose every change is a
@@ -95,6 +103,7 @@ type Config struct {
 	OnTrip                   string    `json:"on_trip,omitempty"`
 	ReviewCommand            string    `json:"review_command,omitempty"`
 	TripwiresBlockAutoReview *bool     `json:"tripwires_block_auto_review,omitempty"`
+	MaxAutoReviews           *int      `json:"max_auto_reviews,omitempty"`
 	TripwirePaths            *[]string `json:"tripwire_paths,omitempty"`
 	TripwirePatterns         *[]string `json:"tripwire_patterns,omitempty"`
 }
@@ -189,6 +198,9 @@ func loadMergedConfig() *Config {
 	if repo.TripwiresBlockAutoReview != nil {
 		merged.TripwiresBlockAutoReview = repo.TripwiresBlockAutoReview
 	}
+	if repo.MaxAutoReviews != nil {
+		merged.MaxAutoReviews = repo.MaxAutoReviews
+	}
 	if repo.TripwirePaths != nil {
 		merged.TripwirePaths = repo.TripwirePaths
 	}
@@ -266,6 +278,7 @@ var knownConfigKeys = map[string]bool{
 	"on_trip":                     true,
 	"review_command":              true,
 	"tripwires_block_auto_review": true,
+	"max_auto_reviews":            true,
 	"tripwire_paths":              true,
 	"tripwire_patterns":           true,
 }
@@ -312,6 +325,20 @@ func LoadReviewCommand() string {
 		return cfg.ReviewCommand
 	}
 	return DefaultReviewCommand
+}
+
+// LoadMaxAutoReviews returns the self-review clears allowed per human
+// touchpoint: N per cycle, 0 = never (same as on_trip: block), any negative
+// value = unlimited (hands-off mode).
+func LoadMaxAutoReviews() int {
+	cfg := loadMergedConfig()
+	if cfg.MaxAutoReviews == nil {
+		return DefaultMaxAutoReviews
+	}
+	if *cfg.MaxAutoReviews < 0 {
+		return UnlimitedAutoReviews
+	}
+	return *cfg.MaxAutoReviews
 }
 
 // LoadTripwiresBlockAutoReview reports whether tripwire hits exclude an

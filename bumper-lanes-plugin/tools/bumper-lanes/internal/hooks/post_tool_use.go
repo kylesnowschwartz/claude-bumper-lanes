@@ -123,7 +123,7 @@ func handleBashCommit(input *HookInput) int {
 	// Reset baseline
 	scoreAtReset := sess.Score
 	currentBranch := GetCurrentBranch()
-	sess.ResetBaseline(currentTree, currentBranch)
+	sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
 	if err := sess.Save(); err != nil {
 		return 0
 	}
@@ -162,6 +162,10 @@ func handleWriteEdit(input *HookInput) int {
 	if sess.ThresholdLimit == 0 {
 		return 0
 	}
+
+	// Forgive commits that landed since the baseline (pull/rebase/merge)
+	// so the gauge doesn't count upstream churn.
+	maybeRebaseBaseline(sess, log)
 
 	// Get diff stats from baseline (fresh calculation, not incremental)
 	// This allows score to decrease when user manually deletes/reverts changes

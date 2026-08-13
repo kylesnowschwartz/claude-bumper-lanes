@@ -33,7 +33,7 @@ sequenceDiagram
     Sess-->>Stop: 420/400 (105%)
     Stop->>Sess: set stop_triggered: true
     Stop-->>Claude: BLOCKED - trip packet (modules, decisions, plain file list) + OSC 9 desktop notification on fresh trip
-    Note over Stop,Claude: on_trip: review - packet scripts self-review instead:<br/>run review_command, then `bumper-lanes review-clear`<br/>(resets budget, cause=review), then implement findings.<br/>One self-review per human touchpoint (AutoReviews guard);<br/>next trip shows the human packet.
+    Note over Stop,Claude: on_trip: review - packet scripts self-review instead:<br/>run review_command, then `bumper-lanes review-clear`<br/>(resets budget, cause=review), then implement findings.<br/>max_auto_reviews self-reviews per human touchpoint<br/>(default 1, -1 unlimited; AutoReviews guard);<br/>past the limit the trip shows the human packet.
     Stop-->>User: score breakdown + review prompt
 
     %% === USER REVIEW OPTIONS ===
@@ -103,6 +103,9 @@ sequenceDiagram
 %% - PostToolUse tiers: internal/hooks/post_tool_use.go:119-128
 %% - Stop blocking: internal/hooks/stop.go:127-184
 %% - Stop auto-recovery: internal/hooks/stop.go:136-154 (v3.7.0)
+%% - Baseline rebase over upstream commits (pull/rebase/merge lands mid-
+%%   session): internal/hooks/baseline_rebase.go - 3-way tree merge advances
+%%   the baseline so upstream churn is free; only under reset_on: commit.
 %% - PreToolUse auto-recovery: internal/hooks/pre_tool_use.go:112-142 (v3.8.0)
 %% - PreToolUse blocking: internal/hooks/pre_tool_use.go:145-154
 %% - Reset: internal/hooks/prompt_handler.go:96-115

@@ -89,7 +89,8 @@ Self-review is enabled (on_trip: review). Do this now, in order:
 // escalationNote explains why a review-policy trip is showing the human
 // packet anyway.
 const escalationNote = `
-Note: self-review was already used this cycle; this trip requires the user.
+Note: the self-review limit for this cycle is reached; this trip requires
+the user.
 `
 
 // newFilePaths lists non-generated new files, in stats order.

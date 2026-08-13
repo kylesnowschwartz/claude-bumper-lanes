@@ -102,6 +102,11 @@ func Stop(input *HookInput) error {
 		return nil
 	}
 
+	// Forgive commits that landed since the baseline (pull/rebase/merge)
+	// before any score calculation below. After the paused/disabled guards
+	// so inert sessions don't pay the git call.
+	maybeRebaseBaseline(sess, log)
+
 	// Detect branch switch - auto-reset baseline
 	currentBranch := GetCurrentBranch()
 	if sess.BaselineBranch != "" && currentBranch != "" && sess.BaselineBranch != currentBranch {
@@ -113,7 +118,7 @@ func Stop(input *HookInput) error {
 			return nil
 		}
 		scoreAtReset := sess.Score
-		sess.ResetBaseline(currentTree, currentBranch)
+		sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
 		sess.Save()
 		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseBranch}); err != nil {
 			log.Warn("failed to append event: %v", err)
@@ -189,8 +194,9 @@ func Stop(input *HookInput) error {
 	// and available this cycle, otherwise the human packet.
 	nextMove := humanNextMove
 	if config.LoadOnTrip() == config.OnTripReview {
+		maxReviews := config.LoadMaxAutoReviews()
 		switch {
-		case sess.AutoReviews >= 1:
+		case maxReviews >= 0 && sess.AutoReviews >= maxReviews:
 			nextMove = humanNextMove + escalationNote
 		case config.LoadTripwiresBlockAutoReview() && len(sess.Tripwires) > 0:
 			nextMove = humanNextMove + "\nNote: tripwires fired, so this trip requires the user (tripwires_block_auto_review).\n"
@@ -198,6 +204,7 @@ func Stop(input *HookInput) error {
 			nextMove = reviewNextMove(config.LoadReviewCommand())
 		}
 	}
+	nextMove += staleBaselineNote(sess)
 	reason := buildTripPacket(sess, result, stats, nextMove)
 	pct := (freshScore * 100) / sess.ThresholdLimit
 

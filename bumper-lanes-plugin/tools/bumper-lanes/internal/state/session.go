@@ -29,6 +29,13 @@ type SessionState struct {
 	// tree shrank; the statusline shows that in green.
 	NetLines int `json:"net_lines,omitempty"`
 
+	// BaselineHead is the HEAD commit SHA at the moment the baseline was
+	// captured. When HEAD later moves (pull, rebase, merge, external commit),
+	// the baseline is rebased over the old-HEAD→new-HEAD delta so upstream
+	// changes are not charged against the review budget. Empty on state
+	// written by older versions; adopted lazily on the next score calculation.
+	BaselineHead string `json:"baseline_head,omitempty"`
+
 	// HeadBeforeCommit is the HEAD commit SHA recorded by PreToolUse when a
 	// commit-shaped Bash command is about to run ("none" on an unborn branch).
 	// PostToolUse treats a moved HEAD as the evidence that the commit
@@ -229,12 +236,13 @@ func (s *SessionState) SetScore(score int) {
 	s.Score = score
 }
 
-// ResetBaseline resets the baseline to a new tree SHA.
+// ResetBaseline resets the baseline to a new tree SHA, anchored at newHead.
 // Clears score, net lines, stop_triggered, tripwires, and the auto-review
 // counter (every reset path except review-clear is human-visible; review-clear
 // restores its own incremented counter after calling this).
-func (s *SessionState) ResetBaseline(newTree, newBranch string) {
+func (s *SessionState) ResetBaseline(newTree, newBranch, newHead string) {
 	s.BaselineTree = newTree
+	s.BaselineHead = newHead
 	s.Score = 0
 	s.NetLines = 0
 	s.StopTriggered = false

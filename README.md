@@ -35,6 +35,8 @@ Work normally with Claude. If the configurable threshold is exceeded:
 4. Or Manually reset the baseline: `/bumper-reset`
 5. Continue working with restored budget
 
+Pulling or rebasing mid-session is free: the baseline follows commits that land (under the default `reset_on: commit`), so upstream changes are never charged against the budget.
+
 ## Commands
 
 | Command | Description |
@@ -99,7 +101,8 @@ Config files (in precedence order):
 |-------|-------------|
 | `threshold` | Points limit. `0` = disabled, `50-2000` = active (default: 600) |
 | `reset_on` | When Claude's git commits auto-reset the budget: `commit` (default), `verified-commit` (refuses `--no-verify`), or `human` (never) |
-| `on_trip` | What tripping asks for: `block` (default) shows the review packet and waits for you; `review` instructs the agent to run a code review of the increment, clear the breaker itself (`bumper-lanes review-clear`), and implement the findings against a fresh budget. One self-review per human touchpoint — the next trip requires you. |
+| `on_trip` | What tripping asks for: `block` (default) shows the review packet and waits for you; `review` instructs the agent to run a code review of the increment, clear the breaker itself (`bumper-lanes review-clear`), and implement the findings against a fresh budget. |
+| `max_auto_reviews` | Self-review clears allowed per human touchpoint: `1` (default), any `N`, `0` = never, `-1` = unlimited (hands-off: trips force a review but never require you) |
 | `review_command` | The review workflow named in the self-review instruction (default `/code-review`) |
 | `tripwires_block_auto_review` | When `true`, increments with tripwire hits cannot self-clear and always come to you (default `false`) |
 | `statusline_auto_setup` | Allow session start to configure the status line (default: false) |

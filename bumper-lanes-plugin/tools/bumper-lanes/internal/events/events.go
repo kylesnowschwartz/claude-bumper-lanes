@@ -22,6 +22,11 @@ const (
 	Pause        = "pause"
 	Resume       = "resume"
 	Tripwire     = "tripwire"
+	// Rebase marks the baseline advancing over commits that landed since it
+	// was captured (pull/rebase/merge/external commit). Not a reset: the
+	// score continues, minus the upstream churn. Its score field is the
+	// score before the rebase.
+	Rebase = "rebase"
 )
 
 // Reset causes. A reset entry's score is the score at reset time, which is
@@ -35,6 +40,9 @@ const (
 	// CauseReview marks a self-review clear (on_trip: review): the agent
 	// reviewed the increment and cleared the breaker itself.
 	CauseReview = "review"
+	// CauseUpstream marks a baseline rebase over commits the session did
+	// not make through its own commit flow (pull, rebase, merge).
+	CauseUpstream = "upstream"
 )
 
 // Entry is one logged lifecycle event.

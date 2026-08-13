@@ -28,7 +28,7 @@ func Reset(sessionID string) error {
 	events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual})
 
 	// Reset baseline
-	sess.ResetBaseline(newTree, currentBranch)
+	sess.ResetBaseline(newTree, currentBranch, GetHeadCommit())
 
 	// Save state
 	if err := sess.Save(); err != nil {
