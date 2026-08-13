@@ -1,6 +1,6 @@
 # Bumper Lanes
 
-Bumper lanes is a circuit breaker for Claude Code: it tracks how much code Claude has written since your last review and blocks Claude from continuing until you review and approve the accumulated changes.
+Bumper lanes is a circuit breaker for Claude Code: it tracks how much code Claude has written since the last review and blocks Claude from continuing until the accumulated changes are reviewed — by you (the default), or by a code review the agent must run on itself before it may proceed.
 
 ![Threshold exceeded demo](assets/bumper-demo.gif)
 
@@ -35,6 +35,8 @@ Work normally with Claude. If the configurable threshold is exceeded:
 4. Or Manually reset the baseline: `/bumper-reset`
 5. Continue working with restored budget
 
+With `on_trip: review`, step 1 changes: instead of waiting for you, the trip instructs the agent to run a code review of the increment (your `review_command`), clear the breaker itself (`bumper-lanes review-clear`), and implement the findings against the fresh budget. Every self-clear is recorded in the event log, and `max_auto_reviews` caps how many happen before a trip comes back to you.
+
 Pulling or rebasing mid-session is free: the baseline follows commits that land (under the default `reset_on: commit`), so upstream changes are never charged against the budget.
 
 ## Commands
@@ -48,11 +50,18 @@ Pulling or rebasing mid-session is free: the baseline follows commits that land 
 | `/bumper-config` | Show current configuration |
 | `/bumper-config <n>` | Set repo threshold (0=disabled, 50-2000) |
 
+Two CLI verbs run from the agent's shell (no slash command, no statusline JSON needed):
+
+| Command | Description |
+|---------|-------------|
+| `bumper-lanes budget` | Print the remaining review budget in plain text (the agent uses this to size increments) |
+| `bumper-lanes review-clear` | Clear a tripped breaker after a self-review (only valid with `on_trip: review`) |
+
 ## Status Line
 
 The status line shows a one-line gauge: a traffic-light bar with the percentage of budget spent, a red ⚠ when a tripwire fired, and a green line count when the increment is net-negative (the tree shrank).
 
-Status line setup is **opt-in**: set `"statusline_auto_setup": true` in your config and the plugin configures `~/.claude/settings.json` on session start. Or configure manually:
+Status line setup is **opt-in**: answer yes to the "Add budget gauge to status line" prompt when enabling the plugin (or set `"statusline_auto_setup": true` in a repo `.bumper-lanes.json`) and the plugin configures `~/.claude/settings.json` on session start. Or configure manually:
 
 ```json
 {
@@ -87,6 +96,7 @@ This tells bumper-lanes to leave your configuration alone. The plugin will not w
 Set your defaults when enabling the plugin: `/plugin` > claude-bumper-lanes prompts for the threshold, reset policy, trip behavior, and status line setup, and stores them in your user settings. Change them any time through the same menu.
 
 Precedence order:
+
 1. `.bumper-lanes.json` at repo root (highest priority - per-repo overrides)
 2. Plugin settings (set via `/plugin`, prompted at enable)
 3. `~/.config/bumper-lanes/config.json` (deprecated - support ends in v5; move values to the plugin settings)
@@ -114,9 +124,9 @@ Precedence order:
 
 ### Disabling Enforcement
 
-Set `"threshold": 0` in `.bumper-lanes.json` to disable for a specific repo, or in the global config to disable everywhere. Individual repos can override the global config.
+Set `"threshold": 0` in `.bumper-lanes.json` to disable for a specific repo, or set the plugin's threshold to `0` (`/plugin` > claude-bumper-lanes) to disable everywhere. Repo files override the plugin setting.
 
-Run `/bumper-config` to see which config files are active.
+Run `/bumper-config` to see which config sources are active.
 
 ### Weighted Scoring
 

@@ -148,12 +148,7 @@ Bash-invoked CLI commands (`review-clear`, `budget`) never see the plugin env va
 
 ### Disabling Globally
 
-To disable enforcement across all repos:
-
-```bash
-mkdir -p ~/.config/bumper-lanes
-echo '{"threshold": 0}' > ~/.config/bumper-lanes/config.json
-```
+To disable enforcement across all repos, set the plugin's threshold to `0` via `/plugin` > claude-bumper-lanes (stored in `~/.claude/settings.json` `pluginConfigs`).
 
 Individual repos can override with their own `.bumper-lanes.json`.
 
