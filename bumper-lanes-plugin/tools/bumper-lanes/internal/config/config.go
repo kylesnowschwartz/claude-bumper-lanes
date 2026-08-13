@@ -330,6 +330,9 @@ type Settings struct {
 //     empty list disables that tripwire lane.
 func Load() (Settings, []string) {
 	cfg, warnings := loadMergedConfig()
+	warn := func(format string, args ...any) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}
 	s := Settings{
 		Threshold:        DefaultThreshold,
 		ResetOn:          DefaultResetOn,
@@ -346,12 +349,20 @@ func Load() (Settings, []string) {
 		s.StatuslineAutoSetup = *cfg.StatuslineAutoSetup
 	}
 	switch cfg.ResetOn {
+	case "":
+		// unset: keep the default already in s.ResetOn
 	case ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman:
 		s.ResetOn = cfg.ResetOn
+	default:
+		warn("reset_on: invalid value %q (using default %q)", cfg.ResetOn, DefaultResetOn)
 	}
 	switch cfg.OnTrip {
+	case "":
+		// unset: keep the default already in s.OnTrip
 	case OnTripBlock, OnTripReview:
 		s.OnTrip = cfg.OnTrip
+	default:
+		warn("on_trip: invalid value %q (using default %q)", cfg.OnTrip, DefaultOnTrip)
 	}
 	if cfg.ReviewCommand != "" {
 		s.ReviewCommand = cfg.ReviewCommand

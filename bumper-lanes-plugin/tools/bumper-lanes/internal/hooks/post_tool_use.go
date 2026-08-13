@@ -101,7 +101,7 @@ func handleBashCommit(input *hookio.Input) int {
 	}
 
 	// Apply the reset policy now that the commit is proven.
-	cfg, _ := config.Load()
+	cfg := loadConfig(log)
 	policy := cfg.ResetOn
 	switch policy {
 	case config.ResetOnHuman:
@@ -143,7 +143,7 @@ func handleBashCommit(input *hookio.Input) int {
 	}
 
 	// Output feedback
-	if err := hookio.WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", cfg.Threshold)); err != nil {
+	if err := hookio.WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", sess.ThresholdLimit)); err != nil {
 		log.Warn("failed to write context (auto-reset notice): %v (failing open)", err)
 	}
 	return 0
@@ -170,7 +170,7 @@ func handleWriteEdit(input *hookio.Input) int {
 		return 0
 	}
 
-	cfg, _ := config.Load()
+	cfg := loadConfig(log)
 
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
 	// so the gauge doesn't count upstream churn.

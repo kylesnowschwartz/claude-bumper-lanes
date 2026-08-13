@@ -6,6 +6,7 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -52,7 +53,7 @@ func ReviewClear(sessionID string) error {
 	// back to file config for state written before stamping existed.
 	policy := sess.Policy
 	if policy == nil {
-		cfg, _ := config.Load()
+		cfg := loadConfig(logging.New(sess.SessionID, "review_clear"))
 		policy = reviewPolicy(cfg)
 	}
 

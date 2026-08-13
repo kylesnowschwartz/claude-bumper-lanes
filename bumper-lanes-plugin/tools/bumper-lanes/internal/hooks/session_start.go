@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
@@ -45,11 +44,8 @@ func SessionStart(input *hookio.Input) int {
 	// Get current branch for staleness detection
 	baselineBranch := git.CurrentBranch()
 
-	cfg, cfgWarnings := config.Load()
+	cfg := loadConfig(log)
 	threshold := cfg.Threshold
-	for _, w := range cfgWarnings {
-		log.Warn("config: %s", w)
-	}
 
 	// Create and save session state
 	sess, err := state.New(input.SessionID, baselineTree, baselineBranch, threshold)

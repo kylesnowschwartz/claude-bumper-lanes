@@ -106,13 +106,14 @@ func Stop(input *hookio.Input) error {
 		return nil
 	}
 
-	// Config is loaded once here, after the paused/disabled guards, so
-	// inert sessions don't pay for it.
-	cfg, _ := config.Load()
-
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
-	// before any score calculation below.
-	maybeRebaseBaseline(sess, cfg.ResetOn, log)
+	// before any score calculation below. Config is loaded lazily, only
+	// when HEAD has actually moved, so an untripped session with an
+	// unmoved HEAD never pays for the subprocess + file reads.
+	if head := git.HeadCommit(); head != "none" && head != sess.BaselineHead {
+		cfg := loadConfig(log)
+		maybeRebaseBaseline(sess, cfg.ResetOn, log)
+	}
 
 	// Detect branch switch - auto-reset baseline
 	currentBranch := git.CurrentBranch()
@@ -182,7 +183,9 @@ func Stop(input *hookio.Input) error {
 		return nil
 	}
 
-	// Over threshold - set stop_triggered and block
+	// Over threshold - set stop_triggered and block. Config is loaded here,
+	// on the trip path only, rather than for every Stop invocation.
+	cfg := loadConfig(log)
 	wasTripped := sess.StopTriggered
 	sess.SetStopTriggered(true)
 	sess.SetScore(freshScore)

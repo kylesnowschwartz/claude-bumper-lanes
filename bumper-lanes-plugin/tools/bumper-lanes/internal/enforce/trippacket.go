@@ -24,9 +24,16 @@ func TripNotification(score, limit int) string {
 // The meter holds facts the model's own summary omits; pairing them is what
 // turns the stop sign into the review. nextMove is one of HumanNextMove,
 // ReviewNextMove(...), or HumanNextMove+EscalationNote.
+//
+// Precondition: sess.ThresholdLimit must be > 0 (the caller only reaches a
+// trip when enforcement is active); a limit <= 0 clamps the percentage to 0
+// instead of dividing by zero.
 func BuildTripPacket(sess *state.SessionState, result *scoring.WeightedScore, stats *diff.StatsJSON, nextMove string) string {
 	var b strings.Builder
-	pct := (result.Score * 100) / sess.ThresholdLimit
+	pct := 0
+	if sess.ThresholdLimit > 0 {
+		pct = (result.Score * 100) / sess.ThresholdLimit
+	}
 
 	fmt.Fprintf(&b, "\n⚠️  Bumper lanes: review budget tripped - %d/%d pts (%d%%)\n",
 		result.Score, sess.ThresholdLimit, pct)

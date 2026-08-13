@@ -6,11 +6,12 @@ import (
 	"strconv"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 )
 
 // ConfigShow displays the current threshold configuration.
 func ConfigShow() error {
-	cfg, _ := config.Load()
+	cfg := loadConfig(logging.New(os.Getenv("CLAUDE_CODE_SESSION_ID"), "config_cmd"))
 	threshold := cfg.Threshold
 
 	fmt.Printf("Threshold: %d points", threshold)

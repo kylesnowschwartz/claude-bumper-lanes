@@ -206,7 +206,7 @@ func handleDiff(sessionID string) int {
 func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
-		cfg, _ := config.Load()
+		cfg := loadConfig(logging.New(sessionID, "prompt_handler"))
 		threshold := cfg.Threshold
 
 		// Attribute the source by which config files exist (repo overrides
