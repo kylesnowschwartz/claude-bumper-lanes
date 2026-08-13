@@ -101,7 +101,8 @@ func handleBashCommit(input *hookio.Input) int {
 	}
 
 	// Apply the reset policy now that the commit is proven.
-	policy := config.LoadResetOn()
+	cfg, _ := config.Load()
+	policy := cfg.ResetOn
 	switch policy {
 	case config.ResetOnHuman:
 		log.Info("reset_on=human - commit does not reset baseline")
@@ -142,8 +143,7 @@ func handleBashCommit(input *hookio.Input) int {
 	}
 
 	// Output feedback
-	threshold := config.LoadThreshold()
-	if err := hookio.WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold)); err != nil {
+	if err := hookio.WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", cfg.Threshold)); err != nil {
 		log.Warn("failed to write context (auto-reset notice): %v (failing open)", err)
 	}
 	return 0
@@ -170,9 +170,11 @@ func handleWriteEdit(input *hookio.Input) int {
 		return 0
 	}
 
+	cfg, _ := config.Load()
+
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
 	// so the gauge doesn't count upstream churn.
-	maybeRebaseBaseline(sess, log)
+	maybeRebaseBaseline(sess, cfg.ResetOn, log)
 
 	// Get diff stats from baseline (fresh calculation, not incremental)
 	// This allows score to decrease when user manually deletes/reverts changes
@@ -187,7 +189,7 @@ func handleWriteEdit(input *hookio.Input) int {
 
 	// Tripwires fire at any score: small edits in high-risk classes
 	// (CI, dependencies, harness config, test skips) get named immediately.
-	freshTripwires := sess.AddTripwires(enforce.DetectTripwires(stats, sess.BaselineTree))
+	freshTripwires := sess.AddTripwires(enforce.DetectTripwires(stats, sess.BaselineTree, cfg))
 
 	// Update state with fresh score (and any new tripwires)
 	sess.SetScore(freshScore)

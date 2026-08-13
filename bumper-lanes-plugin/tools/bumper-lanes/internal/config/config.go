@@ -16,24 +16,6 @@ import (
 	"strings"
 )
 
-// configWarnings collects human-readable warnings from the most recent
-// loadMergedConfig call: malformed config files (parse/read errors other
-// than "file does not exist") and unparseable plugin env values. config
-// must not import internal/logging (it stays a leaf package), so hook
-// callers read LoadWarnings() and log it themselves.
-var configWarnings []string
-
-// LoadWarnings returns the warnings collected during the most recent
-// Load*/loadMergedConfig call. Empty when the load was clean.
-func LoadWarnings() []string {
-	return configWarnings
-}
-
-// recordWarning appends a warning to the current load's warning list.
-func recordWarning(format string, args ...interface{}) {
-	configWarnings = append(configWarnings, fmt.Sprintf(format, args...))
-}
-
 // DefaultThreshold is the default diff point threshold.
 const DefaultThreshold = 600
 
@@ -182,35 +164,38 @@ func getGlobalConfigPath() string {
 // legacy global file (~/.config/bumper-lanes, deprecated) < plugin config
 // (userConfig values, via CLAUDE_PLUGIN_OPTION_* env in hook processes)
 // < repo .bumper-lanes.json.
-func loadMergedConfig() *Config {
-	configWarnings = nil
+func loadMergedConfig() (*Config, []string) {
+	var warnings []string
+	warn := func(format string, args ...interface{}) {
+		warnings = append(warnings, fmt.Sprintf(format, args...))
+	}
 	merged := &Config{}
 
 	if globalPath := getGlobalConfigPath(); globalPath != "" {
 		if global, err := loadConfigFile(globalPath); err == nil {
 			merged = global
 		} else if !os.IsNotExist(err) {
-			recordWarning("%s: %v", globalPath, err)
+			warn("%s: %v", globalPath, err)
 		}
 	}
 
-	overlay(merged, pluginOptionsFromEnv())
+	overlay(merged, pluginOptionsFromEnv(warn))
 
 	repoRoot, err := getRepoRoot()
 	if err != nil {
-		return merged
+		return merged, warnings
 	}
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
 	repo, err := loadConfigFile(repoPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			recordWarning("%s: %v", repoPath, err)
+			warn("%s: %v", repoPath, err)
 		}
-		return merged
+		return merged, warnings
 	}
 	overlay(merged, repo)
 
-	return merged
+	return merged, warnings
 }
 
 // overlay applies src's set fields (non-nil pointers, non-empty strings)
@@ -249,23 +234,24 @@ func overlay(dst, src *Config) {
 // variables Claude Code sets in plugin subprocesses for userConfig values
 // (plugin.json). Only hook processes see them; CLI invocations from the
 // agent's Bash tool read the policy the hooks stamped into session state
-// instead. Unparseable values are ignored but recorded in LoadWarnings
-// (the enable-time prompt is typed, so these should arrive well-formed).
-func pluginOptionsFromEnv() *Config {
+// instead. Unparseable values are ignored but reported through warn, so
+// they surface in Load's warnings (the enable-time prompt is typed, so
+// these should arrive well-formed).
+func pluginOptionsFromEnv(warn func(format string, args ...interface{})) *Config {
 	cfg := &Config{}
-	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_THRESHOLD"); ok {
+	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_THRESHOLD", warn); ok {
 		cfg.Threshold = &v
 	}
-	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_STATUSLINE_AUTO_SETUP"); ok {
+	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_STATUSLINE_AUTO_SETUP", warn); ok {
 		cfg.StatuslineAutoSetup = &v
 	}
 	cfg.ResetOn = os.Getenv("CLAUDE_PLUGIN_OPTION_RESET_ON")
 	cfg.OnTrip = os.Getenv("CLAUDE_PLUGIN_OPTION_ON_TRIP")
 	cfg.ReviewCommand = os.Getenv("CLAUDE_PLUGIN_OPTION_REVIEW_COMMAND")
-	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_TRIPWIRES_BLOCK_AUTO_REVIEW"); ok {
+	if v, ok := envBool("CLAUDE_PLUGIN_OPTION_TRIPWIRES_BLOCK_AUTO_REVIEW", warn); ok {
 		cfg.TripwiresBlockAutoReview = &v
 	}
-	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_MAX_AUTO_REVIEWS"); ok {
+	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_MAX_AUTO_REVIEWS", warn); ok {
 		cfg.MaxAutoReviews = &v
 	}
 	return cfg
@@ -283,20 +269,20 @@ func HasPluginOptions() bool {
 	return false
 }
 
-func envInt(key string) (int, bool) {
+func envInt(key string, warn func(format string, args ...interface{})) (int, bool) {
 	raw := os.Getenv(key)
 	if raw == "" {
 		return 0, false
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		recordWarning("%s: invalid integer %q (ignoring)", key, raw)
+		warn("%s: invalid integer %q (ignoring)", key, raw)
 		return 0, false
 	}
 	return v, true
 }
 
-func envBool(key string) (bool, bool) {
+func envBool(key string, warn func(format string, args ...interface{})) (bool, bool) {
 	raw := os.Getenv(key)
 	switch raw {
 	case "":
@@ -306,67 +292,91 @@ func envBool(key string) (bool, bool) {
 	case "false":
 		return false, true
 	}
-	recordWarning("%s: invalid boolean %q, want \"true\" or \"false\" (ignoring)", key, raw)
+	warn("%s: invalid boolean %q, want \"true\" or \"false\" (ignoring)", key, raw)
 	return false, false
 }
 
-// LoadThreshold returns the configured threshold value.
-// Checks repo config first, then global config, then returns DefaultThreshold.
-// Returns 0 if explicitly disabled.
-func LoadThreshold() int {
-	cfg := loadMergedConfig()
-	if cfg.Threshold != nil {
-		return *cfg.Threshold
+// Settings is the resolved configuration: every field carries an effective
+// value, with defaults applied and invalid values replaced. The pointer-based
+// file shape (Config) stays internal to loading and merging.
+type Settings struct {
+	Threshold                int
+	StatuslineAutoSetup      bool
+	ResetOn                  string
+	OnTrip                   string
+	ReviewCommand            string
+	MaxAutoReviews           int
+	TripwiresBlockAutoReview bool
+	TripwirePaths            []string
+	TripwirePatterns         []string
+}
+
+// Load reads and merges the config sources (legacy global file < plugin
+// userConfig env < repo .bumper-lanes.json) once and resolves every value.
+// The returned warnings name malformed config files (parse/read errors
+// other than "file does not exist") and unparseable plugin env values;
+// config must not import internal/logging (it stays a leaf package), so
+// hook callers log them. Resolution:
+//   - Threshold: DefaultThreshold when unset; 0 = disabled.
+//   - StatuslineAutoSetup: opt-in, defaults to false, because it rewrites
+//     user-global settings from whatever repo runs the hook.
+//   - ResetOn: unknown values fall back to the default rather than silently
+//     disabling resets.
+//   - OnTrip: unknown values fall back to the default (block) rather than
+//     silently enabling self-clearing.
+//   - MaxAutoReviews: N per cycle, 0 = never (same as on_trip: block), any
+//     negative value = UnlimitedAutoReviews (hands-off mode).
+//   - TripwirePaths/TripwirePatterns: nil config = defaults; an explicit
+//     empty list disables that tripwire lane.
+func Load() (Settings, []string) {
+	cfg, warnings := loadMergedConfig()
+	s := Settings{
+		Threshold:        DefaultThreshold,
+		ResetOn:          DefaultResetOn,
+		OnTrip:           DefaultOnTrip,
+		ReviewCommand:    DefaultReviewCommand,
+		MaxAutoReviews:   DefaultMaxAutoReviews,
+		TripwirePaths:    DefaultTripwirePaths,
+		TripwirePatterns: DefaultTripwirePatterns,
 	}
-	return DefaultThreshold
+	if cfg.Threshold != nil {
+		s.Threshold = *cfg.Threshold
+	}
+	if cfg.StatuslineAutoSetup != nil {
+		s.StatuslineAutoSetup = *cfg.StatuslineAutoSetup
+	}
+	switch cfg.ResetOn {
+	case ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman:
+		s.ResetOn = cfg.ResetOn
+	}
+	switch cfg.OnTrip {
+	case OnTripBlock, OnTripReview:
+		s.OnTrip = cfg.OnTrip
+	}
+	if cfg.ReviewCommand != "" {
+		s.ReviewCommand = cfg.ReviewCommand
+	}
+	if cfg.MaxAutoReviews != nil {
+		s.MaxAutoReviews = *cfg.MaxAutoReviews
+		if s.MaxAutoReviews < 0 {
+			s.MaxAutoReviews = UnlimitedAutoReviews
+		}
+	}
+	if cfg.TripwiresBlockAutoReview != nil {
+		s.TripwiresBlockAutoReview = *cfg.TripwiresBlockAutoReview
+	}
+	if cfg.TripwirePaths != nil {
+		s.TripwirePaths = *cfg.TripwirePaths
+	}
+	if cfg.TripwirePatterns != nil {
+		s.TripwirePatterns = *cfg.TripwirePatterns
+	}
+	return s, warnings
 }
 
 // IsDisabled returns true if the given threshold means enforcement is disabled.
 func IsDisabled(threshold int) bool {
 	return threshold == 0
-}
-
-// LoadStatuslineAutoSetup returns whether session-start may configure the
-// user's status line in ~/.claude/settings.json. Opt-in: defaults to false,
-// because it rewrites user-global settings from whatever repo runs the hook.
-func LoadStatuslineAutoSetup() bool {
-	cfg := loadMergedConfig()
-	if cfg.StatuslineAutoSetup != nil {
-		return *cfg.StatuslineAutoSetup
-	}
-	return false
-}
-
-// LoadResetOn returns the configured commit auto-reset policy.
-// Unknown values fall back to the default rather than silently
-// disabling resets.
-func LoadResetOn() string {
-	cfg := loadMergedConfig()
-	switch cfg.ResetOn {
-	case ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman:
-		return cfg.ResetOn
-	}
-	return DefaultResetOn
-}
-
-// LoadTripwirePaths returns the configured tripwire path globs.
-// nil config = defaults; an explicit empty list disables path tripwires.
-func LoadTripwirePaths() []string {
-	cfg := loadMergedConfig()
-	if cfg.TripwirePaths != nil {
-		return *cfg.TripwirePaths
-	}
-	return DefaultTripwirePaths
-}
-
-// LoadTripwirePatterns returns the configured added-line tripwire patterns.
-// nil config = defaults; an explicit empty list disables pattern tripwires.
-func LoadTripwirePatterns() []string {
-	cfg := loadMergedConfig()
-	if cfg.TripwirePatterns != nil {
-		return *cfg.TripwirePatterns
-	}
-	return DefaultTripwirePatterns
 }
 
 // knownConfigKeys are the keys the current config schema understands.
@@ -403,52 +413,6 @@ func UnknownKeys(path string) []string {
 	}
 	sort.Strings(unknown)
 	return unknown
-}
-
-// LoadOnTrip returns the configured trip policy. Unknown values fall back
-// to the default (block) rather than silently enabling self-clearing.
-func LoadOnTrip() string {
-	cfg := loadMergedConfig()
-	switch cfg.OnTrip {
-	case OnTripBlock, OnTripReview:
-		return cfg.OnTrip
-	}
-	return DefaultOnTrip
-}
-
-// LoadReviewCommand returns the review workflow named in the self-review
-// trip packet.
-func LoadReviewCommand() string {
-	cfg := loadMergedConfig()
-	if cfg.ReviewCommand != "" {
-		return cfg.ReviewCommand
-	}
-	return DefaultReviewCommand
-}
-
-// LoadMaxAutoReviews returns the self-review clears allowed per human
-// touchpoint: N per cycle, 0 = never (same as on_trip: block), any negative
-// value = unlimited (hands-off mode).
-func LoadMaxAutoReviews() int {
-	cfg := loadMergedConfig()
-	if cfg.MaxAutoReviews == nil {
-		return DefaultMaxAutoReviews
-	}
-	if *cfg.MaxAutoReviews < 0 {
-		return UnlimitedAutoReviews
-	}
-	return *cfg.MaxAutoReviews
-}
-
-// LoadTripwiresBlockAutoReview reports whether tripwire hits exclude an
-// increment from self-review clearing (forcing the human packet).
-// Default false: the self-review covers tripwires, named as priority items.
-func LoadTripwiresBlockAutoReview() bool {
-	cfg := loadMergedConfig()
-	if cfg.TripwiresBlockAutoReview != nil {
-		return *cfg.TripwiresBlockAutoReview
-	}
-	return false
 }
 
 // GetConfigPath returns the path to .bumper-lanes.json (or empty if not in a repo).

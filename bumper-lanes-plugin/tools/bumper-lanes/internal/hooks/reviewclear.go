@@ -9,15 +9,15 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
-// currentReviewPolicy resolves the trip policy from config. In hook
-// processes this sees plugin userConfig values (CLAUDE_PLUGIN_OPTION_* env);
-// elsewhere it reads file config only.
-func currentReviewPolicy() *state.ReviewPolicy {
+// reviewPolicy extracts the trip policy from resolved config. In hook
+// processes the config load sees plugin userConfig values
+// (CLAUDE_PLUGIN_OPTION_* env); elsewhere it reads file config only.
+func reviewPolicy(cfg config.Settings) *state.ReviewPolicy {
 	return &state.ReviewPolicy{
-		OnTrip:                   config.LoadOnTrip(),
-		MaxAutoReviews:           config.LoadMaxAutoReviews(),
-		ReviewCommand:            config.LoadReviewCommand(),
-		TripwiresBlockAutoReview: config.LoadTripwiresBlockAutoReview(),
+		OnTrip:                   cfg.OnTrip,
+		MaxAutoReviews:           cfg.MaxAutoReviews,
+		ReviewCommand:            cfg.ReviewCommand,
+		TripwiresBlockAutoReview: cfg.TripwiresBlockAutoReview,
 	}
 }
 
@@ -52,7 +52,8 @@ func ReviewClear(sessionID string) error {
 	// back to file config for state written before stamping existed.
 	policy := sess.Policy
 	if policy == nil {
-		policy = currentReviewPolicy()
+		cfg, _ := config.Load()
+		policy = reviewPolicy(cfg)
 	}
 
 	if policy.OnTrip != config.OnTripReview {

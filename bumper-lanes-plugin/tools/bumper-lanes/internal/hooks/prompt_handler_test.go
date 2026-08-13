@@ -233,8 +233,8 @@ func TestSetThreshold(t *testing.T) {
 				// Durable half: setThreshold's success path calls
 				// config.SaveRepoConfig, so the repo's .bumper-lanes.json
 				// must reflect the same value, not just in-memory state.
-				if got := config.LoadThreshold(); got != tc.wantThreshold {
-					t.Errorf("config.LoadThreshold() = %d, want %d (SaveRepoConfig didn't persist)", got, tc.wantThreshold)
+				if cfg, _ := config.Load(); cfg.Threshold != tc.wantThreshold {
+					t.Errorf("config.Load().Threshold = %d, want %d (SaveRepoConfig didn't persist)", cfg.Threshold, tc.wantThreshold)
 				}
 			} else {
 				if reloaded.ThresholdLimit != 600 {

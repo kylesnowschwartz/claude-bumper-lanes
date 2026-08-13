@@ -10,7 +10,8 @@ import (
 
 // ConfigShow displays the current threshold configuration.
 func ConfigShow() error {
-	threshold := config.LoadThreshold()
+	cfg, _ := config.Load()
+	threshold := cfg.Threshold
 
 	fmt.Printf("Threshold: %d points", threshold)
 	if config.IsDisabled(threshold) {

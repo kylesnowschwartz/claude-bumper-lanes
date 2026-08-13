@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
@@ -80,7 +81,8 @@ func PreToolUse(input *hookio.Input) (exitCode int) {
 		// Forgive commits that landed since the baseline (pull/rebase/
 		// merge) before judging recovery, so upstream churn can't hold
 		// the breaker closed.
-		maybeRebaseBaseline(sess, log)
+		cfg, _ := config.Load()
+		maybeRebaseBaseline(sess, cfg.ResetOn, log)
 
 		currentTree, err := git.CaptureTree()
 		if err != nil {

@@ -45,9 +45,9 @@ func SessionStart(input *hookio.Input) int {
 	// Get current branch for staleness detection
 	baselineBranch := git.CurrentBranch()
 
-	// Load threshold from config
-	threshold := config.LoadThreshold()
-	for _, w := range config.LoadWarnings() {
+	cfg, cfgWarnings := config.Load()
+	threshold := cfg.Threshold
+	for _, w := range cfgWarnings {
 		log.Warn("config: %s", w)
 	}
 
@@ -62,7 +62,7 @@ func SessionStart(input *hookio.Input) int {
 	sess.BaselineHead = git.HeadCommit()
 	// Stamp the trip policy while we're in a hook process, where plugin
 	// userConfig env vars are visible (Bash-invoked CLI commands are not).
-	sess.Policy = currentReviewPolicy()
+	sess.Policy = reviewPolicy(cfg)
 
 	if err := sess.Save(); err != nil {
 		log.Warn("failed to save session state: %v (failing open)", err)
@@ -90,7 +90,7 @@ func SessionStart(input *hookio.Input) int {
 	// Repairing an already-installed bumper-lanes wrapper or binary path
 	// always runs: the user opted in by installing, and a plugin update
 	// that moves the binary would otherwise silently break their status line.
-	if msg := statusline.EnsureInstalled(log, config.LoadStatuslineAutoSetup()); msg != "" {
+	if msg := statusline.EnsureInstalled(log, cfg.StatuslineAutoSetup); msg != "" {
 		warnings = append(warnings, msg)
 	}
 

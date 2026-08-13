@@ -206,7 +206,8 @@ func handleDiff(sessionID string) int {
 func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
-		threshold := config.LoadThreshold()
+		cfg, _ := config.Load()
+		threshold := cfg.Threshold
 
 		// Attribute the source by which config files exist (repo overrides
 		// global), matching ConfigShow - an explicit value equal to the
@@ -231,7 +232,7 @@ func handleConfig(sessionID, args string) int {
 			thresholdStr = fmt.Sprintf("%d points", threshold)
 		}
 
-		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, config.LoadResetOn(), source)
+		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, cfg.ResetOn, source)
 		msg += unknownKeyWarnings()
 		msg += deprecation
 		blockPrompt(msg)

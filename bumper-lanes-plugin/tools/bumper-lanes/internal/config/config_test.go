@@ -24,9 +24,9 @@ func TestConfigLoading(t *testing.T) {
 	t.Run("default when no config file exists", func(t *testing.T) {
 		os.Remove(repoPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != DefaultThreshold {
-			t.Errorf("LoadThreshold() = %d, want %d (default)", got, DefaultThreshold)
+			t.Errorf("loadSettings().Threshold = %d, want %d (default)", got, DefaultThreshold)
 		}
 	})
 
@@ -34,9 +34,9 @@ func TestConfigLoading(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644)
 		defer os.Remove(repoPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != 200 {
-			t.Errorf("LoadThreshold() = %d, want 200 (config)", got)
+			t.Errorf("loadSettings().Threshold = %d, want 200 (config)", got)
 		}
 	})
 
@@ -44,9 +44,9 @@ func TestConfigLoading(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"threshold": 200, "default_view_mode": "sparkline-tree"}`), 0644)
 		defer os.Remove(repoPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != 200 {
-			t.Errorf("LoadThreshold() = %d, want 200 (unknown keys ignored)", got)
+			t.Errorf("loadSettings().Threshold = %d, want 200 (unknown keys ignored)", got)
 		}
 	})
 }
@@ -67,9 +67,8 @@ func TestLoadWarnings(t *testing.T) {
 
 	t.Run("no config file produces no warning", func(t *testing.T) {
 		os.Remove(repoPath)
-		LoadThreshold()
-		if got := LoadWarnings(); len(got) != 0 {
-			t.Errorf("LoadWarnings() = %v, want none for absent config", got)
+		if _, got := Load(); len(got) != 0 {
+			t.Errorf("Load() warnings = %v, want none for absent config", got)
 		}
 	})
 
@@ -77,10 +76,9 @@ func TestLoadWarnings(t *testing.T) {
 		os.WriteFile(repoPath, []byte("not json"), 0644)
 		defer os.Remove(repoPath)
 
-		LoadThreshold()
-		got := LoadWarnings()
+		_, got := Load()
 		if len(got) != 1 {
-			t.Fatalf("LoadWarnings() = %v, want exactly 1 warning", got)
+			t.Fatalf("Load() warnings = %v, want exactly 1 warning", got)
 		}
 		if !strings.Contains(got[0], repoPath) {
 			t.Errorf("warning %q does not name the config path %q", got[0], repoPath)
@@ -91,10 +89,9 @@ func TestLoadWarnings(t *testing.T) {
 		os.Remove(repoPath)
 		t.Setenv("CLAUDE_PLUGIN_OPTION_THRESHOLD", "not-a-number")
 
-		LoadThreshold()
-		got := LoadWarnings()
+		_, got := Load()
 		if len(got) != 1 || !strings.Contains(got[0], "CLAUDE_PLUGIN_OPTION_THRESHOLD") {
-			t.Errorf("LoadWarnings() = %v, want a warning naming CLAUDE_PLUGIN_OPTION_THRESHOLD", got)
+			t.Errorf("Load() warnings = %v, want a warning naming CLAUDE_PLUGIN_OPTION_THRESHOLD", got)
 		}
 	})
 }
@@ -113,24 +110,24 @@ func TestLoadStatuslineAutoSetup(t *testing.T) {
 
 	t.Run("defaults to false", func(t *testing.T) {
 		os.Remove(repoPath)
-		if LoadStatuslineAutoSetup() {
-			t.Error("LoadStatuslineAutoSetup() = true, want false (opt-in default)")
+		if loadSettings().StatuslineAutoSetup {
+			t.Error("loadSettings().StatuslineAutoSetup = true, want false (opt-in default)")
 		}
 	})
 
 	t.Run("repo config opts in", func(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"statusline_auto_setup": true}`), 0644)
 		defer os.Remove(repoPath)
-		if !LoadStatuslineAutoSetup() {
-			t.Error("LoadStatuslineAutoSetup() = false, want true (config)")
+		if !loadSettings().StatuslineAutoSetup {
+			t.Error("loadSettings().StatuslineAutoSetup = false, want true (config)")
 		}
 	})
 
 	t.Run("explicit false stays false", func(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"statusline_auto_setup": false}`), 0644)
 		defer os.Remove(repoPath)
-		if LoadStatuslineAutoSetup() {
-			t.Error("LoadStatuslineAutoSetup() = true, want false")
+		if loadSettings().StatuslineAutoSetup {
+			t.Error("loadSettings().StatuslineAutoSetup = true, want false")
 		}
 	})
 }
@@ -149,16 +146,16 @@ func TestLoadResetOn(t *testing.T) {
 
 	t.Run("defaults to commit", func(t *testing.T) {
 		os.Remove(repoPath)
-		if got := LoadResetOn(); got != ResetOnCommit {
-			t.Errorf("LoadResetOn() = %q, want %q (default)", got, ResetOnCommit)
+		if got := loadSettings().ResetOn; got != ResetOnCommit {
+			t.Errorf("loadSettings().ResetOn = %q, want %q (default)", got, ResetOnCommit)
 		}
 	})
 
 	t.Run("loads configured policies", func(t *testing.T) {
 		for _, policy := range []string{ResetOnCommit, ResetOnVerifiedCommit, ResetOnHuman} {
 			os.WriteFile(repoPath, []byte(`{"reset_on": "`+policy+`"}`), 0644)
-			if got := LoadResetOn(); got != policy {
-				t.Errorf("LoadResetOn() = %q, want %q", got, policy)
+			if got := loadSettings().ResetOn; got != policy {
+				t.Errorf("loadSettings().ResetOn = %q, want %q", got, policy)
 			}
 		}
 		os.Remove(repoPath)
@@ -167,8 +164,8 @@ func TestLoadResetOn(t *testing.T) {
 	t.Run("unknown value falls back to default", func(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"reset_on": "never-heard-of-it"}`), 0644)
 		defer os.Remove(repoPath)
-		if got := LoadResetOn(); got != DefaultResetOn {
-			t.Errorf("LoadResetOn() = %q, want %q (fallback)", got, DefaultResetOn)
+		if got := loadSettings().ResetOn; got != DefaultResetOn {
+			t.Errorf("loadSettings().ResetOn = %q, want %q (fallback)", got, DefaultResetOn)
 		}
 	})
 }
@@ -225,16 +222,16 @@ func TestEmptyRepoNoHEAD(t *testing.T) {
 
 	t.Run("LoadThreshold succeeds without HEAD", func(t *testing.T) {
 		// Should not panic, should return default
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != DefaultThreshold {
-			t.Errorf("LoadThreshold() = %d, want %d", got, DefaultThreshold)
+			t.Errorf("loadSettings().Threshold = %d, want %d", got, DefaultThreshold)
 		}
 	})
 
 	t.Run("LoadResetOn succeeds without HEAD", func(t *testing.T) {
-		got := LoadResetOn()
+		got := loadSettings().ResetOn
 		if got != DefaultResetOn {
-			t.Errorf("LoadResetOn() = %q, want %q", got, DefaultResetOn)
+			t.Errorf("loadSettings().ResetOn = %q, want %q", got, DefaultResetOn)
 		}
 	})
 
@@ -377,9 +374,9 @@ func TestGlobalConfigLoading(t *testing.T) {
 		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100}`), 0644)
 		defer os.Remove(globalConfigPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != 100 {
-			t.Errorf("LoadThreshold() = %d, want 100 (global)", got)
+			t.Errorf("loadSettings().Threshold = %d, want 100 (global)", got)
 		}
 	})
 
@@ -389,9 +386,9 @@ func TestGlobalConfigLoading(t *testing.T) {
 		defer os.Remove(globalConfigPath)
 		defer os.Remove(repoPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != 200 {
-			t.Errorf("LoadThreshold() = %d, want 200 (repo overrides global)", got)
+			t.Errorf("loadSettings().Threshold = %d, want 200 (repo overrides global)", got)
 		}
 	})
 
@@ -401,13 +398,13 @@ func TestGlobalConfigLoading(t *testing.T) {
 		defer os.Remove(globalConfigPath)
 		defer os.Remove(repoPath)
 
-		gotThreshold := LoadThreshold()
-		gotResetOn := LoadResetOn()
+		gotThreshold := loadSettings().Threshold
+		gotResetOn := loadSettings().ResetOn
 		if gotThreshold != 200 {
-			t.Errorf("LoadThreshold() = %d, want 200 (repo)", gotThreshold)
+			t.Errorf("loadSettings().Threshold = %d, want 200 (repo)", gotThreshold)
 		}
 		if gotResetOn != ResetOnHuman {
-			t.Errorf("LoadResetOn() = %q, want %q (global)", gotResetOn, ResetOnHuman)
+			t.Errorf("loadSettings().ResetOn = %q, want %q (global)", gotResetOn, ResetOnHuman)
 		}
 	})
 
@@ -416,9 +413,9 @@ func TestGlobalConfigLoading(t *testing.T) {
 		os.WriteFile(globalConfigPath, []byte(`{"threshold": 0}`), 0644)
 		defer os.Remove(globalConfigPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != 0 {
-			t.Errorf("LoadThreshold() = %d, want 0 (disabled via global)", got)
+			t.Errorf("loadSettings().Threshold = %d, want 0 (disabled via global)", got)
 		}
 		if !IsDisabled(got) {
 			t.Error("IsDisabled() = false, want true")
@@ -429,9 +426,9 @@ func TestGlobalConfigLoading(t *testing.T) {
 		os.Remove(repoPath)
 		os.Remove(globalConfigPath)
 
-		got := LoadThreshold()
+		got := loadSettings().Threshold
 		if got != DefaultThreshold {
-			t.Errorf("LoadThreshold() = %d, want %d (default)", got, DefaultThreshold)
+			t.Errorf("loadSettings().Threshold = %d, want %d (default)", got, DefaultThreshold)
 		}
 	})
 }
@@ -473,4 +470,11 @@ func TestGetGlobalConfigPath(t *testing.T) {
 			t.Errorf("GetGlobalConfigPath() = %q, want %q", got, want)
 		}
 	})
+}
+
+// loadSettings resolves config, discarding load warnings the way most
+// callers do.
+func loadSettings() Settings {
+	s, _ := Load()
+	return s
 }

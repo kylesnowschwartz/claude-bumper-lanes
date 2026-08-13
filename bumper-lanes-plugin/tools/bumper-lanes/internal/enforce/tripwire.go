@@ -60,10 +60,10 @@ func globToRegexp(glob string) *regexp.Regexp {
 // the current diff: changed files matching tripwire path globs, and added
 // lines containing tripwire patterns. stats is the already-computed diff
 // from baseline; baselineTree is used for the added-line scan.
-func DetectTripwires(stats *diff.StatsJSON, baselineTree string) []string {
+func DetectTripwires(stats *diff.StatsJSON, baselineTree string, cfg config.Settings) []string {
 	var hits []string
 
-	for _, pattern := range config.LoadTripwirePaths() {
+	for _, pattern := range cfg.TripwirePaths {
 		for _, file := range stats.Files {
 			if matchTripwirePath(pattern, file.Path) {
 				hits = append(hits, file.Path)
@@ -71,7 +71,7 @@ func DetectTripwires(stats *diff.StatsJSON, baselineTree string) []string {
 		}
 	}
 
-	patterns := config.LoadTripwirePatterns()
+	patterns := cfg.TripwirePatterns
 	if len(patterns) > 0 {
 		for _, hit := range scanAddedLines(baselineTree, patterns) {
 			hits = append(hits, hit)

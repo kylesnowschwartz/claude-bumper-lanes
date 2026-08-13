@@ -106,10 +106,13 @@ func Stop(input *hookio.Input) error {
 		return nil
 	}
 
+	// Config is loaded once here, after the paused/disabled guards, so
+	// inert sessions don't pay for it.
+	cfg, _ := config.Load()
+
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
-	// before any score calculation below. After the paused/disabled guards
-	// so inert sessions don't pay the git call.
-	maybeRebaseBaseline(sess, log)
+	// before any score calculation below.
+	maybeRebaseBaseline(sess, cfg.ResetOn, log)
 
 	// Detect branch switch - auto-reset baseline
 	currentBranch := git.CurrentBranch()
@@ -186,7 +189,7 @@ func Stop(input *hookio.Input) error {
 	sess.NetLines = result.NetLines
 	// Stamp the effective trip policy for review-clear, which runs from
 	// the agent's Bash tool and cannot see plugin userConfig env vars.
-	policy := currentReviewPolicy()
+	policy := reviewPolicy(cfg)
 	sess.Policy = policy
 	saveOrLog(sess, log, "score update on trip")
 	// Log the trip transition only, not every blocked Stop while tripped.

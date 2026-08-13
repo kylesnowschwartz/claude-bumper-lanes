@@ -25,17 +25,17 @@ func TestPluginOptionsPrecedence(t *testing.T) {
 		t.Setenv("CLAUDE_PLUGIN_OPTION_MAX_AUTO_REVIEWS", "-1")
 		t.Setenv("CLAUDE_PLUGIN_OPTION_TRIPWIRES_BLOCK_AUTO_REVIEW", "true")
 
-		if got := LoadThreshold(); got != 250 {
-			t.Errorf("LoadThreshold() = %d, want 250 (plugin option)", got)
+		if got := loadSettings().Threshold; got != 250 {
+			t.Errorf("loadSettings().Threshold = %d, want 250 (plugin option)", got)
 		}
-		if got := LoadOnTrip(); got != OnTripReview {
-			t.Errorf("LoadOnTrip() = %q, want review", got)
+		if got := loadSettings().OnTrip; got != OnTripReview {
+			t.Errorf("loadSettings().OnTrip = %q, want review", got)
 		}
-		if got := LoadMaxAutoReviews(); got != UnlimitedAutoReviews {
-			t.Errorf("LoadMaxAutoReviews() = %d, want -1", got)
+		if got := loadSettings().MaxAutoReviews; got != UnlimitedAutoReviews {
+			t.Errorf("loadSettings().MaxAutoReviews = %d, want -1", got)
 		}
-		if !LoadTripwiresBlockAutoReview() {
-			t.Error("LoadTripwiresBlockAutoReview() = false, want true (plugin option)")
+		if !loadSettings().TripwiresBlockAutoReview {
+			t.Error("loadSettings().TripwiresBlockAutoReview = false, want true (plugin option)")
 		}
 	})
 
@@ -46,8 +46,8 @@ func TestPluginOptionsPrecedence(t *testing.T) {
 		defer os.RemoveAll(globalDir)
 		t.Setenv("CLAUDE_PLUGIN_OPTION_THRESHOLD", "250")
 
-		if got := LoadThreshold(); got != 250 {
-			t.Errorf("LoadThreshold() = %d, want 250 (plugin option over global file)", got)
+		if got := loadSettings().Threshold; got != 250 {
+			t.Errorf("loadSettings().Threshold = %d, want 250 (plugin option over global file)", got)
 		}
 	})
 
@@ -56,16 +56,16 @@ func TestPluginOptionsPrecedence(t *testing.T) {
 		os.WriteFile(repoPath, []byte(`{"threshold": 75}`), 0644)
 		defer os.Remove(repoPath)
 
-		if got := LoadThreshold(); got != 75 {
-			t.Errorf("LoadThreshold() = %d, want 75 (repo file wins)", got)
+		if got := loadSettings().Threshold; got != 75 {
+			t.Errorf("loadSettings().Threshold = %d, want 75 (repo file wins)", got)
 		}
 	})
 
 	t.Run("unparseable numeric option is ignored", func(t *testing.T) {
 		t.Setenv("CLAUDE_PLUGIN_OPTION_THRESHOLD", "lots")
 
-		if got := LoadThreshold(); got != DefaultThreshold {
-			t.Errorf("LoadThreshold() = %d, want default for junk env", got)
+		if got := loadSettings().Threshold; got != DefaultThreshold {
+			t.Errorf("loadSettings().Threshold = %d, want default for junk env", got)
 		}
 	})
 }
