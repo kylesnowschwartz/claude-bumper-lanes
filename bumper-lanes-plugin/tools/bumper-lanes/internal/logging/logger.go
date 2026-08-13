@@ -116,6 +116,9 @@ func (l *Logger) Error(format string, args ...any) { l.log(LevelError, format, a
 // log formats the printf-style message and hands it to slog, which applies
 // the level filter and the fileHandler's line format.
 func (l *Logger) log(level Level, format string, args ...any) {
+	if !l.slog.Enabled(context.Background(), level) {
+		return
+	}
 	l.slog.Log(context.Background(), level, fmt.Sprintf(format, args...))
 }
 

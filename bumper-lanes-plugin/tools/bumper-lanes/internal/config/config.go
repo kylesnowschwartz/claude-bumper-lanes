@@ -344,6 +344,10 @@ func Load() (Settings, []string) {
 	}
 	if cfg.Threshold != nil {
 		s.Threshold = *cfg.Threshold
+		if s.Threshold < 0 {
+			warn("threshold: invalid negative value %d (using 0: disabled)", s.Threshold)
+			s.Threshold = 0
+		}
 	}
 	if cfg.StatuslineAutoSetup != nil {
 		s.StatuslineAutoSetup = *cfg.StatuslineAutoSetup
@@ -387,7 +391,7 @@ func Load() (Settings, []string) {
 
 // IsDisabled returns true if the given threshold means enforcement is disabled.
 func IsDisabled(threshold int) bool {
-	return threshold == 0
+	return threshold <= 0
 }
 
 // knownConfigKeys are the keys the current config schema understands.

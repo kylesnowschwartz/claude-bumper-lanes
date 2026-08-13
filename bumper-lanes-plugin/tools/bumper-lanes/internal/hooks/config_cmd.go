@@ -11,7 +11,7 @@ import (
 
 // ConfigShow displays the current threshold configuration.
 func ConfigShow() error {
-	cfg := loadConfig(logging.New(os.Getenv("CLAUDE_CODE_SESSION_ID"), "config_cmd"))
+	cfg, cfgWarnings := loadConfigWithWarnings(logging.New(os.Getenv("CLAUDE_CODE_SESSION_ID"), "config_cmd"))
 	threshold := cfg.Threshold
 
 	fmt.Printf("Threshold: %d points", threshold)
@@ -46,6 +46,9 @@ func ConfigShow() error {
 	}
 	if globalExists {
 		fmt.Printf("Note: the global file is deprecated - move these values to the plugin's settings (/plugin > claude-bumper-lanes). File support ends in v5.\n")
+	}
+	for _, w := range cfgWarnings {
+		fmt.Printf("Warning: %s\n", w)
 	}
 
 	return nil

@@ -90,4 +90,29 @@ func TestCaptureTree(t *testing.T) {
 			t.Error("CaptureTree() error = nil, want non-nil outside a git repo")
 		}
 	})
+
+	t.Run("untracked file with non-ASCII name is captured", func(t *testing.T) {
+		// Under the default core.quotePath, `git ls-files` C-quotes
+		// non-ASCII filenames; without -z/NUL-splitting, `git add` is
+		// handed the quoted string instead of the real path and fails.
+		tmpDir := t.TempDir()
+		testutil.IsolateGitEnv(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
+
+		t.Chdir(tmpDir)
+
+		if err := os.WriteFile(tmpDir+"/café.md", []byte("hello"), 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		tree, err := CaptureTree()
+		if err != nil {
+			t.Fatalf("CaptureTree() error = %v, want nil", err)
+		}
+
+		headTree := HeadTree()
+		if tree == headTree {
+			t.Error("CaptureTree() did not include the non-ASCII untracked file")
+		}
+	})
 }

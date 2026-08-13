@@ -66,7 +66,16 @@ func TestLoggerLevels(t *testing.T) {
 	})
 
 	t.Run("Debug is dropped unless BUMPER_LANES_DEBUG=1 was set at construction", func(t *testing.T) {
+		// Clear ambient env explicitly: New reads BUMPER_LANES_DEBUG from
+		// the real environment, so a value left set in the shell running
+		// the tests (not just a prior subtest) would leak into this
+		// assertion.
+		t.Setenv("BUMPER_LANES_DEBUG", "")
 		logger := New(t.Name(), "test")
+		// The log file name is date+session-derived, so a run earlier
+		// today (e.g. with BUMPER_LANES_DEBUG genuinely set) can leave a
+		// debug line in the same path; start from a fresh, empty file.
+		os.Remove(logger.LogFile())
 		logger.Debug("debug message")
 
 		if _, err := os.Stat(logger.LogFile()); err == nil {

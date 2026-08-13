@@ -81,7 +81,7 @@ func PreToolUse(input *hookio.Input) (exitCode int) {
 		// merge) before judging recovery, so upstream churn can't hold
 		// the breaker closed.
 		cfg := loadConfig(log)
-		maybeRebaseBaseline(sess, cfg.ResetOn, log)
+		maybeRebaseBaseline(sess, cfg.ResetOn, git.HeadCommit(), log)
 
 		currentTree, err := git.CaptureTree()
 		if err != nil {

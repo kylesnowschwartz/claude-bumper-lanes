@@ -174,7 +174,7 @@ func handleWriteEdit(input *hookio.Input) int {
 
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
 	// so the gauge doesn't count upstream churn.
-	maybeRebaseBaseline(sess, cfg.ResetOn, log)
+	maybeRebaseBaseline(sess, cfg.ResetOn, git.HeadCommit(), log)
 
 	// Get diff stats from baseline (fresh calculation, not incremental)
 	// This allows score to decrease when user manually deletes/reverts changes

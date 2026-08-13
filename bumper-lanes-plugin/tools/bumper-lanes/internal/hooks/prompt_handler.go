@@ -206,7 +206,7 @@ func handleDiff(sessionID string) int {
 func handleConfig(sessionID, args string) int {
 	if args == "" {
 		// Show current config
-		cfg := loadConfig(logging.New(sessionID, "prompt_handler"))
+		cfg, cfgWarnings := loadConfigWithWarnings(logging.New(sessionID, "prompt_handler"))
 		threshold := cfg.Threshold
 
 		// Attribute the source by which config files exist (repo overrides
@@ -233,6 +233,9 @@ func handleConfig(sessionID, args string) int {
 		}
 
 		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, cfg.ResetOn, source)
+		for _, w := range cfgWarnings {
+			msg += fmt.Sprintf("\nWarning: %s", w)
+		}
 		msg += unknownKeyWarnings()
 		msg += deprecation
 		blockPrompt(msg)

@@ -106,13 +106,26 @@ func Stop(input *hookio.Input) error {
 		return nil
 	}
 
+	// Config is loaded at most once per Stop call and reused by both the
+	// rebase check below and the trip path further down, so a tripped
+	// Stop with a moved HEAD doesn't read the config files twice.
+	var cfg config.Settings
+	var cfgLoaded bool
+	getConfig := func() config.Settings {
+		if !cfgLoaded {
+			cfg = loadConfig(log)
+			cfgLoaded = true
+		}
+		return cfg
+	}
+
 	// Forgive commits that landed since the baseline (pull/rebase/merge)
 	// before any score calculation below. Config is loaded lazily, only
 	// when HEAD has actually moved, so an untripped session with an
 	// unmoved HEAD never pays for the subprocess + file reads.
-	if head := git.HeadCommit(); head != "none" && head != sess.BaselineHead {
-		cfg := loadConfig(log)
-		maybeRebaseBaseline(sess, cfg.ResetOn, log)
+	head := git.HeadCommit()
+	if head != "none" && head != sess.BaselineHead {
+		maybeRebaseBaseline(sess, getConfig().ResetOn, head, log)
 	}
 
 	// Detect branch switch - auto-reset baseline
@@ -183,9 +196,8 @@ func Stop(input *hookio.Input) error {
 		return nil
 	}
 
-	// Over threshold - set stop_triggered and block. Config is loaded here,
-	// on the trip path only, rather than for every Stop invocation.
-	cfg := loadConfig(log)
+	// Over threshold - set stop_triggered and block.
+	cfg = getConfig()
 	wasTripped := sess.StopTriggered
 	sess.SetStopTriggered(true)
 	sess.SetScore(freshScore)

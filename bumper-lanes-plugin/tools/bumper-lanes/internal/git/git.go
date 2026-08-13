@@ -4,8 +4,6 @@
 package git
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -63,20 +61,19 @@ func CaptureTree() (string, error) {
 		}
 	}
 
-	// Add untracked files (respecting .gitignore)
-	lsCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	// Add untracked files (respecting .gitignore). -z / NUL-splitting keeps
+	// paths raw: without it, git C-quotes non-ASCII, quote, and backslash
+	// characters (default core.quotePath) and the quoted string is not a
+	// path `git add` can find, silently failing the whole capture.
+	lsCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard", "-z")
 	untrackedOutput, err := lsCmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("ls-files --others: %w", err)
 	}
-	if len(untrackedOutput) > 0 {
-		scanner := bufio.NewScanner(bytes.NewReader(untrackedOutput))
-		for scanner.Scan() {
-			path := scanner.Text()
-			if path != "" {
-				if err := gitWithTempIndex("add", path).Run(); err != nil {
-					return "", fmt.Errorf("add %q: %w", path, err)
-				}
+	for _, path := range strings.Split(strings.TrimRight(string(untrackedOutput), "\x00"), "\x00") {
+		if path != "" {
+			if err := gitWithTempIndex("add", "--", path).Run(); err != nil {
+				return "", fmt.Errorf("add %q: %w", path, err)
 			}
 		}
 	}

@@ -31,8 +31,11 @@ import (
 // versions, "none" from an unborn branch or a failed rev-parse) adopts the
 // current HEAD without rebasing. Saves the state itself on every mutation;
 // returns true when the baseline moved.
-func maybeRebaseBaseline(sess *state.SessionState, resetOn string, log *logging.Logger) bool {
-	head := git.HeadCommit()
+//
+// head is the caller's already-resolved git.HeadCommit(), passed in so
+// callers that need HEAD for other checks too don't pay for a second
+// subprocess.
+func maybeRebaseBaseline(sess *state.SessionState, resetOn string, head string, log *logging.Logger) bool {
 	if head == "none" {
 		return false
 	}

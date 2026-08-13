@@ -63,7 +63,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		sess := setupRebaseRepo(t, "")
 		commitUpstreamFile(t, "upstream.txt")
 
-		if !maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if !maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Fatal("expected the baseline to rebase over the upstream commit")
 		}
 		stats := getStatsJSON(sess.BaselineTree)
@@ -84,7 +84,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 
 	t.Run("no-op when HEAD has not moved", func(t *testing.T) {
 		sess := setupRebaseRepo(t, "")
-		if maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Error("baseline moved with HEAD unchanged")
 		}
 	})
@@ -92,7 +92,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 	t.Run("strict reset policies do not auto-rebase", func(t *testing.T) {
 		sess := setupRebaseRepo(t, `{"reset_on": "human"}`)
 		commitUpstreamFile(t, "upstream.txt")
-		if maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Error("baseline moved under reset_on: human")
 		}
 		if note := staleBaselineNote(sess); note == "" {
@@ -116,7 +116,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 	t.Run("none sentinel adopts like legacy state", func(t *testing.T) {
 		sess := setupRebaseRepo(t, "")
 		sess.BaselineHead = "none"
-		if maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Error("none sentinel should adopt, not rebase")
 		}
 		if sess.BaselineHead != git.HeadCommit() {
@@ -127,7 +127,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 	t.Run("legacy state adopts current HEAD without rebasing", func(t *testing.T) {
 		sess := setupRebaseRepo(t, "")
 		sess.BaselineHead = ""
-		if maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Error("legacy state should adopt, not rebase")
 		}
 		if sess.BaselineHead != git.HeadCommit() {
@@ -154,7 +154,7 @@ func TestMaybeRebaseBaseline(t *testing.T) {
 		exec.Command("git", "commit", "-q", "-m", "upstream shared").Run()
 
 		oldTree := sess.BaselineTree
-		if maybeRebaseBaseline(sess, loadResetOn(), log) {
+		if maybeRebaseBaseline(sess, loadResetOn(), git.HeadCommit(), log) {
 			t.Fatal("conflicting merge should fail open, not rebase")
 		}
 		if sess.BaselineTree != oldTree {
