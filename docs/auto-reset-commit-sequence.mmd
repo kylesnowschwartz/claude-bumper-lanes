@@ -68,12 +68,12 @@ sequenceDiagram
     Note over PreTU,Git: Clean tree check (handles external commits)
     PreTU->>Git: CaptureTree()
     Git-->>PreTU: tree SHA jkl012
-    PreTU->>Git: GetHeadTree()
+    PreTU->>Git: HeadTree()
     Git-->>PreTU: HEAD tree jkl012
 
     %% Trees match - auto-reset and allow
     PreTU->>PreTU: (tree == HEAD, clean!)
-    PreTU->>Git: GetCurrentBranch()
+    PreTU->>Git: CurrentBranch()
     Git-->>PreTU: main
     PreTU->>Sess: ResetBaseline(jkl012, main)
     PreTU->>Sess: StopTriggered = false
@@ -115,7 +115,7 @@ sequenceDiagram
     Note over PreTU,Git: Tree dirty check (v3.8.0 recalculates score)
     PreTU->>Git: CaptureTree()
     Git-->>PreTU: tree SHA xyz789
-    PreTU->>Git: GetHeadTree()
+    PreTU->>Git: HeadTree()
     Git-->>PreTU: HEAD tree jkl012
 
     %% Trees don't match (dirty) - NEW: recalculate score
@@ -152,7 +152,7 @@ sequenceDiagram
 %% - Commit-shaped command detection: internal/hooks/post_tool_use.go:gitCommitPattern
 %% - HEAD recording: internal/hooks/pre_tool_use.go:recordHeadBeforeCommit
 %% - HEAD-moved evidence + reset policy: internal/hooks/post_tool_use.go:handleBashCommit
-%% - reset_on policy (commit | verified-commit | human): internal/config/config.go:LoadResetOn
+%% - reset_on policy (commit | verified-commit | human): internal/config/config.go:Load / Settings.ResetOn
 %% - no-verify detection scoped to the commit segment: internal/hooks/post_tool_use.go:commitSegment
 %%
 %% Scenario 2 (PreToolUse auto-reset on clean tree, v3.7.0):
@@ -209,7 +209,7 @@ sequenceDiagram
 %%    - Walks all files, stats them, reads contents, computes object hashes
 %%    - Cost: O(n) where n = number of files in repository
 %%    - Typical cost: 50-100ms on modern hardware for medium repos
-%% 2. Scenario 2 (PreToolUse clean tree check) runs CaptureTree() + GetHeadTree() when StopTriggered=true
+%% 2. Scenario 2 (PreToolUse clean tree check) runs CaptureTree() + HeadTree() when StopTriggered=true
 %%    - Only triggers AFTER threshold exceeded (rare state)
 %%    - Cost: ~120ms per Write/Edit in blocked state (tree check only)
 %% 3. Scenario 3 (PreToolUse auto-recovery, v3.8.0) adds diff recalculation to Scenario 2's cost
@@ -219,6 +219,6 @@ sequenceDiagram
 %%    - Enables auto-recovery without manual /bumper-reset (UX benefit)
 %% 4. Potential optimization (out of scope): Use `git diff-index --quiet HEAD`
 %%    - Returns exit code 0 (clean) or 1 (dirty) without computing tree hash
-%%    - Cost: ~10ms (90% faster than CaptureTree + GetHeadTree)
+%%    - Cost: ~10ms (90% faster than CaptureTree + HeadTree)
 %%    - Trade-off: Doesn't provide tree SHA for baseline reset (would need follow-up call)
 %%    - Requires deeper investigation of git-diff-index behavior with untracked files

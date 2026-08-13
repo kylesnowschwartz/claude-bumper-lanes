@@ -51,7 +51,7 @@ sequenceDiagram
         FS-->>Hook: (log to stderr, ignore errors)
 
         %% Status line setup only when statusline_auto_setup=true (opt-in)
-        Hook->>Hook: setupStatusLineWrapper()
+        Hook->>Hook: statusline.EnsureInstalled()
         Hook-->>CC: (configure/wrap statusLine if opted in)
     end
 
@@ -75,7 +75,7 @@ sequenceDiagram
 %% ============================================================
 %% - ensure-binaries.sh: scripts/ensure-binaries.sh (version sentinel)
 %% - SessionStart: internal/hooks/session_start.go:29-77
-%% - setupStatusLineWrapper: internal/hooks/session_start.go:122-196
+%% - EnsureInstalled (cross-package call from SessionStart): internal/statusline/installer.go:EnsureInstalled()
 %% - State New(): internal/state/session.go:136-154
 %% - State Save(): internal/state/session.go:93-134 (atomic write)
 %% - State Load(): internal/state/session.go:69-89

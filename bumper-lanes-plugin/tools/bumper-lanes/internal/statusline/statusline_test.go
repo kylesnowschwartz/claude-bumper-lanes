@@ -2,46 +2,17 @@ package statusline
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
-
-// setupTempGitRepo initializes a git repo in tmpDir with an initial commit.
-func setupTempGitRepo(t *testing.T, tmpDir string) {
-	t.Helper()
-
-	cmd := exec.Command("git", "init", "-b", "main")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git init failed: %v", err)
-	}
-
-	configCmds := [][]string{
-		{"config", "user.name", "Test"},
-		{"config", "user.email", "test@example.com"},
-	}
-	for _, args := range configCmds {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = tmpDir
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("git %v failed: %v", args, err)
-		}
-	}
-
-	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "initial")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git commit failed: %v", err)
-	}
-}
 
 func TestRenderBumperWidget(t *testing.T) {
 	t.Run("no session file returns empty output", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 		t.Chdir(tmpDir)
 
 		out := renderBumperWidget("no-such-session")
@@ -55,7 +26,7 @@ func TestRenderBumperWidget(t *testing.T) {
 
 	t.Run("threshold limit zero means disabled", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 		t.Chdir(tmpDir)
 
 		sess, err := state.New("sess-disabled", "tree1", "main", 0)
@@ -74,7 +45,7 @@ func TestRenderBumperWidget(t *testing.T) {
 
 	t.Run("paused session", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 		t.Chdir(tmpDir)
 
 		sess, err := state.New("sess-paused", "tree1", "main", 600)
@@ -94,7 +65,7 @@ func TestRenderBumperWidget(t *testing.T) {
 
 	t.Run("stop triggered means tripped", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 		t.Chdir(tmpDir)
 
 		sess, err := state.New("sess-tripped", "tree1", "main", 600)
@@ -128,7 +99,7 @@ func TestRenderBumperWidget(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				tmpDir := t.TempDir()
-				setupTempGitRepo(t, tmpDir)
+				testutil.SetupTempGitRepo(t, tmpDir)
 				t.Chdir(tmpDir)
 
 				sess, err := state.New("sess-active", "tree1", "main", tt.limit)
@@ -156,7 +127,7 @@ func TestRenderBumperWidget(t *testing.T) {
 
 	t.Run("tripwires present", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 		t.Chdir(tmpDir)
 
 		sess, err := state.New("sess-tripwire", "tree1", "main", 600)
@@ -180,7 +151,7 @@ func TestRenderBumperWidget(t *testing.T) {
 
 func TestRenderIndicator(t *testing.T) {
 	tmpDir := t.TempDir()
-	setupTempGitRepo(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
 
 	sess, err := state.New("sess-indicator", "tree1", "main", 600)
 	if err != nil {
@@ -231,7 +202,7 @@ func TestRenderIndicator(t *testing.T) {
 func TestRender(t *testing.T) {
 	t.Run("with saved session includes bumper segment", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 
 		sess, err := state.New("sess-render", "tree1", "main", 600)
 		if err != nil {
@@ -288,7 +259,7 @@ func TestRender(t *testing.T) {
 
 	t.Run("no saved session omits bumper segment", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		setupTempGitRepo(t, tmpDir)
+		testutil.SetupTempGitRepo(t, tmpDir)
 
 		input := &StatusInput{
 			SessionID: "sess-no-state",

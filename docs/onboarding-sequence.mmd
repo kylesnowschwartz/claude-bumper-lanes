@@ -50,12 +50,12 @@ sequenceDiagram
 %% ============================================================
 %% - Plugin install: README.md:24-27
 %% - Version sentinel: scripts/ensure-binaries.sh
-%% - Hands-off check: internal/hooks/session_start.go:isHandsOff()
-%% - Auto-setup: internal/hooks/session_start.go:setupStatusLineWrapper()
-%% - Wrapper generation: internal/hooks/session_start.go:generateWrapper()
-%% - Staleness check: internal/hooks/session_start.go:isWrapperStale()
-%% - Binary path extraction: internal/hooks/session_start.go:getWrapperBinaryPath()
-%% - Settings update: internal/hooks/session_start.go:updateSettingsWithJq()
+%% - Hands-off check: internal/statusline/installer.go:isHandsOff()
+%% - Auto-setup entry point (cross-package call from SessionStart): internal/statusline/installer.go:EnsureInstalled()
+%% - Wrapper generation: internal/statusline/installer.go:generateWrapper()
+%% - Staleness check: internal/statusline/installer.go:isWrapperStale()
+%% - Binary path extraction: internal/statusline/installer.go:getWrapperBinaryPath()
+%% - Settings update: internal/statusline/installer.go:updateSettingsWithJq()
 %%
 %% SETUP MODEL
 %% 1. Fresh installation rewrites ~/.claude/settings.json (user-global), so it
