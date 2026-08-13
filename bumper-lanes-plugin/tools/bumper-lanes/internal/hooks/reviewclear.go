@@ -22,17 +22,20 @@ func reviewPolicy(cfg config.Settings) *state.ReviewPolicy {
 	}
 }
 
-// ReviewClear clears a tripped breaker after an agent self-review
-// (on_trip: review). The agent runs this from the Bash tool between
-// reviewing the increment and implementing the findings, so the fixes are
-// metered as the next increment. With an empty sessionID it uses the most
-// recently active session, like `bumper-lanes budget`.
+// ReviewClear clears the breaker after an agent self-review (on_trip:
+// review), whether the breaker had tripped or the agent is closing out a
+// review mid-increment. The agent runs this from the Bash tool between
+// reviewing the changes so far and implementing the findings, so the fixes
+// are metered as the next increment. With an empty sessionID it uses the
+// most recently active session, like `bumper-lanes budget`.
 //
 // The clear is trust-based by design: the binary cannot prove a review
 // happened, so instead every clear is auditable - a reset event with cause
-// "review" records the increment size, and the loop guard (max_auto_reviews
+// "review" records the pre-clear score, and the loop guard (max_auto_reviews
 // self-reviews per human touchpoint, default 1) bounds how far an
-// unreviewed session can run. max_auto_reviews: -1 removes the cap.
+// unreviewed session can run. max_auto_reviews: -1 removes the cap. A clear
+// at score 0 with no trip is a no-op: there is nothing since the baseline
+// for the review to have covered.
 func ReviewClear(sessionID string) error {
 	var sess *state.SessionState
 	var err error
@@ -60,8 +63,9 @@ func ReviewClear(sessionID string) error {
 	if policy.OnTrip != config.OnTripReview {
 		return fmt.Errorf("review-clear requires on_trip: \"review\" (current policy: %s); ask the user to review instead", policy.OnTrip)
 	}
-	if !sess.StopTriggered {
-		return fmt.Errorf("breaker is not tripped (score %d/%d); nothing to clear", sess.Score, sess.ThresholdLimit)
+	if sess.Score == 0 && !sess.StopTriggered {
+		fmt.Printf("Budget already fresh (0/%d pts); nothing to clear.\n", sess.ThresholdLimit)
+		return nil
 	}
 	maxReviews := policy.MaxAutoReviews
 	if maxReviews >= 0 && sess.AutoReviews >= maxReviews {

@@ -1,13 +1,31 @@
 package hooks
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
+
+// lastEventEntry reads the last line of the repo's events.jsonl relative to
+// the current working directory.
+func lastEventEntry(t *testing.T) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(".git", "bumper-checkpoints", "events.jsonl"))
+	if err != nil {
+		t.Fatalf("reading events.jsonl: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &entry); err != nil {
+		t.Fatalf("unmarshal last event: %v", err)
+	}
+	return entry
+}
 
 // setupReviewRepo creates a temp repo with on_trip: review configured and a
 // tripped session, returning the session id.
@@ -130,14 +148,50 @@ func TestReviewClear(t *testing.T) {
 		}
 	})
 
-	t.Run("refuses when not tripped", func(t *testing.T) {
+	t.Run("clears a partial run: nonzero score, not tripped", func(t *testing.T) {
 		sessionID := setupReviewRepo(t, `{"on_trip": "review"}`)
 		sess, _ := state.Load(sessionID)
 		sess.SetStopTriggered(false)
 		sess.Save()
-		err := ReviewClear(sessionID)
-		if err == nil || !strings.Contains(err.Error(), "not tripped") {
-			t.Errorf("expected not-tripped refusal, got: %v", err)
+
+		if err := ReviewClear(sessionID); err != nil {
+			t.Fatalf("ReviewClear on partial run: %v", err)
+		}
+
+		sess, err := state.Load(sessionID)
+		if err != nil {
+			t.Fatalf("load after clear: %v", err)
+		}
+		if sess.Score != 0 || sess.StopTriggered {
+			t.Errorf("expected cleared state, got score=%d stop=%v", sess.Score, sess.StopTriggered)
+		}
+		if sess.AutoReviews != 1 {
+			t.Errorf("AutoReviews = %d, want 1 (partial-run clears count as self-reviews)", sess.AutoReviews)
+		}
+
+		entry := lastEventEntry(t)
+		if entry["cause"] != "review" {
+			t.Errorf("event cause = %v, want review", entry["cause"])
+		}
+		if entry["score"].(float64) != 150 {
+			t.Errorf("event score = %v, want 150 (pre-clear score)", entry["score"])
+		}
+	})
+
+	t.Run("fresh clear at score 0 is a no-op notice, not an error", func(t *testing.T) {
+		sessionID := setupReviewRepo(t, `{"on_trip": "review"}`)
+		sess, _ := state.Load(sessionID)
+		sess.SetScore(0)
+		sess.SetStopTriggered(false)
+		sess.Save()
+
+		if err := ReviewClear(sessionID); err != nil {
+			t.Errorf("fresh clear should exit 0 with a notice, got error: %v", err)
+		}
+
+		sess, _ = state.Load(sessionID)
+		if sess.AutoReviews != 0 {
+			t.Errorf("AutoReviews after no-op clear = %d, want 0 (nothing was cleared)", sess.AutoReviews)
 		}
 	})
 
