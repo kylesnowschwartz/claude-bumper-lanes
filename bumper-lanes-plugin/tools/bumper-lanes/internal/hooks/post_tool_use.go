@@ -89,7 +89,7 @@ func handleBashCommit(input *HookInput) int {
 	headBefore := sess.HeadBeforeCommit
 	if headBefore != "" {
 		sess.HeadBeforeCommit = ""
-		sess.Save()
+		saveOrLog(sess, log, "clear pending-commit record")
 	}
 
 	if headBefore == "" || GetHeadCommit() == headBefore {
@@ -106,7 +106,9 @@ func handleBashCommit(input *HookInput) int {
 	case config.ResetOnVerifiedCommit:
 		if noVerifyPattern.MatchString(commitSegment(input.ToolInput.Command)) {
 			log.Info("reset_on=verified-commit and commit bypasses hooks - baseline not reset")
-			WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget.")
+			if err := WriteContext("PostToolUse", "bumper-lanes: commit used --no-verify, so the review budget was NOT reset (reset_on=verified-commit). Commit with hooks enabled to reset the budget."); err != nil {
+				log.Warn("failed to write context (no-verify notice): %v (failing open)", err)
+			}
 			return 0
 		}
 	}
@@ -138,7 +140,9 @@ func handleBashCommit(input *HookInput) int {
 
 	// Output feedback
 	threshold := config.LoadThreshold()
-	WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold))
+	if err := WriteContext("PostToolUse", fmt.Sprintf("bumper-lanes: auto-reset after commit. Fresh budget: %d pts.", threshold)); err != nil {
+		log.Warn("failed to write context (auto-reset notice): %v (failing open)", err)
+	}
 	return 0
 }
 
@@ -185,7 +189,7 @@ func handleWriteEdit(input *HookInput) int {
 	// Update state with fresh score (and any new tripwires)
 	sess.SetScore(freshScore)
 	sess.NetLines = result.NetLines
-	sess.Save()
+	saveOrLog(sess, log, "fuel gauge score update")
 
 	var messages []string
 	for _, hit := range freshTripwires {
@@ -206,7 +210,9 @@ func handleWriteEdit(input *HookInput) int {
 	}
 
 	if len(messages) > 0 {
-		WriteContext("PostToolUse", strings.Join(messages, "\n"))
+		if err := WriteContext("PostToolUse", strings.Join(messages, "\n")); err != nil {
+			log.Warn("failed to write context (fuel gauge): %v (failing open)", err)
+		}
 	}
 	return 0
 }

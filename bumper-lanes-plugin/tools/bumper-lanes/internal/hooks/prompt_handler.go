@@ -13,6 +13,7 @@ import (
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
@@ -84,27 +85,37 @@ func injectBudgetContext(sessionID string) {
 	if sessionID == "" {
 		return
 	}
+	log := logging.New(sessionID, "prompt_handler")
 	sess, err := state.Load(sessionID)
-	if err != nil || sess.Paused || sess.ThresholdLimit == 0 {
+	if err != nil {
+		log.Warn("failed to load session for budget context: %v (failing open)", err)
+		return
+	}
+	if sess.Paused || sess.ThresholdLimit == 0 {
 		return
 	}
 	pct := (sess.Score * 100) / sess.ThresholdLimit
 	if pct < 50 {
 		return
 	}
-	WriteContext("UserPromptSubmit", fmt.Sprintf(
+	if err := WriteContext("UserPromptSubmit", fmt.Sprintf(
 		"bumper-lanes: %s. Plan work that fits the remaining budget, or ask before expanding scope.",
-		budgetLine(sess.Score, sess.ThresholdLimit)))
+		budgetLine(sess.Score, sess.ThresholdLimit))); err != nil {
+		log.Warn("failed to write budget context: %v (failing open)", err)
+	}
 }
 
 // handleReset captures new baseline and resets score.
 func handleReset(sessionID string) int {
+	log := logging.New(sessionID, "prompt_handler")
 	sess := loadSessionOrBlock(sessionID)
 	if sess == nil {
 		return 0
 	}
 
-	events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual})
+	if err := events.Append(events.Entry{SessionID: sessionID, Event: events.Reset, Score: sess.Score, Limit: sess.ThresholdLimit, Cause: events.CauseManual}); err != nil {
+		log.Warn("failed to append event: %v", err)
+	}
 
 	// Reset score FIRST for immediate statusline update
 	sess.Score = 0
@@ -131,7 +142,7 @@ func handleReset(sessionID string) int {
 	if branch := GetCurrentBranch(); branch != "" {
 		sess.BaselineBranch = branch
 	}
-	sess.Save() // Best-effort save of baseline
+	saveOrLog(sess, log, "baseline save after reset")
 
 	blockPrompt(fmt.Sprintf("Baseline reset. Score: 0/%d", sess.ThresholdLimit))
 	return 0
@@ -148,7 +159,9 @@ func handlePause(sessionID string) int {
 	if !saveOrBlock(sess) {
 		return 0
 	}
-	events.Append(events.Entry{SessionID: sessionID, Event: events.Pause, Score: sess.Score, Limit: sess.ThresholdLimit})
+	if err := events.Append(events.Entry{SessionID: sessionID, Event: events.Pause, Score: sess.Score, Limit: sess.ThresholdLimit}); err != nil {
+		logging.New(sessionID, "prompt_handler").Warn("failed to append event: %v", err)
+	}
 
 	blockPrompt("Enforcement paused. Changes still tracked.\nUse /bumper-resume to re-enable.")
 	return 0
@@ -165,7 +178,9 @@ func handleResume(sessionID string) int {
 	if !saveOrBlock(sess) {
 		return 0
 	}
-	events.Append(events.Entry{SessionID: sessionID, Event: events.Resume, Score: sess.Score, Limit: sess.ThresholdLimit})
+	if err := events.Append(events.Entry{SessionID: sessionID, Event: events.Resume, Score: sess.Score, Limit: sess.ThresholdLimit}); err != nil {
+		logging.New(sessionID, "prompt_handler").Warn("failed to append event: %v", err)
+	}
 
 	blockPrompt(fmt.Sprintf("Enforcement resumed. Score: %d/%d", sess.Score, sess.ThresholdLimit))
 	return 0
@@ -272,7 +287,7 @@ func setThreshold(sessionID, valStr string) int {
 	// Apply to current session immediately
 	if sess := loadSessionOrBlock(sessionID); sess != nil {
 		sess.ThresholdLimit = val
-		sess.Save()
+		saveOrLog(sess, logging.New(sessionID, "prompt_handler"), "apply threshold to session")
 	}
 
 	if val == 0 {
@@ -302,6 +317,7 @@ func loadSessionOrBlock(sessionID string) *state.SessionState {
 	}
 	sess, err := state.Load(sessionID)
 	if err != nil {
+		logging.New(sessionID, "prompt_handler").Warn("failed to load session state: %v", err)
 		blockPrompt(fmt.Sprintf("Error: No session state for %s", sessionID))
 		return nil
 	}

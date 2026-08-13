@@ -51,6 +51,54 @@ func TestConfigLoading(t *testing.T) {
 	})
 }
 
+// TestLoadWarnings verifies that a malformed config file and an
+// unparseable plugin env var surface a warning instead of being silently
+// indistinguishable from an absent config.
+func TestLoadWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+
+	t.Run("no config file produces no warning", func(t *testing.T) {
+		os.Remove(repoPath)
+		LoadThreshold()
+		if got := LoadWarnings(); len(got) != 0 {
+			t.Errorf("LoadWarnings() = %v, want none for absent config", got)
+		}
+	})
+
+	t.Run("malformed config file produces a warning", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte("not json"), 0644)
+		defer os.Remove(repoPath)
+
+		LoadThreshold()
+		got := LoadWarnings()
+		if len(got) != 1 {
+			t.Fatalf("LoadWarnings() = %v, want exactly 1 warning", got)
+		}
+		if !strings.Contains(got[0], repoPath) {
+			t.Errorf("warning %q does not name the config path %q", got[0], repoPath)
+		}
+	})
+
+	t.Run("unparseable plugin env value produces a warning", func(t *testing.T) {
+		os.Remove(repoPath)
+		t.Setenv("CLAUDE_PLUGIN_OPTION_THRESHOLD", "not-a-number")
+
+		LoadThreshold()
+		got := LoadWarnings()
+		if len(got) != 1 || !strings.Contains(got[0], "CLAUDE_PLUGIN_OPTION_THRESHOLD") {
+			t.Errorf("LoadWarnings() = %v, want a warning naming CLAUDE_PLUGIN_OPTION_THRESHOLD", got)
+		}
+	})
+}
+
 // TestLoadStatuslineAutoSetup verifies status line setup is opt-in.
 func TestLoadStatuslineAutoSetup(t *testing.T) {
 	tmpDir := t.TempDir()

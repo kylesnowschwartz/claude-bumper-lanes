@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/logging"
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/state"
 )
 
 // HookInput represents the JSON input from Claude Code hooks.
@@ -140,23 +141,38 @@ func CaptureTree() (string, error) {
 	// Initialize temp index with HEAD tree (or empty if no commits)
 	headRef, err := exec.Command("git", "rev-parse", "HEAD").Output()
 	if err == nil && len(headRef) > 0 {
-		gitWithTempIndex("read-tree", strings.TrimSpace(string(headRef))).Run()
+		if err := gitWithTempIndex("read-tree", strings.TrimSpace(string(headRef))).Run(); err != nil {
+			return "", fmt.Errorf("read-tree HEAD: %w", err)
+		}
 	} else {
-		gitWithTempIndex("read-tree", "--empty").Run()
+		if err := gitWithTempIndex("read-tree", "--empty").Run(); err != nil {
+			return "", fmt.Errorf("read-tree --empty: %w", err)
+		}
 	}
 
-	// Add tracked file changes (staged and unstaged)
-	gitWithTempIndex("add", "-u", ".").Run()
+	// Add tracked file changes (staged and unstaged). A repo with no
+	// tracked files yet (fresh init, or HEAD^{tree} empty) reports a
+	// pathspec error here - benign, since there is nothing to update.
+	if out, err := gitWithTempIndex("add", "-u", ".").CombinedOutput(); err != nil {
+		if !strings.Contains(string(out), "did not match any file") {
+			return "", fmt.Errorf("add -u: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
 
 	// Add untracked files (respecting .gitignore)
 	lsCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
-	untrackedOutput, _ := lsCmd.Output()
+	untrackedOutput, err := lsCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("ls-files --others: %w", err)
+	}
 	if len(untrackedOutput) > 0 {
 		scanner := bufio.NewScanner(bytes.NewReader(untrackedOutput))
 		for scanner.Scan() {
 			path := scanner.Text()
 			if path != "" {
-				gitWithTempIndex("add", path).Run()
+				if err := gitWithTempIndex("add", path).Run(); err != nil {
+					return "", fmt.Errorf("add %q: %w", path, err)
+				}
 			}
 		}
 	}
@@ -174,6 +190,14 @@ func CaptureTree() (string, error) {
 	}
 
 	return treeSHA, nil
+}
+
+// saveOrLog saves session state, logging a WARN naming the caller's context
+// on failure. The operation that called it proceeds regardless (fail open).
+func saveOrLog(sess *state.SessionState, log *logging.Logger, context string) {
+	if err := sess.Save(); err != nil {
+		log.Warn("failed to save session state (%s): %v (failing open)", context, err)
+	}
 }
 
 // GetCurrentBranch returns the current branch name, or empty string if detached.

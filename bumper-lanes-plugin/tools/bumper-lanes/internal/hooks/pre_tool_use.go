@@ -115,7 +115,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 			scoreAtReset := sess.Score
 			currentBranch := GetCurrentBranch()
 			sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
-			sess.Save()
+			saveOrLog(sess, log, "auto-reset on clean tree")
 			if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseCleanTree}); err != nil {
 				log.Warn("failed to append event: %v", err)
 			}
@@ -141,7 +141,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 			sess.SetStopTriggered(false)
 			sess.SetScore(freshScore)
 			sess.NetLines = result.NetLines
-			sess.Save()
+			saveOrLog(sess, log, "auto-recovery below threshold")
 
 			pct := 0
 			if sess.ThresholdLimit > 0 {
@@ -157,7 +157,7 @@ func PreToolUse(input *HookInput) (exitCode int) {
 		// Still over threshold - update score and fall through to blocking
 		sess.SetScore(freshScore)
 		sess.NetLines = result.NetLines
-		sess.Save()
+		saveOrLog(sess, log, "score update while still over threshold")
 	}
 
 	// KEY CHECK: Only block if Stop hook has already triggered

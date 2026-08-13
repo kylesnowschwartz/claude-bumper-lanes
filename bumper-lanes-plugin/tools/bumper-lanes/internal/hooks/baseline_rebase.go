@@ -42,7 +42,7 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 	}
 	if sess.BaselineHead == "" || sess.BaselineHead == "none" {
 		sess.BaselineHead = head
-		sess.Save()
+		saveOrLog(sess, log, "adopt baseline head (legacy state)")
 		return false
 	}
 	if sess.BaselineHead == head {
@@ -60,14 +60,14 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 		// head so the staleness doesn't persist forever.
 		log.Warn("baseline head %s unresolvable; adopting current HEAD without rebasing", sess.BaselineHead)
 		sess.BaselineHead = head
-		sess.Save()
+		saveOrLog(sess, log, "adopt baseline head (unresolvable tree)")
 		return false
 	}
 	if oldHeadTree == newHeadTree {
 		// HEAD moved without changing content (e.g. an amend of message
 		// only): nothing to forgive.
 		sess.BaselineHead = head
-		sess.Save()
+		saveOrLog(sess, log, "adopt baseline head (no-op HEAD move)")
 		return false
 	}
 
@@ -81,7 +81,7 @@ func maybeRebaseBaseline(sess *state.SessionState, log *logging.Logger) bool {
 	oldHead := sess.BaselineHead
 	sess.BaselineTree = newBaseline
 	sess.BaselineHead = head
-	sess.Save()
+	saveOrLog(sess, log, "baseline rebase")
 	events.Append(events.Entry{
 		SessionID: sess.SessionID,
 		Event:     events.Rebase,

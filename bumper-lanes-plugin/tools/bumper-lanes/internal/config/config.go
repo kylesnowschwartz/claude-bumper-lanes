@@ -7,6 +7,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,24 @@ import (
 	"strconv"
 	"strings"
 )
+
+// configWarnings collects human-readable warnings from the most recent
+// loadMergedConfig call: malformed config files (parse/read errors other
+// than "file does not exist") and unparseable plugin env values. config
+// must not import internal/logging (it stays a leaf package), so hook
+// callers read LoadWarnings() and log it themselves.
+var configWarnings []string
+
+// LoadWarnings returns the warnings collected during the most recent
+// Load*/loadMergedConfig call. Empty when the load was clean.
+func LoadWarnings() []string {
+	return configWarnings
+}
+
+// recordWarning appends a warning to the current load's warning list.
+func recordWarning(format string, args ...interface{}) {
+	configWarnings = append(configWarnings, fmt.Sprintf(format, args...))
+}
 
 // DefaultThreshold is the default diff point threshold.
 const DefaultThreshold = 600
@@ -164,11 +183,14 @@ func getGlobalConfigPath() string {
 // (userConfig values, via CLAUDE_PLUGIN_OPTION_* env in hook processes)
 // < repo .bumper-lanes.json.
 func loadMergedConfig() *Config {
+	configWarnings = nil
 	merged := &Config{}
 
 	if globalPath := getGlobalConfigPath(); globalPath != "" {
 		if global, err := loadConfigFile(globalPath); err == nil {
 			merged = global
+		} else if !os.IsNotExist(err) {
+			recordWarning("%s: %v", globalPath, err)
 		}
 	}
 
@@ -181,6 +203,9 @@ func loadMergedConfig() *Config {
 	repoPath := filepath.Join(repoRoot, ".bumper-lanes.json")
 	repo, err := loadConfigFile(repoPath)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			recordWarning("%s: %v", repoPath, err)
+		}
 		return merged
 	}
 	overlay(merged, repo)
@@ -224,8 +249,8 @@ func overlay(dst, src *Config) {
 // variables Claude Code sets in plugin subprocesses for userConfig values
 // (plugin.json). Only hook processes see them; CLI invocations from the
 // agent's Bash tool read the policy the hooks stamped into session state
-// instead. Unparseable values are ignored (the enable-time prompt is typed,
-// so these arrive well-formed).
+// instead. Unparseable values are ignored but recorded in LoadWarnings
+// (the enable-time prompt is typed, so these should arrive well-formed).
 func pluginOptionsFromEnv() *Config {
 	cfg := &Config{}
 	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_THRESHOLD"); ok {
@@ -265,18 +290,23 @@ func envInt(key string) (int, bool) {
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {
+		recordWarning("%s: invalid integer %q (ignoring)", key, raw)
 		return 0, false
 	}
 	return v, true
 }
 
 func envBool(key string) (bool, bool) {
-	switch os.Getenv(key) {
+	raw := os.Getenv(key)
+	switch raw {
+	case "":
+		return false, false
 	case "true":
 		return true, true
 	case "false":
 		return false, true
 	}
+	recordWarning("%s: invalid boolean %q, want \"true\" or \"false\" (ignoring)", key, raw)
 	return false, false
 }
 

@@ -59,7 +59,8 @@ func Stop(input *HookInput) error {
 	// Acquire lock to prevent parallel Stop hooks from racing
 	lockDir, err := acquireLock(input.SessionID)
 	if err != nil {
-		return nil // Another instance has the lock
+		log.Warn("failed to acquire stop lock: %v (failing open, assuming another instance holds it)", err)
+		return nil // Another instance has the lock, or the git dir is unreachable
 	}
 	defer releaseLock(lockDir)
 
@@ -84,7 +85,7 @@ func Stop(input *HookInput) error {
 			result := scoring.Calculate(stats)
 			sess.SetScore(result.Score)
 			sess.NetLines = result.NetLines
-			sess.Save()
+			saveOrLog(sess, log, "score update while paused")
 		}
 		return nil
 	}
@@ -97,7 +98,7 @@ func Stop(input *HookInput) error {
 			result := scoring.Calculate(stats)
 			sess.SetScore(result.Score)
 			sess.NetLines = result.NetLines
-			sess.Save()
+			saveOrLog(sess, log, "score update while disabled")
 		}
 		return nil
 	}
@@ -119,7 +120,7 @@ func Stop(input *HookInput) error {
 		}
 		scoreAtReset := sess.Score
 		sess.ResetBaseline(currentTree, currentBranch, GetHeadCommit())
-		sess.Save()
+		saveOrLog(sess, log, "auto-reset on branch switch")
 		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Reset, Score: scoreAtReset, Limit: sess.ThresholdLimit, Cause: events.CauseBranch}); err != nil {
 			log.Warn("failed to append event: %v", err)
 		}
@@ -153,7 +154,7 @@ func Stop(input *HookInput) error {
 			sess.SetStopTriggered(false)
 			sess.SetScore(freshScore)
 			sess.NetLines = result.NetLines
-			sess.Save()
+			saveOrLog(sess, log, "auto-recovery below threshold")
 
 			// Notify user of recovery
 			pct := 0
@@ -171,7 +172,7 @@ func Stop(input *HookInput) error {
 		// Normal case: update state and allow
 		sess.SetScore(freshScore)
 		sess.NetLines = result.NetLines
-		sess.Save()
+		saveOrLog(sess, log, "score update under threshold")
 		return nil
 	}
 
@@ -184,7 +185,7 @@ func Stop(input *HookInput) error {
 	// the agent's Bash tool and cannot see plugin userConfig env vars.
 	policy := currentReviewPolicy()
 	sess.Policy = policy
-	sess.Save()
+	saveOrLog(sess, log, "score update on trip")
 	// Log the trip transition only, not every blocked Stop while tripped.
 	if !wasTripped {
 		if err := events.Append(events.Entry{SessionID: input.SessionID, Event: events.Trip, Score: freshScore, Limit: sess.ThresholdLimit}); err != nil {

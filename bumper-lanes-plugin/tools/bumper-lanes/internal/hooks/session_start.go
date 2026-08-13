@@ -58,6 +58,9 @@ func SessionStart(input *HookInput) int {
 
 	// Load threshold from config
 	threshold := config.LoadThreshold()
+	for _, w := range config.LoadWarnings() {
+		log.Warn("config: %s", w)
+	}
 
 	// Create and save session state
 	sess, err := state.New(input.SessionID, baselineTree, baselineBranch, threshold)
@@ -122,7 +125,9 @@ func emitBudgetRecap(sess *state.SessionState, source string) int {
 	msg := fmt.Sprintf(
 		"bumper-lanes: %s, preserved across %s. Incremental-review contract active: plan work that fits the remaining budget, or ask before expanding scope.",
 		budgetLine(sess.Score, sess.ThresholdLimit), source)
-	WriteContext("SessionStart", msg)
+	if err := WriteContext("SessionStart", msg); err != nil {
+		logging.New(sess.SessionID, "session_start").Warn("failed to write budget recap context: %v (failing open)", err)
+	}
 	return 0
 }
 
