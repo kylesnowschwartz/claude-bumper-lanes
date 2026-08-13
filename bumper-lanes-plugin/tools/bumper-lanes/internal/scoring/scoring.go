@@ -3,7 +3,9 @@
 package scoring
 
 import (
-	"sort"
+	"cmp"
+	"path"
+	"slices"
 	"strings"
 
 	"github.com/kylesnowschwartz/diff-viz/v2/diff"
@@ -46,11 +48,8 @@ var generatedSuffixes = []string{".lock", ".pb.go", "_generated.go", ".min.js", 
 
 // IsGenerated reports whether a path's content is machine-written
 // (lockfiles, codegen output, vendored trees) and therefore free to change.
-func IsGenerated(path string) bool {
-	base := path
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		base = path[i+1:]
-	}
+func IsGenerated(filePath string) bool {
+	base := path.Base(filePath)
 	if generatedBasenames[base] {
 		return true
 	}
@@ -59,8 +58,8 @@ func IsGenerated(path string) bool {
 			return true
 		}
 	}
-	return strings.HasPrefix(path, "vendor/") || strings.Contains(path, "/vendor/") ||
-		strings.HasPrefix(path, "node_modules/") || strings.Contains(path, "/node_modules/")
+	return strings.HasPrefix(filePath, "vendor/") || strings.Contains(filePath, "/vendor/") ||
+		strings.HasPrefix(filePath, "node_modules/") || strings.Contains(filePath, "/node_modules/")
 }
 
 // ModulePoints is a directory's share of the weighted score.
@@ -82,8 +81,8 @@ func ByModule(stats *diff.StatsJSON) []ModulePoints {
 			continue
 		}
 		module := "(root)"
-		if i := strings.LastIndex(f.Path, "/"); i >= 0 {
-			module = f.Path[:i+1]
+		if dir := path.Dir(f.Path); dir != "." {
+			module = dir + "/"
 		}
 		m := agg[module]
 		if m == nil {
@@ -102,11 +101,11 @@ func ByModule(stats *diff.StatsJSON) []ModulePoints {
 	for _, m := range agg {
 		modules = append(modules, *m)
 	}
-	sort.Slice(modules, func(i, j int) bool {
-		if modules[i].Points != modules[j].Points {
-			return modules[i].Points > modules[j].Points
+	slices.SortFunc(modules, func(a, b ModulePoints) int {
+		if a.Points != b.Points {
+			return cmp.Compare(b.Points, a.Points)
 		}
-		return modules[i].Module < modules[j].Module
+		return cmp.Compare(a.Module, b.Module)
 	})
 	return modules
 }

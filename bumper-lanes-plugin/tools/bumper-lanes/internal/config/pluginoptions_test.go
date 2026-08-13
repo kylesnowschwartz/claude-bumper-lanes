@@ -14,9 +14,7 @@ func TestPluginOptionsPrecedence(t *testing.T) {
 	xdg := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
 	t.Run("plugin options apply when no files set the value", func(t *testing.T) {

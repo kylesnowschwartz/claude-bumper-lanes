@@ -96,7 +96,7 @@ func TestStopCumulativeStats(t *testing.T) {
 			t.Fatal("ThresholdData is nil")
 		}
 
-		thresholdData, ok := resp.ThresholdData.(map[string]interface{})
+		thresholdData, ok := resp.ThresholdData.(map[string]any)
 		if !ok {
 			t.Fatalf("ThresholdData is not a map, got %T", resp.ThresholdData)
 		}
@@ -512,7 +512,7 @@ func TestSessionStateConsistencyAcrossHooks(t *testing.T) {
 		}
 
 		// Should be valid JSON
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		if err := json.Unmarshal(data, &parsed); err != nil {
 			t.Errorf("State file is not valid JSON: %v\nContent: %s", err, string(data))
 		}

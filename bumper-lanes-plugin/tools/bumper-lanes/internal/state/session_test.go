@@ -95,9 +95,7 @@ func TestSessionState_SetScore(t *testing.T) {
 func TestCountCheckpoints(t *testing.T) {
 	// Create temp dir and init as git repo
 	tmpDir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	// Initialize git repo
 	if err := os.WriteFile("test.txt", []byte("test"), 0644); err != nil {
@@ -154,9 +152,7 @@ func TestCountCheckpoints(t *testing.T) {
 func TestCheckpointCountWarning(t *testing.T) {
 	// Create temp dir and init as git repo
 	tmpDir := t.TempDir()
-	oldWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	// Initialize git repo
 	runGit := func(args ...string) {

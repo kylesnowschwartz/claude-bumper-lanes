@@ -241,7 +241,7 @@ func Stop(input *hookio.Input) error {
 		Reason: reason,
 		// OSC 9 desktop notification (empty when this stop was already tripped)
 		TerminalSequence: notification,
-		ThresholdData: map[string]interface{}{
+		ThresholdData: map[string]any{
 			"score":                freshScore,
 			"threshold_limit":      sess.ThresholdLimit,
 			"threshold_percentage": pct,

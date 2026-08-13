@@ -20,9 +20,7 @@ func setupCheckpointRepo(t *testing.T) string {
 	if err := exec.Command("git", "init", "-q", tmpDir).Run(); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
-	origDir, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(origDir) })
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	checkpointDir := filepath.Join(tmpDir, ".git", "bumper-checkpoints")
 	os.MkdirAll(checkpointDir, 0755)

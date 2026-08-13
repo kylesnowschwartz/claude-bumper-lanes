@@ -130,7 +130,7 @@ func hasStatusLineConfigured() bool {
 		return false // No settings file = not configured
 	}
 
-	var settings map[string]interface{}
+	var settings map[string]any
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return true // Invalid JSON - fail open
 	}
@@ -142,7 +142,7 @@ func hasStatusLineConfigured() bool {
 	}
 
 	// Check if statusLine has a command configured
-	statusLineMap, ok := statusLine.(map[string]interface{})
+	statusLineMap, ok := statusLine.(map[string]any)
 	if !ok {
 		return false
 	}
@@ -165,7 +165,7 @@ func getStatusLineCommand(homeDir string) string {
 		return ""
 	}
 
-	var settings map[string]interface{}
+	var settings map[string]any
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return ""
 	}

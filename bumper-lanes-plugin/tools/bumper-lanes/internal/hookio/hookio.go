@@ -60,13 +60,13 @@ type ContextOutput struct {
 //
 // See the Stop handler in internal/hooks for a detailed explanation.
 type StopResponse struct {
-	Continue         bool        `json:"continue"`                   // true=Claude continues, false=Claude stops
-	SystemMessage    string      `json:"systemMessage,omitempty"`    // Injected into Claude's context
-	SuppressOutput   bool        `json:"suppressOutput,omitempty"`   // Hide Claude's pending output
-	Decision         string      `json:"decision,omitempty"`         // "block" = block the stop (not Claude!)
-	Reason           string      `json:"reason,omitempty"`           // Shown to user when blocking
-	TerminalSequence string      `json:"terminalSequence,omitempty"` // Escape sequence written to the terminal (e.g. OSC 9 desktop notification)
-	ThresholdData    interface{} `json:"threshold_data,omitempty"`   // Custom data for debugging
+	Continue         bool   `json:"continue"`                   // true=Claude continues, false=Claude stops
+	SystemMessage    string `json:"systemMessage,omitempty"`    // Injected into Claude's context
+	SuppressOutput   bool   `json:"suppressOutput,omitempty"`   // Hide Claude's pending output
+	Decision         string `json:"decision,omitempty"`         // "block" = block the stop (not Claude!)
+	Reason           string `json:"reason,omitempty"`           // Shown to user when blocking
+	TerminalSequence string `json:"terminalSequence,omitempty"` // Escape sequence written to the terminal (e.g. OSC 9 desktop notification)
+	ThresholdData    any    `json:"threshold_data,omitempty"`   // Custom data for debugging
 }
 
 // PreToolUseResponse is the JSON response for PreToolUse hooks.
@@ -114,7 +114,7 @@ func Read() (*Input, error) {
 }
 
 // Write writes JSON response to stdout.
-func Write(resp interface{}) error {
+func Write(resp any) error {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("marshaling response: %w", err)

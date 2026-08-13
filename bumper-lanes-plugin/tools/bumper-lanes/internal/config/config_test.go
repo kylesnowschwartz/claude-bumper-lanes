@@ -14,10 +14,7 @@ func TestConfigLoading(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
@@ -58,10 +55,7 @@ func TestLoadWarnings(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
@@ -101,10 +95,7 @@ func TestLoadStatuslineAutoSetup(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
@@ -137,10 +128,7 @@ func TestLoadResetOn(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
@@ -177,9 +165,7 @@ func TestGitWorktreeDetection(t *testing.T) {
 	mainRepo := t.TempDir()
 	setupGitRepo(t, mainRepo)
 
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(mainRepo)
+	t.Chdir(mainRepo)
 
 	// Create a worktree
 	worktreeDir := t.TempDir()
@@ -189,7 +175,7 @@ func TestGitWorktreeDetection(t *testing.T) {
 	}
 	defer exec.Command("git", "worktree", "remove", worktreeDir).Run()
 
-	os.Chdir(worktreeDir)
+	t.Chdir(worktreeDir)
 
 	t.Run("GetGitDir returns worktree-specific git dir", func(t *testing.T) {
 		gitDir, err := GetGitDir()
@@ -215,10 +201,7 @@ func TestEmptyRepoNoHEAD(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // isolate from real global config
-
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	t.Run("LoadThreshold succeeds without HEAD", func(t *testing.T) {
 		// Should not panic, should return default
@@ -354,18 +337,8 @@ func TestGlobalConfigLoading(t *testing.T) {
 	os.MkdirAll(globalConfigDir, 0755)
 	globalConfigPath := filepath.Join(globalConfigDir, "config.json")
 
-	origDir, _ := os.Getwd()
-	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		os.Chdir(origDir)
-		if origXDG == "" {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		}
-	}()
-	os.Chdir(tmpDir)
-	os.Setenv("XDG_CONFIG_HOME", xdgDir)
+	t.Chdir(tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
@@ -435,16 +408,7 @@ func TestGlobalConfigLoading(t *testing.T) {
 
 func TestGetGlobalConfigPath(t *testing.T) {
 	t.Run("uses XDG_CONFIG_HOME when set", func(t *testing.T) {
-		origXDG := os.Getenv("XDG_CONFIG_HOME")
-		defer func() {
-			if origXDG == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", origXDG)
-			}
-		}()
-
-		os.Setenv("XDG_CONFIG_HOME", "/custom/config")
+		t.Setenv("XDG_CONFIG_HOME", "/custom/config")
 		got := GetGlobalConfigPath()
 		want := "/custom/config/bumper-lanes/config.json"
 		if got != want {
@@ -453,16 +417,7 @@ func TestGetGlobalConfigPath(t *testing.T) {
 	})
 
 	t.Run("falls back to ~/.config when XDG not set", func(t *testing.T) {
-		origXDG := os.Getenv("XDG_CONFIG_HOME")
-		defer func() {
-			if origXDG == "" {
-				os.Unsetenv("XDG_CONFIG_HOME")
-			} else {
-				os.Setenv("XDG_CONFIG_HOME", origXDG)
-			}
-		}()
-
-		os.Unsetenv("XDG_CONFIG_HOME")
+		t.Setenv("XDG_CONFIG_HOME", "")
 		got := GetGlobalConfigPath()
 		home, _ := os.UserHomeDir()
 		want := filepath.Join(home, ".config", "bumper-lanes", "config.json")

@@ -11,7 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -166,7 +166,7 @@ func getGlobalConfigPath() string {
 // < repo .bumper-lanes.json.
 func loadMergedConfig() (*Config, []string) {
 	var warnings []string
-	warn := func(format string, args ...interface{}) {
+	warn := func(format string, args ...any) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
 	}
 	merged := &Config{}
@@ -237,7 +237,7 @@ func overlay(dst, src *Config) {
 // instead. Unparseable values are ignored but reported through warn, so
 // they surface in Load's warnings (the enable-time prompt is typed, so
 // these should arrive well-formed).
-func pluginOptionsFromEnv(warn func(format string, args ...interface{})) *Config {
+func pluginOptionsFromEnv(warn func(format string, args ...any)) *Config {
 	cfg := &Config{}
 	if v, ok := envInt("CLAUDE_PLUGIN_OPTION_THRESHOLD", warn); ok {
 		cfg.Threshold = &v
@@ -269,7 +269,7 @@ func HasPluginOptions() bool {
 	return false
 }
 
-func envInt(key string, warn func(format string, args ...interface{})) (int, bool) {
+func envInt(key string, warn func(format string, args ...any)) (int, bool) {
 	raw := os.Getenv(key)
 	if raw == "" {
 		return 0, false
@@ -282,7 +282,7 @@ func envInt(key string, warn func(format string, args ...interface{})) (int, boo
 	return v, true
 }
 
-func envBool(key string, warn func(format string, args ...interface{})) (bool, bool) {
+func envBool(key string, warn func(format string, args ...any)) (bool, bool) {
 	raw := os.Getenv(key)
 	switch raw {
 	case "":
@@ -411,7 +411,7 @@ func UnknownKeys(path string) []string {
 			unknown = append(unknown, key)
 		}
 	}
-	sort.Strings(unknown)
+	slices.Sort(unknown)
 	return unknown
 }
 
