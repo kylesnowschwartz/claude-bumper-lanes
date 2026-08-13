@@ -39,3 +39,62 @@ func TestLoggerHygiene(t *testing.T) {
 		t.Errorf("log write failed: err=%v content=%q", err, data)
 	}
 }
+
+// readLog reads the logger's file and fails the test if it can't.
+func readLog(t *testing.T, logger *Logger) string {
+	t.Helper()
+	data, err := os.ReadFile(logger.LogFile())
+	if err != nil {
+		t.Fatalf("reading log file: %v", err)
+	}
+	return string(data)
+}
+
+func TestLoggerLevels(t *testing.T) {
+	t.Run("Info, Warn, Error all reach the file with their level tag", func(t *testing.T) {
+		logger := New(t.Name(), "test")
+		logger.Info("info message")
+		logger.Warn("warn message")
+		logger.Error("error message")
+
+		got := readLog(t, logger)
+		for _, want := range []string{"[INFO] [test] info message", "[WARN] [test] warn message", "[ERROR] [test] error message"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("log = %q, want it to contain %q", got, want)
+			}
+		}
+	})
+
+	t.Run("Debug is dropped unless BUMPER_LANES_DEBUG=1 was set at construction", func(t *testing.T) {
+		logger := New(t.Name(), "test")
+		logger.Debug("debug message")
+
+		if _, err := os.Stat(logger.LogFile()); err == nil {
+			got := readLog(t, logger)
+			if strings.Contains(got, "debug message") {
+				t.Errorf("log = %q, debug message should have been filtered", got)
+			}
+		}
+	})
+
+	t.Run("Debug is kept when BUMPER_LANES_DEBUG=1 was set before New", func(t *testing.T) {
+		t.Setenv("BUMPER_LANES_DEBUG", "1")
+		logger := New(t.Name(), "test")
+		logger.Debug("debug message")
+
+		got := readLog(t, logger)
+		if !strings.Contains(got, "[DEBUG] [test] debug message") {
+			t.Errorf("log = %q, want it to contain the debug message", got)
+		}
+	})
+}
+
+func TestLoggerMultilineMessage(t *testing.T) {
+	logger := New(t.Name(), "test")
+	logger.Info("line one\nline two")
+
+	got := readLog(t, logger)
+	if !strings.Contains(got, "[INFO] [test]\nline one\nline two\n") {
+		t.Errorf("log = %q, want the multiline message on its own line", got)
+	}
+}

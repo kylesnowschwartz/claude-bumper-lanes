@@ -6,7 +6,9 @@
 package logging
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,43 +17,48 @@ import (
 	"time"
 )
 
-// Level represents log severity
-type Level string
+// Level represents log severity.
+type Level = slog.Level
 
 const (
-	LevelDebug Level = "DEBUG"
-	LevelInfo  Level = "INFO"
-	LevelWarn  Level = "WARN"
-	LevelError Level = "ERROR"
+	LevelDebug = slog.LevelDebug
+	LevelInfo  = slog.LevelInfo
+	LevelWarn  = slog.LevelWarn
+	LevelError = slog.LevelError
 )
 
-// Logger handles session-based file logging
+// Logger handles session-based file logging, built on log/slog.
 type Logger struct {
-	sessionID string
-	source    string
-	logFile   string
-	mu        sync.Mutex
+	slog    *slog.Logger
+	logFile string
 }
 
-var (
-	// sessionIDSanitizer replaces non-alphanumeric chars (except - and _) with _
-	sessionIDSanitizer = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
+// sessionIDSanitizer replaces non-alphanumeric chars (except - and _) with _
+var sessionIDSanitizer = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
 
-	// debugEnabled is set by BUMPER_LANES_DEBUG=1
-	debugEnabled = os.Getenv("BUMPER_LANES_DEBUG") == "1"
-)
-
-// New creates a logger for the given session and source component
+// New creates a logger for the given session and source component. The
+// level is decided here, from BUMPER_LANES_DEBUG, rather than at package
+// init, so tests can control it per-logger via t.Setenv before calling New.
 func New(sessionID, source string) *Logger {
 	safeID := sanitizeSessionID(sessionID)
 	logDir := getLogDir()
 	pruneOnce.Do(func() { pruneOldLogs(logDir) })
 	logFile := filepath.Join(logDir, fmt.Sprintf("%s-session-%s.log", time.Now().Format("2006-01-02"), safeID))
 
+	level := LevelInfo
+	if os.Getenv("BUMPER_LANES_DEBUG") == "1" {
+		level = LevelDebug
+	}
+
+	handler := &fileHandler{
+		path:   logFile,
+		source: source,
+		level:  level,
+	}
+
 	return &Logger{
-		sessionID: sessionID,
-		source:    source,
-		logFile:   logFile,
+		slog:    slog.New(handler),
+		logFile: logFile,
 	}
 }
 
@@ -93,72 +100,23 @@ func pruneOldLogs(logDir string) {
 	}
 }
 
-// Debug logs a debug message (only if BUMPER_LANES_DEBUG=1)
-func (l *Logger) Debug(format string, args ...interface{}) {
-	if debugEnabled {
-		l.log(LevelDebug, format, args...)
-	}
-}
+// Debug logs a debug message (only if BUMPER_LANES_DEBUG=1 was set when the
+// logger was created).
+func (l *Logger) Debug(format string, args ...any) { l.log(LevelDebug, format, args...) }
 
-// Info logs an info message
-func (l *Logger) Info(format string, args ...interface{}) {
-	l.log(LevelInfo, format, args...)
-}
+// Info logs an info message.
+func (l *Logger) Info(format string, args ...any) { l.log(LevelInfo, format, args...) }
 
-// Warn logs a warning message
-func (l *Logger) Warn(format string, args ...interface{}) {
-	l.log(LevelWarn, format, args...)
-}
+// Warn logs a warning message.
+func (l *Logger) Warn(format string, args ...any) { l.log(LevelWarn, format, args...) }
 
-// Error logs an error message
-func (l *Logger) Error(format string, args ...interface{}) {
-	l.log(LevelError, format, args...)
-}
+// Error logs an error message.
+func (l *Logger) Error(format string, args ...any) { l.log(LevelError, format, args...) }
 
-// log writes a log entry to the session log file
-func (l *Logger) log(level Level, format string, args ...interface{}) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	message := fmt.Sprintf(format, args...)
-
-	var entry string
-	if strings.Contains(message, "\n") {
-		// Multiline: put message on new line
-		entry = fmt.Sprintf("[%s] [%s] [%s]\n%s\n", timestamp, level, l.source, message)
-	} else {
-		entry = fmt.Sprintf("[%s] [%s] [%s] %s\n", timestamp, level, l.source, message)
-	}
-
-	if err := l.writeToFile(entry); err != nil {
-		// Fallback to stderr if file logging fails
-		fmt.Fprintf(os.Stderr, "bumper-lanes: logging failed: %v\n", err)
-		fmt.Fprint(os.Stderr, entry)
-	}
-}
-
-// writeToFile appends the entry to the log file
-func (l *Logger) writeToFile(entry string) error {
-	// Ensure log directory exists
-	logDir := filepath.Dir(l.logFile)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	// Open file in append mode (thread-safe via mutex)
-	f, err := os.OpenFile(l.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString(entry); err != nil {
-		return fmt.Errorf("failed to write log entry: %w", err)
-	}
-
-	// Immediate flush
-	return f.Sync()
+// log formats the printf-style message and hands it to slog, which applies
+// the level filter and the fileHandler's line format.
+func (l *Logger) log(level Level, format string, args ...any) {
+	l.slog.Log(context.Background(), level, fmt.Sprintf(format, args...))
 }
 
 // getLogDir returns the log directory path (~/.claude/logs/bumper-lanes).
@@ -188,3 +146,60 @@ func sanitizeSessionID(sessionID string) string {
 func (l *Logger) LogFile() string {
 	return l.logFile
 }
+
+// fileHandler is a slog.Handler that appends one line per record to a
+// session log file: "[timestamp] [LEVEL] [source] message", with the
+// message moved to its own line when it contains a newline. It opens and
+// closes the file on every write instead of holding it open, and relies on
+// the OS write buffer rather than fsyncing each line - this runs on every
+// hook invocation, so a per-line fsync is not affordable. If the file can't
+// be opened or written, the entry falls back to stderr.
+type fileHandler struct {
+	mu     sync.Mutex
+	path   string
+	source string
+	level  Level
+}
+
+func (h *fileHandler) Enabled(_ context.Context, level Level) bool {
+	return level >= h.level
+}
+
+func (h *fileHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	timestamp := r.Time.Format("2006-01-02 15:04:05")
+	var entry string
+	if strings.Contains(r.Message, "\n") {
+		entry = fmt.Sprintf("[%s] [%s] [%s]\n%s\n", timestamp, r.Level, h.source, r.Message)
+	} else {
+		entry = fmt.Sprintf("[%s] [%s] [%s] %s\n", timestamp, r.Level, h.source, r.Message)
+	}
+
+	if err := h.writeToFile(entry); err != nil {
+		fmt.Fprintf(os.Stderr, "bumper-lanes: logging failed: %v\n", err)
+		fmt.Fprint(os.Stderr, entry)
+	}
+	return nil
+}
+
+func (h *fileHandler) writeToFile(entry string) error {
+	if err := os.MkdirAll(filepath.Dir(h.path), 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	f, err := os.OpenFile(h.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Errorf("failed to write log entry: %w", err)
+	}
+	return nil
+}
+
+func (h *fileHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *fileHandler) WithGroup(_ string) slog.Handler      { return h }
