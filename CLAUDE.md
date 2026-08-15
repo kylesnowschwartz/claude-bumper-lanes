@@ -37,7 +37,7 @@ Defense-in-depth hook system with three layers:
 - UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
 - Budget messages use scope-contract framing (points remaining, clamped at 0, via one shared `budgetLine` helper); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes budget` before large edits and size increments to the remaining budget
 - `bumper-lanes budget [session]` prints the plain-text remaining budget; with no usable session id it falls back to the most recently active session, so it works from Claude's Bash tool (no statusline JSON on stdin required)
-- Statusline setup: fresh installs require `statusline_auto_setup: true`; repair of an already-installed wrapper/binary path runs unconditionally so plugin updates don't strand a dead path
+- Statusline setup: fresh installs require `statusline_auto_setup: true` and only happen when no status line is configured (settings point directly at the binary — bumper-lanes never touches a user's own command); binary-path repair runs unconditionally so plugin updates don't strand a dead path
 - Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
 
 ## Auto-Reset Triggers
@@ -114,8 +114,9 @@ Config sources (in precedence order):
 
 1. `.bumper-lanes.json` at repo root (highest priority)
 2. Plugin `userConfig` (prompted at enable via `/plugin`; stored in `~/.claude/settings.json` `pluginConfigs`; reaches hook processes as `CLAUDE_PLUGIN_OPTION_<KEY>` env vars — `config.pluginOptionsFromEnv`)
-3. `~/.config/bumper-lanes/config.json` (deprecated global fallback — support ends in v5)
-4. Built-in defaults
+3. Built-in defaults
+
+The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is no longer read; its presence surfaces a load warning until deleted.
 
 Bash-invoked CLI commands (`review-clear`, `budget`) never see the plugin env vars, so hooks stamp the effective trip policy into session state (`sess.Policy`, `state.ReviewPolicy`) at session-start and on every trip; `review-clear` reads the stamp first and falls back to file config. Tripwire path/pattern lists stay file-only (unpromptable as strings).
 
@@ -144,7 +145,7 @@ Bash-invoked CLI commands (`review-clear`, `budget`) never see the plugin env va
 - `reset_on`: When a git commit made by Claude auto-resets the budget. `commit` (default) = any commit with success output; `verified-commit` = refuses commits using `--no-verify`/`-n`; `human` = never auto-reset on Claude's commits (only `/bumper-reset` or a clean tree restores budget)
 - `on_trip`: What the trip packet asks for. `block` (default) = human review packet; `review` = self-review flow: the packet instructs the agent to run `review_command` on the increment, clear the breaker with `bumper-lanes review-clear` (Bash, latest-session fallback like `budget`), then implement findings against the fresh budget. Trust-based by design (the binary cannot prove a review happened) but fully auditable: every clear is a `reset` event with cause `review`. Loop guard: `max_auto_reviews` self-reviews per human touchpoint (default 1; `-1` = unlimited hands-off mode, `0` = never; `sess.AutoReviews`, zeroed by manual reset/commit); past the limit the next trip escalates to the human packet. `tripwires_block_auto_review: true` additionally excludes tripwire-hit increments from self-clearing (default false: the review covers them).
 - `statusline_auto_setup`: Allow SessionStart to configure the status line in `~/.claude/settings.json` (default: false — opt-in, because it rewrites a user-global file)
-- `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Omit for defaults (`config.DefaultTripwirePaths`/`DefaultTripwirePatterns`); empty list disables. Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
+- `tripwire_paths` / `tripwire_patterns`: Zero-threshold lanes — any change to a matching file (CI workflows, dependency manifests, `.claude/settings*.json`, `hooks.json`, migrations) or any added line containing a pattern (test skips like `t.Skip`) is named immediately at any score, logged as a `tripwire` event, listed in the trip message, and marked with a red `⚠` in the statusline indicator. Opt-in: omitted or empty lists disable that lane; the literal entry `"defaults"` expands to the recommended list (`config.RecommendedTripwirePaths`/`RecommendedTripwirePatterns`). Path globs support `*` and `**`; slashless patterns also match basenames. Warned once per hit per increment; cleared on baseline reset. Added-line scanning covers tracked files only.
 
 ### Disabling Globally
 

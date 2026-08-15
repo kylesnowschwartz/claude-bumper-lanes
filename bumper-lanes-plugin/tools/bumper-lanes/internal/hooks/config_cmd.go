@@ -22,30 +22,15 @@ func ConfigShow() error {
 
 	// Show source with helpful paths
 	repoPath := config.GetConfigPath()
-	globalPath := config.GetGlobalConfigPath()
-
-	repoExists := fileExists(repoPath)
-	globalExists := fileExists(globalPath)
 
 	fmt.Println()
-	if repoExists && globalExists {
-		fmt.Printf("Config: %s (repo, overrides global)\n", repoPath)
-		fmt.Printf("Global: %s\n", globalPath)
-	} else if repoExists {
+	if fileExists(repoPath) {
 		fmt.Printf("Config: %s (repo)\n", repoPath)
-		fmt.Printf("Global: %s (not found)\n", globalPath)
-	} else if globalExists {
-		fmt.Printf("Config: %s (global)\n", globalPath)
-		fmt.Printf("Repo:   (no .bumper-lanes.json)\n")
 	} else {
-		fmt.Println("Config: (using defaults)")
-		fmt.Printf("Global: %s (create for viz-only mode)\n", globalPath)
+		fmt.Println("Config: (no .bumper-lanes.json - using plugin settings or defaults)")
 	}
 	if config.HasPluginOptions() {
 		fmt.Println("Plugin: values set via /plugin > claude-bumper-lanes (repo file still overrides)")
-	}
-	if globalExists {
-		fmt.Printf("Note: the global file is deprecated - move these values to the plugin's settings (/plugin > claude-bumper-lanes). File support ends in v5.\n")
 	}
 	for _, w := range cfgWarnings {
 		fmt.Printf("Warning: %s\n", w)

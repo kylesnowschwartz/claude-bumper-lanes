@@ -209,15 +209,10 @@ func handleConfig(sessionID, args string) int {
 		cfg, cfgWarnings := loadConfigWithWarnings(logging.New(sessionID, "prompt_handler"))
 		threshold := cfg.Threshold
 
-		// Attribute the source by which config files exist (repo overrides
-		// global), matching ConfigShow - an explicit value equal to the
-		// default is still attributed to its file.
+		// Attribute the source by which config sources are present,
+		// matching ConfigShow - an explicit value equal to the default
+		// is still attributed to its source.
 		source := "default"
-		deprecation := ""
-		if globalPath := config.GetGlobalConfigPath(); globalPath != "" && fileExists(globalPath) {
-			source = globalPath
-			deprecation = fmt.Sprintf("\nNote: %s is deprecated - move these values to the plugin's settings (/plugin > claude-bumper-lanes). File support ends in v5.", globalPath)
-		}
 		if config.HasPluginOptions() {
 			source = "plugin config (/plugin > claude-bumper-lanes)"
 		}
@@ -237,7 +232,6 @@ func handleConfig(sessionID, args string) int {
 			msg += fmt.Sprintf("\nWarning: %s", w)
 		}
 		msg += unknownKeyWarnings()
-		msg += deprecation
 		blockPrompt(msg)
 		return 0
 	}
@@ -247,19 +241,17 @@ func handleConfig(sessionID, args string) int {
 }
 
 // unknownKeyWarnings names config keys the current schema does not
-// understand, per config file. Unknown keys are otherwise ignored silently,
-// so options removed across versions rot in place invisibly.
+// understand in the repo config file. Unknown keys are otherwise ignored
+// silently, so options removed across versions rot in place invisibly.
 func unknownKeyWarnings() string {
-	var warnings string
-	for _, path := range []string{config.GetConfigPath(), config.GetGlobalConfigPath()} {
-		if path == "" {
-			continue
-		}
-		if unknown := config.UnknownKeys(path); len(unknown) > 0 {
-			warnings += fmt.Sprintf("\nWarning: %s has unrecognized keys: %s", path, strings.Join(unknown, ", "))
-		}
+	path := config.GetConfigPath()
+	if path == "" {
+		return ""
 	}
-	return warnings
+	if unknown := config.UnknownKeys(path); len(unknown) > 0 {
+		return fmt.Sprintf("\nWarning: %s has unrecognized keys: %s", path, strings.Join(unknown, ", "))
+	}
+	return ""
 }
 
 // setThreshold parses and saves threshold value to .bumper-lanes.json.

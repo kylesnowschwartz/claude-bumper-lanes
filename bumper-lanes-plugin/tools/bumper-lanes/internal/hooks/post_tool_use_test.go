@@ -687,6 +687,8 @@ func TestHandleBashCommit(t *testing.T) {
 
 // TestTripwireDetection verifies the manual-check requirement from the
 // audit: a t.Skip insertion at a tiny score must surface immediately.
+// Tripwires are opt-in, so the repo config enables both lanes via the
+// "defaults" expansion.
 func TestTripwireDetection(t *testing.T) {
 	tmpDir := t.TempDir()
 	setupTempGitRepo(t, tmpDir)
@@ -695,6 +697,8 @@ func TestTripwireDetection(t *testing.T) {
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
 	os.Chdir(tmpDir)
+
+	os.WriteFile(".bumper-lanes.json", []byte(`{"tripwire_paths": ["defaults"], "tripwire_patterns": ["defaults"]}`), 0644)
 
 	// Tracked test file in the baseline
 	os.WriteFile("thing_test.go", []byte("package thing\n\nfunc TestA(t *testing.T) {\n}\n"), 0644)

@@ -14,7 +14,7 @@ When the threshold is exceeded:
 2. **Stop hook** blocks Claude from continuing when threshold exceeded
 3. **Reset command** (`/bumper-reset`) restores the budget after you review
 
-Beyond the size budget, **tripwires** flag high-risk change classes (CI config, dependency manifests, disabled tests) immediately, at any score.
+Beyond the size budget, opt-in **tripwires** flag high-risk change classes (CI config, dependency manifests, disabled tests) immediately, at any score.
 
 ## Installation
 
@@ -61,7 +61,7 @@ Two CLI verbs run from the agent's shell (no slash command, no statusline JSON n
 
 The status line shows a one-line gauge: a traffic-light bar with the percentage of budget spent, a red ⚠ when a tripwire fired, and a green line count when the increment is net-negative (the tree shrank).
 
-Status line setup is **opt-in**: answer yes to the "Add budget gauge to status line" prompt when enabling the plugin (or set `"statusline_auto_setup": true` in a repo `.bumper-lanes.json`) and the plugin configures `~/.claude/settings.json` on session start. Or configure manually:
+Status line setup is **opt-in** and only applies when you have no status line configured: answer yes to the "Add budget gauge to status line" prompt when enabling the plugin (or set `"statusline_auto_setup": true` in a repo `.bumper-lanes.json`) and the plugin points `~/.claude/settings.json` at the bumper-lanes binary on session start. An existing status line command is never touched — compose the gauge into it yourself with `bumper-lanes status --widget=indicator`. Or configure manually:
 
 ```json
 {
@@ -81,16 +81,6 @@ For custom status lines, `bumper-lanes status --widget=indicator` prints just th
 go install github.com/kylesnowschwartz/diff-viz/v2/cmd/git-diff-tree@latest
 ```
 
-### Opting Out of Auto-Setup
-
-To prevent bumper-lanes from modifying your statusline script, add this comment anywhere in your script:
-
-```bash
-# BUMPER_HANDS_OFF
-```
-
-This tells bumper-lanes to leave your configuration alone. The plugin will not wrap, update, or regenerate any script containing this marker.
-
 ## Configuration
 
 Set your defaults when enabling the plugin: `/plugin` > claude-bumper-lanes prompts for the threshold, reset policy, trip behavior, and status line setup, and stores them in your user settings. Change them any time through the same menu.
@@ -99,8 +89,9 @@ Precedence order:
 
 1. `.bumper-lanes.json` at repo root (highest priority - per-repo overrides)
 2. Plugin settings (set via `/plugin`, prompted at enable)
-3. `~/.config/bumper-lanes/config.json` (deprecated - support ends in v5; move values to the plugin settings)
-4. Built-in defaults
+3. Built-in defaults
+
+The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is no longer read; if it exists, config commands warn until you move its values and delete it.
 
 ```json
 {
@@ -119,8 +110,8 @@ Precedence order:
 | `review_command` | The review workflow named in the self-review instruction (default `/code-review`) |
 | `tripwires_block_auto_review` | When `true`, increments with tripwire hits cannot self-clear and always come to you (default `false`) |
 | `statusline_auto_setup` | Allow session start to configure the status line (default: false) |
-| `tripwire_paths` | Glob patterns whose changes are flagged at any score (defaults cover CI, dependency manifests, migrations) |
-| `tripwire_patterns` | Added-line substrings that are flagged at any score (defaults cover test-skip idioms) |
+| `tripwire_paths` | Glob patterns whose changes are flagged at any score. Opt-in: omit to disable; the entry `"defaults"` expands to a recommended list (CI, dependency manifests, migrations) |
+| `tripwire_patterns` | Added-line substrings that are flagged at any score. Opt-in: omit to disable; the entry `"defaults"` expands to a recommended list (test-skip idioms) |
 
 ### Disabling Enforcement
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -311,8 +312,9 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 	}
 }
 
-// TestGlobalConfigLoading verifies global config as fallback for repo config.
-func TestGlobalConfigLoading(t *testing.T) {
+// TestLegacyGlobalConfigIgnored verifies the pre-v5 global file is no longer
+// read and its presence surfaces a warning.
+func TestLegacyGlobalConfigIgnored(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
 	testutil.IsolateGitEnv(t, tmpDir)
@@ -329,87 +331,93 @@ func TestGlobalConfigLoading(t *testing.T) {
 
 	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
 
-	t.Run("global config used when no repo config", func(t *testing.T) {
+	t.Run("legacy file values are ignored, warning names the file", func(t *testing.T) {
 		os.Remove(repoPath)
 		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100}`), 0644)
 		defer os.Remove(globalConfigPath)
 
-		got := loadSettings().Threshold
-		if got != 100 {
-			t.Errorf("loadSettings().Threshold = %d, want 100 (global)", got)
+		s, warnings := Load()
+		if s.Threshold != DefaultThreshold {
+			t.Errorf("Load().Threshold = %d, want %d (legacy file ignored)", s.Threshold, DefaultThreshold)
+		}
+		if len(warnings) != 1 || !strings.Contains(warnings[0], globalConfigPath) {
+			t.Errorf("Load() warnings = %v, want one warning naming %s", warnings, globalConfigPath)
 		}
 	})
 
-	t.Run("repo config overrides global config", func(t *testing.T) {
-		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100}`), 0644)
-		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644)
-		defer os.Remove(globalConfigPath)
-		defer os.Remove(repoPath)
-
-		got := loadSettings().Threshold
-		if got != 200 {
-			t.Errorf("loadSettings().Threshold = %d, want 200 (repo overrides global)", got)
-		}
-	})
-
-	t.Run("merge: repo threshold with global reset policy", func(t *testing.T) {
-		os.WriteFile(globalConfigPath, []byte(`{"threshold": 100, "reset_on": "human"}`), 0644)
-		os.WriteFile(repoPath, []byte(`{"threshold": 200}`), 0644) // only threshold, no reset policy
-		defer os.Remove(globalConfigPath)
-		defer os.Remove(repoPath)
-
-		gotThreshold := loadSettings().Threshold
-		gotResetOn := loadSettings().ResetOn
-		if gotThreshold != 200 {
-			t.Errorf("loadSettings().Threshold = %d, want 200 (repo)", gotThreshold)
-		}
-		if gotResetOn != ResetOnHuman {
-			t.Errorf("loadSettings().ResetOn = %q, want %q (global)", gotResetOn, ResetOnHuman)
-		}
-	})
-
-	t.Run("global threshold 0 disables enforcement", func(t *testing.T) {
-		os.Remove(repoPath)
-		os.WriteFile(globalConfigPath, []byte(`{"threshold": 0}`), 0644)
-		defer os.Remove(globalConfigPath)
-
-		got := loadSettings().Threshold
-		if got != 0 {
-			t.Errorf("loadSettings().Threshold = %d, want 0 (disabled via global)", got)
-		}
-		if !IsDisabled(got) {
-			t.Error("IsDisabled() = false, want true")
-		}
-	})
-
-	t.Run("default when neither config exists", func(t *testing.T) {
+	t.Run("no warning when legacy file is absent", func(t *testing.T) {
 		os.Remove(repoPath)
 		os.Remove(globalConfigPath)
 
-		got := loadSettings().Threshold
-		if got != DefaultThreshold {
-			t.Errorf("loadSettings().Threshold = %d, want %d (default)", got, DefaultThreshold)
+		s, warnings := Load()
+		if s.Threshold != DefaultThreshold {
+			t.Errorf("Load().Threshold = %d, want %d (default)", s.Threshold, DefaultThreshold)
+		}
+		if len(warnings) != 0 {
+			t.Errorf("Load() warnings = %v, want none", warnings)
 		}
 	})
 }
 
-func TestGetGlobalConfigPath(t *testing.T) {
+func TestLegacyGlobalConfigPathHelper(t *testing.T) {
 	t.Run("uses XDG_CONFIG_HOME when set", func(t *testing.T) {
 		t.Setenv("XDG_CONFIG_HOME", "/custom/config")
-		got := GetGlobalConfigPath()
+		got := legacyGlobalConfigPath()
 		want := "/custom/config/bumper-lanes/config.json"
 		if got != want {
-			t.Errorf("GetGlobalConfigPath() = %q, want %q", got, want)
+			t.Errorf("legacyGlobalConfigPath() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("falls back to ~/.config when XDG not set", func(t *testing.T) {
 		t.Setenv("XDG_CONFIG_HOME", "")
-		got := GetGlobalConfigPath()
+		got := legacyGlobalConfigPath()
 		home, _ := os.UserHomeDir()
 		want := filepath.Join(home, ".config", "bumper-lanes", "config.json")
 		if got != want {
-			t.Errorf("GetGlobalConfigPath() = %q, want %q", got, want)
+			t.Errorf("legacyGlobalConfigPath() = %q, want %q", got, want)
+		}
+	})
+}
+
+// TestLoadTripwires verifies tripwires are opt-in: disabled when unset,
+// with "defaults" expanding to the recommended lists.
+func TestLoadTripwires(t *testing.T) {
+	tmpDir := t.TempDir()
+	testutil.IsolateGitEnv(t, tmpDir)
+	testutil.SetupTempGitRepo(t, tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Chdir(tmpDir)
+
+	repoPath := filepath.Join(tmpDir, ".bumper-lanes.json")
+
+	t.Run("disabled when unset", func(t *testing.T) {
+		os.Remove(repoPath)
+		s := loadSettings()
+		if len(s.TripwirePaths) != 0 || len(s.TripwirePatterns) != 0 {
+			t.Errorf("TripwirePaths = %v, TripwirePatterns = %v, want both empty (opt-in)", s.TripwirePaths, s.TripwirePatterns)
+		}
+	})
+
+	t.Run("defaults entry expands to recommended lists", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"tripwire_paths": ["custom/**", "defaults"], "tripwire_patterns": ["defaults"]}`), 0644)
+		defer os.Remove(repoPath)
+		s := loadSettings()
+		wantPaths := append([]string{"custom/**"}, RecommendedTripwirePaths...)
+		if !slices.Equal(s.TripwirePaths, wantPaths) {
+			t.Errorf("TripwirePaths = %v, want %v", s.TripwirePaths, wantPaths)
+		}
+		if !slices.Equal(s.TripwirePatterns, RecommendedTripwirePatterns) {
+			t.Errorf("TripwirePatterns = %v, want %v", s.TripwirePatterns, RecommendedTripwirePatterns)
+		}
+	})
+
+	t.Run("explicit list used verbatim", func(t *testing.T) {
+		os.WriteFile(repoPath, []byte(`{"tripwire_paths": ["only/this/**"]}`), 0644)
+		defer os.Remove(repoPath)
+		s := loadSettings()
+		if !slices.Equal(s.TripwirePaths, []string{"only/this/**"}) {
+			t.Errorf("TripwirePaths = %v, want [only/this/**]", s.TripwirePaths)
 		}
 	})
 }

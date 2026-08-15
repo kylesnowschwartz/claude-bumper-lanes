@@ -1,8 +1,11 @@
 // Package config handles configuration loading for bumper-lanes.
-// Config files (in precedence order):
+// Config sources (in precedence order):
 //  1. .bumper-lanes.json at repo root (highest priority)
-//  2. ~/.config/bumper-lanes/config.json (global fallback)
+//  2. Plugin userConfig (CLAUDE_PLUGIN_OPTION_* env in hook processes)
 //  3. Built-in defaults (lowest priority)
+//
+// The pre-v5 global file (~/.config/bumper-lanes/config.json) is no longer
+// read; its presence produces a load warning.
 package config
 
 import (
@@ -60,10 +63,11 @@ const (
 	UnlimitedAutoReviews = -1
 )
 
-// DefaultTripwirePaths are glob patterns for files whose every change is a
+// RecommendedTripwirePaths are glob patterns for files whose every change is a
 // review-worthy decision regardless of size: CI definitions, dependency
-// manifests, agent-harness config, and schema migrations.
-var DefaultTripwirePaths = []string{
+// manifests, agent-harness config, and schema migrations. Tripwires are
+// opt-in; the literal entry "defaults" in tripwire_paths expands to this list.
+var RecommendedTripwirePaths = []string{
 	".github/workflows/**",
 	".gitlab-ci.yml",
 	".circleci/**",
@@ -80,9 +84,10 @@ var DefaultTripwirePaths = []string{
 	"**/migrations/**",
 }
 
-// DefaultTripwirePatterns are substrings that, appearing on an added line,
-// signal a silently weakened test suite.
-var DefaultTripwirePatterns = []string{
+// RecommendedTripwirePatterns are substrings that, appearing on an added line,
+// signal a silently weakened test suite. Tripwires are opt-in; the literal
+// entry "defaults" in tripwire_patterns expands to this list.
+var RecommendedTripwirePatterns = []string{
 	"t.Skip",
 	"it.skip",
 	"test.skip",
@@ -97,7 +102,7 @@ var DefaultTripwirePatterns = []string{
 // Threshold: nil=use default (600), 0=disabled, 50-2000=active threshold
 // StatuslineAutoSetup: nil=default (false), true=allow session-start to configure the status line
 // ResetOn: ""=default ("commit"); one of "commit", "verified-commit", "human"
-// TripwirePaths/TripwirePatterns: nil=defaults, empty list=disabled
+// TripwirePaths/TripwirePatterns: nil or empty list=disabled (opt-in)
 type Config struct {
 	Threshold                *int      `json:"threshold,omitempty"`
 	StatuslineAutoSetup      *bool     `json:"statusline_auto_setup,omitempty"`
@@ -143,9 +148,10 @@ func loadConfigFile(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// getGlobalConfigPath returns the path to the global config file.
-// Uses XDG_CONFIG_HOME if set, otherwise ~/.config/bumper-lanes/config.json.
-func getGlobalConfigPath() string {
+// legacyGlobalConfigPath returns the path of the pre-v5 global config file,
+// which is no longer read. Uses XDG_CONFIG_HOME if set, otherwise
+// ~/.config/bumper-lanes/config.json.
+func legacyGlobalConfigPath() string {
 	configDir := os.Getenv("XDG_CONFIG_HOME")
 	if configDir == "" {
 		home, err := os.UserHomeDir()
@@ -157,13 +163,10 @@ func getGlobalConfigPath() string {
 	return filepath.Join(configDir, "bumper-lanes", "config.json")
 }
 
-// loadMergedConfig loads config from global and repo locations, merging them.
-// Repo config values override global config values.
-// Returns an empty Config if neither file exists (never nil).
 // loadMergedConfig resolves the effective config. Precedence, lowest first:
-// legacy global file (~/.config/bumper-lanes, deprecated) < plugin config
-// (userConfig values, via CLAUDE_PLUGIN_OPTION_* env in hook processes)
-// < repo .bumper-lanes.json.
+// plugin config (userConfig values, via CLAUDE_PLUGIN_OPTION_* env in hook
+// processes) < repo .bumper-lanes.json. Returns an empty Config if no source
+// sets anything (never nil).
 func loadMergedConfig() (*Config, []string) {
 	var warnings []string
 	warn := func(format string, args ...any) {
@@ -171,11 +174,9 @@ func loadMergedConfig() (*Config, []string) {
 	}
 	merged := &Config{}
 
-	if globalPath := getGlobalConfigPath(); globalPath != "" {
-		if global, err := loadConfigFile(globalPath); err == nil {
-			merged = global
-		} else if !os.IsNotExist(err) {
-			warn("%s: %v", globalPath, err)
+	if globalPath := legacyGlobalConfigPath(); globalPath != "" {
+		if _, err := os.Stat(globalPath); err == nil {
+			warn("%s is no longer read (removed in v5) - move these values to the plugin's settings (/plugin > claude-bumper-lanes) or a repo .bumper-lanes.json, then delete the file", globalPath)
 		}
 	}
 
@@ -311,8 +312,8 @@ type Settings struct {
 	TripwirePatterns         []string
 }
 
-// Load reads and merges the config sources (legacy global file < plugin
-// userConfig env < repo .bumper-lanes.json) once and resolves every value.
+// Load reads and merges the config sources (plugin userConfig env < repo
+// .bumper-lanes.json) once and resolves every value.
 // The returned warnings name malformed config files (parse/read errors
 // other than "file does not exist") and unparseable plugin env values;
 // config must not import internal/logging (it stays a leaf package), so
@@ -326,21 +327,20 @@ type Settings struct {
 //     silently enabling self-clearing.
 //   - MaxAutoReviews: N per cycle, 0 = never (same as on_trip: block), any
 //     negative value = UnlimitedAutoReviews (hands-off mode).
-//   - TripwirePaths/TripwirePatterns: nil config = defaults; an explicit
-//     empty list disables that tripwire lane.
+//   - TripwirePaths/TripwirePatterns: opt-in; unset or empty = that tripwire
+//     lane is disabled. The literal entry "defaults" expands to the
+//     recommended list.
 func Load() (Settings, []string) {
 	cfg, warnings := loadMergedConfig()
 	warn := func(format string, args ...any) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
 	}
 	s := Settings{
-		Threshold:        DefaultThreshold,
-		ResetOn:          DefaultResetOn,
-		OnTrip:           DefaultOnTrip,
-		ReviewCommand:    DefaultReviewCommand,
-		MaxAutoReviews:   DefaultMaxAutoReviews,
-		TripwirePaths:    DefaultTripwirePaths,
-		TripwirePatterns: DefaultTripwirePatterns,
+		Threshold:      DefaultThreshold,
+		ResetOn:        DefaultResetOn,
+		OnTrip:         DefaultOnTrip,
+		ReviewCommand:  DefaultReviewCommand,
+		MaxAutoReviews: DefaultMaxAutoReviews,
 	}
 	if cfg.Threshold != nil {
 		s.Threshold = *cfg.Threshold
@@ -381,12 +381,26 @@ func Load() (Settings, []string) {
 		s.TripwiresBlockAutoReview = *cfg.TripwiresBlockAutoReview
 	}
 	if cfg.TripwirePaths != nil {
-		s.TripwirePaths = *cfg.TripwirePaths
+		s.TripwirePaths = expandTripwireDefaults(*cfg.TripwirePaths, RecommendedTripwirePaths)
 	}
 	if cfg.TripwirePatterns != nil {
-		s.TripwirePatterns = *cfg.TripwirePatterns
+		s.TripwirePatterns = expandTripwireDefaults(*cfg.TripwirePatterns, RecommendedTripwirePatterns)
 	}
 	return s, warnings
+}
+
+// expandTripwireDefaults replaces the literal entry "defaults" with the
+// recommended list, so opting into tripwires doesn't require copying it.
+func expandTripwireDefaults(entries, recommended []string) []string {
+	var expanded []string
+	for _, entry := range entries {
+		if entry == "defaults" {
+			expanded = append(expanded, recommended...)
+		} else {
+			expanded = append(expanded, entry)
+		}
+	}
+	return expanded
 }
 
 // IsDisabled returns true if the given threshold means enforcement is disabled.
@@ -437,12 +451,6 @@ func GetConfigPath() string {
 		return ""
 	}
 	return filepath.Join(repoRoot, ".bumper-lanes.json")
-}
-
-// GetGlobalConfigPath returns the path to the global config file.
-// Exported for documentation and debugging.
-func GetGlobalConfigPath() string {
-	return getGlobalConfigPath()
 }
 
 // SaveRepoConfig writes threshold to repo config file.

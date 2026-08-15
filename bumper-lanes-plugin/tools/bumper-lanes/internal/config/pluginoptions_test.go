@@ -8,8 +8,8 @@ import (
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/testutil"
 )
 
-// TestPluginOptionsPrecedence covers the userConfig env source: legacy
-// global file < plugin options (CLAUDE_PLUGIN_OPTION_*) < repo file.
+// TestPluginOptionsPrecedence covers the userConfig env source: plugin
+// options (CLAUDE_PLUGIN_OPTION_*) < repo file.
 func TestPluginOptionsPrecedence(t *testing.T) {
 	tmpDir := t.TempDir()
 	testutil.IsolateGitEnv(t, tmpDir)
@@ -37,18 +37,6 @@ func TestPluginOptionsPrecedence(t *testing.T) {
 		}
 		if !loadSettings().TripwiresBlockAutoReview {
 			t.Error("loadSettings().TripwiresBlockAutoReview = false, want true (plugin option)")
-		}
-	})
-
-	t.Run("plugin options override the legacy global file", func(t *testing.T) {
-		globalDir := filepath.Join(xdg, "bumper-lanes")
-		os.MkdirAll(globalDir, 0755)
-		os.WriteFile(filepath.Join(globalDir, "config.json"), []byte(`{"threshold": 900}`), 0644)
-		defer os.RemoveAll(globalDir)
-		t.Setenv("CLAUDE_PLUGIN_OPTION_THRESHOLD", "250")
-
-		if got := loadSettings().Threshold; got != 250 {
-			t.Errorf("loadSettings().Threshold = %d, want 250 (plugin option over global file)", got)
 		}
 	})
 
