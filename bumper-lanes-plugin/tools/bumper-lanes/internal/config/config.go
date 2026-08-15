@@ -4,8 +4,9 @@
 //  2. Plugin userConfig (CLAUDE_PLUGIN_OPTION_* env in hook processes)
 //  3. Built-in defaults (lowest priority)
 //
-// The pre-v5 global file (~/.config/bumper-lanes/config.json) is no longer
-// read; its presence produces a load warning.
+// The pre-v5 global file (~/.config/bumper-lanes/config.json) is not a
+// config source; session start and the config commands warn while it exists
+// (LegacyGlobalConfigWarning).
 package config
 
 import (
@@ -149,7 +150,7 @@ func loadConfigFile(path string) (*Config, error) {
 }
 
 // legacyGlobalConfigPath returns the path of the pre-v5 global config file,
-// which is no longer read. Uses XDG_CONFIG_HOME if set, otherwise
+// which is not a config source. Uses XDG_CONFIG_HOME if set, otherwise
 // ~/.config/bumper-lanes/config.json.
 func legacyGlobalConfigPath() string {
 	configDir := os.Getenv("XDG_CONFIG_HOME")
@@ -173,12 +174,6 @@ func loadMergedConfig() (*Config, []string) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
 	}
 	merged := &Config{}
-
-	if globalPath := legacyGlobalConfigPath(); globalPath != "" {
-		if _, err := os.Stat(globalPath); err == nil {
-			warn("%s is no longer read (removed in v5) - move these values to the plugin's settings (/plugin > claude-bumper-lanes) or a repo .bumper-lanes.json, then delete the file", globalPath)
-		}
-	}
 
 	overlay(merged, pluginOptionsFromEnv(warn))
 
@@ -401,6 +396,21 @@ func expandTripwireDefaults(entries, recommended []string) []string {
 		}
 	}
 	return expanded
+}
+
+// LegacyGlobalConfigWarning returns a warning naming the pre-v5 global file
+// when it still exists on disk (it is not read). Empty when absent. Session
+// start and the config commands call this, rather than every config load,
+// so an active session's log doesn't accumulate the warning per Write/Edit.
+func LegacyGlobalConfigWarning() string {
+	path := legacyGlobalConfigPath()
+	if path == "" {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s is not read (removed in v5) - move these values to the plugin's settings (/plugin > claude-bumper-lanes) or a repo .bumper-lanes.json, then delete the file", path)
 }
 
 // IsDisabled returns true if the given threshold means enforcement is disabled.

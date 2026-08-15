@@ -116,7 +116,7 @@ Config sources (in precedence order):
 2. Plugin `userConfig` (prompted at enable via `/plugin`; stored in `~/.claude/settings.json` `pluginConfigs`; reaches hook processes as `CLAUDE_PLUGIN_OPTION_<KEY>` env vars — `config.pluginOptionsFromEnv`)
 3. Built-in defaults
 
-The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is no longer read; its presence surfaces a load warning until deleted.
+The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is not read; while it exists, session start logs a warning and the config commands show one (`config.LegacyGlobalConfigWarning`).
 
 Bash-invoked CLI commands (`review-clear`, `budget`) never see the plugin env vars, so hooks stamp the effective trip policy into session state (`sess.Policy`, `state.ReviewPolicy`) at session-start and on every trip; `review-clear` reads the stamp first and falls back to file config. Tripwire path/pattern lists stay file-only (unpromptable as strings).
 

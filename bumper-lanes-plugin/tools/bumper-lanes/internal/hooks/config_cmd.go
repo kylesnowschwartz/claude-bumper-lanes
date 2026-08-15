@@ -32,6 +32,9 @@ func ConfigShow() error {
 	if config.HasPluginOptions() {
 		fmt.Println("Plugin: values set via /plugin > claude-bumper-lanes (repo file still overrides)")
 	}
+	if w := config.LegacyGlobalConfigWarning(); w != "" {
+		fmt.Printf("Warning: %s\n", w)
+	}
 	for _, w := range cfgWarnings {
 		fmt.Printf("Warning: %s\n", w)
 	}

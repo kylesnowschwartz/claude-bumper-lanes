@@ -20,25 +20,20 @@ sequenceDiagram
     CC->>CC: version check (plugin.json vs .build-version)
     CC->>CC: (builds Go binaries ~15s if new/updated)
 
-    %% Status line setup: repair always runs; fresh install is opt-in
-    alt Script contains # BUMPER_HANDS_OFF
-        Note over CC: User opted out - skip all setup
-        CC-->>CC: (silent - no modification)
-    else Existing bumper-lanes wrapper or binary (repair - always runs)
-        CC->>FS: check BUMPER_BIN marker / binary path vs current
-        CC->>FS: regenerate wrapper or update path if stale
-        CC-->>User: stderr: Updated wrapper for new version. Restart session.
+    %% Status line setup: binary-path repair always runs; fresh install is opt-in
+    alt Status line already points at bumper-lanes binary (repair - always runs)
+        CC->>FS: compare settings path vs current binary path
+        CC->>FS: update statusLine.command if stale (via jq)
+        CC-->>User: stderr: Updated status line for new version. Restart session.
+    else Existing foreign status line command
+        Note over CC: User's own status line - never touched
+        CC-->>CC: (silent; compose the gauge via `bumper-lanes status --widget=indicator`)
     else statusline_auto_setup not set (default)
         Note over CC: Fresh install requires opt-in - nothing happens
         CC-->>CC: (silent; set statusline_auto_setup: true in .bumper-lanes.json to enable)
     else Opt-in + no existing status line
         CC->>FS: set statusLine.command to binary path (via jq)
         CC-->>User: stderr: Status line configured! Restart session.
-    else Opt-in + existing status line
-        CC->>FS: generate wrapper at ~/.claude/bumper-lanes-statusline-wrapper.sh
-        Note over FS: Wrapper includes BUMPER_BIN marker for staleness detection
-        CC->>FS: update statusLine.command to wrapper (via jq)
-        CC-->>User: stderr: Wrapped your status line. Restart session.
     end
 
     %% Phase 3: Working
@@ -50,18 +45,17 @@ sequenceDiagram
 %% ============================================================
 %% - Plugin install: README.md:24-27
 %% - Version sentinel: scripts/ensure-binaries.sh
-%% - Hands-off check: internal/statusline/installer.go:isHandsOff()
 %% - Auto-setup entry point (cross-package call from SessionStart): internal/statusline/installer.go:EnsureInstalled()
-%% - Wrapper generation: internal/statusline/installer.go:generateWrapper()
-%% - Staleness check: internal/statusline/installer.go:isWrapperStale()
-%% - Binary path extraction: internal/statusline/installer.go:getWrapperBinaryPath()
+%% - Staleness check: internal/statusline/installer.go:isBinaryStale()
 %% - Settings update: internal/statusline/installer.go:updateSettingsWithJq()
 %%
 %% SETUP MODEL
 %% 1. Fresh installation rewrites ~/.claude/settings.json (user-global), so it
-%%    requires statusline_auto_setup: true in config - opt-in, default off.
-%% 2. Repair of an already-installed wrapper/binary path always runs: the user
-%%    opted in by installing, and plugin updates move the binary path.
-%% 3. # BUMPER_HANDS_OFF in a status line script blocks all modification.
+%%    requires statusline_auto_setup: true in config - opt-in, default off - and
+%%    only applies when no status line is configured.
+%% 2. Repair of an already-installed binary path always runs: the user opted in
+%%    by installing, and plugin updates move the binary path.
+%% 3. A foreign statusLine.command is never modified; custom status lines
+%%    compose the gauge with `bumper-lanes status --widget=indicator`.
 %% 4. Setup is idempotent (checks actual state each session).
 %% 5. Two CLI commands + session restart + 10-15s first build - Claude Code limitations.

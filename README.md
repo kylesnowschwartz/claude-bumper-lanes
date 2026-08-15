@@ -91,7 +91,7 @@ Precedence order:
 2. Plugin settings (set via `/plugin`, prompted at enable)
 3. Built-in defaults
 
-The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is no longer read; if it exists, config commands warn until you move its values and delete it.
+The pre-v5 global file (`~/.config/bumper-lanes/config.json`) is not read; if it exists, `/bumper-config` warns until you move its values and delete it.
 
 ```json
 {

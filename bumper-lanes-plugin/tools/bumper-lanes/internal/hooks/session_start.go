@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/events"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/git"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/hookio"
@@ -46,6 +47,9 @@ func SessionStart(input *hookio.Input) int {
 
 	cfg := loadConfig(log)
 	threshold := cfg.Threshold
+	if w := config.LegacyGlobalConfigWarning(); w != "" {
+		log.Warn("config: %s", w)
+	}
 
 	// Create and save session state
 	sess, err := state.New(input.SessionID, baselineTree, baselineBranch, threshold)
@@ -82,10 +86,11 @@ func SessionStart(input *hookio.Input) int {
 	}
 
 	// Fresh status line installation is opt-in (statusline_auto_setup: true)
-	// because it rewrites ~/.claude/settings.json, a user-global file.
-	// Repairing an already-installed bumper-lanes wrapper or binary path
-	// always runs: the user opted in by installing, and a plugin update
-	// that moves the binary would otherwise silently break their status line.
+	// because it rewrites ~/.claude/settings.json, a user-global file, and
+	// only applies when no status line is configured. Repairing a stale
+	// bumper-lanes binary path always runs: the user opted in by installing,
+	// and a plugin update that moves the binary would otherwise silently
+	// break their status line.
 	if msg := statusline.EnsureInstalled(log, cfg.StatuslineAutoSetup); msg != "" {
 		warnings = append(warnings, msg)
 	}

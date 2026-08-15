@@ -56,7 +56,7 @@
     "statusline_auto_setup": {
       "title": "Add budget gauge to status line",
       "type": "boolean",
-      "description": "Let the plugin add its budget gauge to your status line (edits ~/.claude/settings.json on session start). Default: false",
+      "description": "Point your status line at the budget gauge when none is configured (edits ~/.claude/settings.json on session start; an existing status line command is never touched). Default: false",
       "sensitive": false
     }
   }

@@ -228,6 +228,9 @@ func handleConfig(sessionID, args string) int {
 		}
 
 		msg := fmt.Sprintf("Threshold: %s\nReset policy: %s\nSource: %s", thresholdStr, cfg.ResetOn, source)
+		if w := config.LegacyGlobalConfigWarning(); w != "" {
+			msg += fmt.Sprintf("\nWarning: %s", w)
+		}
 		for _, w := range cfgWarnings {
 			msg += fmt.Sprintf("\nWarning: %s", w)
 		}

@@ -312,8 +312,9 @@ func TestLoadConfigFile_InvalidJSON(t *testing.T) {
 	}
 }
 
-// TestLegacyGlobalConfigIgnored verifies the pre-v5 global file is no longer
-// read and its presence surfaces a warning.
+// TestLegacyGlobalConfigIgnored verifies the pre-v5 global file is not a
+// config source and its presence surfaces a warning through
+// LegacyGlobalConfigWarning.
 func TestLegacyGlobalConfigIgnored(t *testing.T) {
 	// Create temp git repo
 	tmpDir := t.TempDir()
@@ -340,8 +341,11 @@ func TestLegacyGlobalConfigIgnored(t *testing.T) {
 		if s.Threshold != DefaultThreshold {
 			t.Errorf("Load().Threshold = %d, want %d (legacy file ignored)", s.Threshold, DefaultThreshold)
 		}
-		if len(warnings) != 1 || !strings.Contains(warnings[0], globalConfigPath) {
-			t.Errorf("Load() warnings = %v, want one warning naming %s", warnings, globalConfigPath)
+		if len(warnings) != 0 {
+			t.Errorf("Load() warnings = %v, want none (legacy warning is per-surface, not per-load)", warnings)
+		}
+		if w := LegacyGlobalConfigWarning(); !strings.Contains(w, globalConfigPath) {
+			t.Errorf("LegacyGlobalConfigWarning() = %q, want warning naming %s", w, globalConfigPath)
 		}
 	})
 
@@ -349,12 +353,12 @@ func TestLegacyGlobalConfigIgnored(t *testing.T) {
 		os.Remove(repoPath)
 		os.Remove(globalConfigPath)
 
-		s, warnings := Load()
+		s, _ := Load()
 		if s.Threshold != DefaultThreshold {
 			t.Errorf("Load().Threshold = %d, want %d (default)", s.Threshold, DefaultThreshold)
 		}
-		if len(warnings) != 0 {
-			t.Errorf("Load() warnings = %v, want none", warnings)
+		if w := LegacyGlobalConfigWarning(); w != "" {
+			t.Errorf("LegacyGlobalConfigWarning() = %q, want empty", w)
 		}
 	})
 }
