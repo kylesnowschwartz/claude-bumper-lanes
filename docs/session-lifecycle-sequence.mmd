@@ -52,7 +52,7 @@ sequenceDiagram
 
         %% Status line setup only when statusline_auto_setup=true (opt-in)
         Hook->>Hook: statusline.EnsureInstalled()
-        Hook-->>CC: (configure/wrap statusLine if opted in)
+        Hook-->>CC: (configure statusLine if opted in and none exists)
     end
 
     %% === DURING SESSION (each hook call) ===
