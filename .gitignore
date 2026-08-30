@@ -20,6 +20,5 @@ bumper-lanes-plugin/bin/.build-version
 # Override global .claude/ ignore for specific files
 !.claude/
 .claude/*
-!.claude/settings.local.json
 !.claude/commands/
 .idea/
