@@ -36,7 +36,9 @@ func (h *Input) GetPrompt() string {
 
 // ToolInput contains the input for a tool invocation.
 type ToolInput struct {
-	Command string `json:"command,omitempty"` // For Bash tool
+	Command      string `json:"command,omitempty"`       // For Bash tool
+	FilePath     string `json:"file_path,omitempty"`     // For Write/Edit/MultiEdit
+	NotebookPath string `json:"notebook_path,omitempty"` // For NotebookEdit
 }
 
 // ContextResponse injects additionalContext into Claude's context.

@@ -169,3 +169,16 @@ func MergeTrees(base, ours, theirs string) (string, error) {
 	}
 	return tree, nil
 }
+
+// IsIgnored reports whether gitignore rules match the path. An ignored path
+// never enters the working-tree snapshot, so changes to it cannot affect a
+// tree diff.
+func IsIgnored(path string) bool {
+	return exec.Command("git", "check-ignore", "-q", "--", path).Run() == nil
+}
+
+// IsTracked reports whether the path is in the index. A tracked file's
+// edits appear in tree diffs even when a gitignore pattern also matches it.
+func IsTracked(path string) bool {
+	return exec.Command("git", "ls-files", "--error-unmatch", "--", path).Run() == nil
+}

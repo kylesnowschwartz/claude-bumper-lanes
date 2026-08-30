@@ -3,6 +3,8 @@ package hooks
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/config"
 	"github.com/kylesnowschwartz/claude-bumper-lanes/bumper-lanes-plugin/tools/bumper-lanes/internal/enforce"
@@ -68,6 +70,15 @@ func PreToolUse(input *hookio.Input) (exitCode int) {
 
 	// If threshold is 0 (disabled), allow tool
 	if sess.ThresholdLimit == 0 {
+		return 0
+	}
+
+	// The breaker guards the metered diff, nothing else: a write whose
+	// target can never appear in it (outside the worktree, or gitignored -
+	// scratchpads, memory files, .agent-history) stays allowed while
+	// tripped. Checked only when the breaker is armed, before the
+	// auto-recovery work below, so exempt writes skip the git calls too.
+	if sess.StopTriggered && scoreInvisiblePath(input) {
 		return 0
 	}
 
@@ -181,6 +192,44 @@ func PreToolUse(input *hookio.Input) (exitCode int) {
 	}
 
 	return 0 // Exit 0 for JSON output
+}
+
+// scoreInvisiblePath reports whether the tool call's target can never
+// affect the metered diff: it lies outside the repo worktree, or gitignore
+// excludes it from working-tree snapshots (and it is not tracked - a
+// tracked file's edits score even when an ignore pattern matches it).
+// Untracked-but-not-ignored files score as new files and are not exempt.
+// An unknown or missing target is not exempt (the deny stands).
+func scoreInvisiblePath(input *hookio.Input) bool {
+	if input.ToolInput == nil {
+		return false
+	}
+	target := input.ToolInput.FilePath
+	if input.ToolName == "NotebookEdit" {
+		target = input.ToolInput.NotebookPath
+	}
+	if target == "" {
+		return false
+	}
+	target, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	// Resolve symlinks via the parent (the target itself may not exist
+	// yet), so a symlinked path (/tmp on macOS) compares against the
+	// resolved worktree root git reports.
+	if resolvedDir, err := filepath.EvalSymlinks(filepath.Dir(target)); err == nil {
+		target = filepath.Join(resolvedDir, filepath.Base(target))
+	}
+	root, err := state.GetRepoPath()
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return true // outside the worktree
+	}
+	return git.IsIgnored(target) && !git.IsTracked(target)
 }
 
 // recordHeadBeforeCommit stores HEAD ahead of a commit-shaped Bash command,

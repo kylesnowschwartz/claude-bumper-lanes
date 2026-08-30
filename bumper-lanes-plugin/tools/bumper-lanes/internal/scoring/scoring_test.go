@@ -84,7 +84,35 @@ func TestCalculate(t *testing.T) {
 				},
 				Totals: diff.TotalsJSON{Adds: 55, FileCount: 11},
 			},
-			wantScore: 251, // 55*1.3=71 + (11-5)*30=180 = 251
+			wantScore: 151, // 55*1.3=71 + marginal scatter (5*10 + 1*30)=80 = 151
+		},
+		{
+			name: "scatter is marginal - no cliff between 10 and 11 files",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "a.go", Adds: 10}, {Path: "b.go", Adds: 10},
+					{Path: "c.go", Adds: 10}, {Path: "d.go", Adds: 10},
+					{Path: "e.go", Adds: 10}, {Path: "f.go", Adds: 10},
+					{Path: "g.go", Adds: 10}, {Path: "h.go", Adds: 10},
+					{Path: "i.go", Adds: 10}, {Path: "j.go", Adds: 10},
+				},
+				Totals: diff.TotalsJSON{Adds: 100, FileCount: 10},
+			},
+			wantScore: 180, // 100*1.3=130 + 5*10=50 = 180 (one more file adds 30, not 130)
+		},
+		{
+			name: "tiny-diff files score lines but not scatter",
+			stats: &diff.StatsJSON{
+				Files: []diff.FileStatJSON{
+					{Path: "a.go", Adds: 10}, {Path: "b.go", Adds: 10},
+					{Path: "c.go", Adds: 10}, {Path: "d.go", Adds: 10},
+					{Path: "e.go", Adds: 10}, {Path: "f.go", Adds: 10},
+					// Ripple: version bump, changelog stub - under scatterMinAdds
+					{Path: "plugin.json", Adds: 1}, {Path: "CHANGELOG.md", Adds: 4},
+				},
+				Totals: diff.TotalsJSON{Adds: 65, FileCount: 8},
+			},
+			wantScore: 94, // 65*1.3=84 (int) + (6-5)*10=10 = 94; ripple files exempt from scatter
 		},
 	}
 

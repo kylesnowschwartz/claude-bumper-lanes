@@ -31,15 +31,16 @@ Defense-in-depth hook system with three layers:
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
 - PostToolUse fuel gauge tiers: 70%, 90%, and 100% (budget exhausted — wrap up, breaker arms at the next stop boundary), delivered as `additionalContext` JSON; parent-configured hooks fire for subagent tool calls, so the gauge meters and steers subagents too
-- SubagentStop runs the same threshold check as Stop (`internal/hooks/subagent_stop.go`): a subagent finishing over threshold sets `StopTriggered` (arming the PreToolUse write-deny for every agent), logs a `trip` event with cause `subagent-stop`, and blocks the subagent's stop once with a summarize-for-review instruction; the payload's `session_id` may be the subagent's own, so lookup falls back to the latest session
+- SubagentStop runs the same threshold check as Stop (`internal/hooks/subagent_stop.go`): a subagent finishing over threshold sets `StopTriggered` (arming the PreToolUse write-deny for every agent), logs a `trip` event with cause `subagent-stop`, and blocks the subagent's stop once with a summarize-for-review instruction; the payload's `session_id` is the parent session's (the subagent is identified by separate `agent_id`/`agent_type` fields), so the normal session lookup applies
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
+- The tripped write-deny only guards the metered diff: targets outside the worktree or gitignored-and-untracked (scratchpads, `.agent-history/`) stay writable (`pre_tool_use.go:scoreInvisiblePath`); missing/unknown targets stay denied
 - The trip message is an architecture-altitude packet (`internal/enforce/trippacket.go`): weighted points by module (`scoring.ByModule`), tripwires first, new-file decision list, a scripted account for the model ("what changed at module level, does the shape match the request, what was verified"), and a file appendix in diff-viz `plain` mode; a fresh trip also emits an OSC 9 desktop notification via the hook `terminalSequence` field
 - Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining
 - UserPromptSubmit injects a budget line at prompt time once 50% of the budget is spent, so the model plans increments to fit
 - Budget messages use scope-contract framing (points remaining, clamped at 0, via one shared `budgetLine` helper); the `budget-aware-planning` skill teaches Claude to check `bumper-lanes budget` before large edits and size increments to the remaining budget
 - `bumper-lanes budget [session]` prints the plain-text remaining budget; with no usable session id it falls back to the most recently active session, so it works from Claude's Bash tool (no statusline JSON on stdin required)
 - Statusline setup: fresh installs require `statusline_auto_setup: true` and only happen when no status line is configured (settings point directly at the binary — bumper-lanes never touches a user's own command); binary-path repair runs unconditionally so plugin updates don't strand a dead path
-- Scatter penalties: Extra points for touching many files (6-10: +10pts/file, 11+: +30pts/file)
+- Scatter penalties: Extra points for touching many files, marginal like tax brackets — files 6-10 cost +10 each, files 11+ cost +30 each (11 files = 80 pts, not a cliff). Files with fewer than 5 added lines (version bumps, changelog stubs) score their lines but don't count toward scatter (`scoring.scatterMinAdds`)
 
 ## Auto-Reset Triggers
 

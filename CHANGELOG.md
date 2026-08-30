@@ -5,6 +5,14 @@ All notable changes to claude-bumper-lanes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-08-30
+
+### Changed
+
+- **Scatter penalty is now marginal**: files 6-10 cost +10 each and only files 11+ cost +30 each, like tax brackets. Previously crossing into the 11+ tier re-priced all files past the free tier at +30, so the eleventh file alone jumped the penalty from 50 to 180. Now 11 files = 80 pts.
+- **Trivial ripple is scatter-free**: files with fewer than 5 added lines (version bumps, changelog stubs, one-line config touches) still score their lines but no longer count toward the scatter file count — a glanceable diff is not a review context switch.
+- **Tripped write-deny only guards the metered diff**: while the breaker is armed, Write/Edit to targets that can never appear in the diff — paths outside the repo worktree, or gitignored paths (scratchpads, `.agent-history/`, memory files) — are allowed. Untracked-but-not-ignored files still score as new files and remain blocked.
+
 ## [5.1.0] - 2026-08-30
 
 ### Added

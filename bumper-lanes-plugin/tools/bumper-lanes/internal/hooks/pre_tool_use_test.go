@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -178,6 +179,78 @@ func TestPreToolUseBlockReasonUnderReviewPolicy(t *testing.T) {
 	}
 	if strings.Contains(reason, "Run /bumper-reset") {
 		t.Errorf("review-policy reason should not mention /bumper-reset, got: %q", reason)
+	}
+}
+
+// TestPreToolUseScoreInvisiblePathsExempt verifies the tripped write-deny
+// only guards writes that could affect the metered diff: outside-worktree
+// and gitignored targets stay writable; in-repo targets (tracked or
+// untracked-not-ignored) stay denied.
+func TestPreToolUseScoreInvisiblePathsExempt(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	// Repo root as git resolves it (t.TempDir is a symlink on macOS).
+	root, err := state.GetRepoPath()
+	if err != nil {
+		t.Fatalf("GetRepoPath() error = %v", err)
+	}
+
+	os.WriteFile(".gitignore", []byte("scratch/\n"), 0644)
+	exec.Command("git", "add", ".gitignore").Run()
+	exec.Command("git", "commit", "-m", "ignore scratch").Run()
+
+	baseline, _ := git.CaptureTree()
+	sessionID := "test-pretooluse-exempt"
+	sess, err := state.New(sessionID, baseline, "main", 50)
+	if err != nil {
+		t.Fatalf("state.New() error = %v", err)
+	}
+	sess.SetStopTriggered(true)
+	sess.Save()
+
+	// Keep the tree over threshold so auto-recovery can't clear the trip.
+	largeContent := make([]byte, 0, 4096)
+	for i := 0; i < 100; i++ {
+		largeContent = append(largeContent, []byte(fmt.Sprintf("// Line %d\n", i))...)
+	}
+	os.WriteFile("dirty.txt", largeContent, 0644)
+
+	tests := []struct {
+		name     string
+		filePath string
+		wantDeny bool
+	}{
+		{"outside worktree exempt", filepath.Join(os.TempDir(), "bumper-scratch-note.md"), false},
+		{"gitignored path exempt", filepath.Join(root, "scratch", "notes.md"), false},
+		{"tracked file denied", filepath.Join(root, "initial.txt"), true},
+		{"untracked unignored file denied", filepath.Join(root, "new-feature.go"), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := &hookio.Input{
+				HookEventName: "PreToolUse",
+				ToolName:      "Write",
+				SessionID:     sessionID,
+				ToolInput:     &hookio.ToolInput{FilePath: tt.filePath},
+			}
+
+			output := captureStdout(t, func() {
+				if exitCode := PreToolUse(input); exitCode != 0 {
+					t.Errorf("PreToolUse exitCode = %d, want 0", exitCode)
+				}
+			})
+
+			gotDeny := strings.Contains(output, `"permissionDecision":"deny"`)
+			if gotDeny != tt.wantDeny {
+				t.Errorf("deny = %v, want %v (output: %s)", gotDeny, tt.wantDeny, output)
+			}
+		})
 	}
 }
 
