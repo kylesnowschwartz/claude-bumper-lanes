@@ -5,6 +5,13 @@ All notable changes to claude-bumper-lanes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-08-30
+
+### Added
+
+- **SubagentStop enforcement**: a subagent finishing its work is now a review checkpoint. When the diff is over threshold at a subagent's stop, the breaker arms (further Write/Edit denied in any agent until review), a `trip` event logs with cause `subagent-stop`, and the subagent is blocked once with an instruction to summarize its changes for review. Previously subagent writes were metered but the breaker only armed at the parent session's Stop, so a single subagent brief could overshoot the budget without bound.
+- **Budget-exhausted fuel gauge tier**: past 100% of the budget, the per-write whisper escalates from the 90% "finish and pause" message to "budget exhausted — leave the tree coherent, stop and summarize for review; the breaker arms at the next stop boundary".
+
 ## [5.0.1] - 2026-08-30
 
 ### Changed

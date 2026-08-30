@@ -340,6 +340,47 @@ func TestNotebookEditUpdatesScore(t *testing.T) {
 	}
 }
 
+// TestFuelGaugeBudgetExhaustedTier verifies the over-100% whisper: an agent
+// past the budget hears an escalated wrap-up message, not the 90% tier.
+func TestFuelGaugeBudgetExhaustedTier(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTempGitRepo(t, tmpDir)
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	baseline, _ := git.CaptureTree()
+	sessionID := "test-gauge-exhausted"
+	sess, err := state.New(sessionID, baseline, "main", 30)
+	if err != nil {
+		t.Fatalf("state.New() error = %v", err)
+	}
+	sess.Save()
+
+	// Dirty the tree well past the 30-pt threshold
+	dirtyTree(t, tmpDir)
+
+	input := &hookio.Input{
+		HookEventName: "PostToolUse",
+		ToolName:      "Write",
+		SessionID:     sessionID,
+	}
+
+	output := captureStdout(t, func() {
+		if exitCode := PostToolUse(input); exitCode != 0 {
+			t.Errorf("PostToolUse(Write) = %d, want 0", exitCode)
+		}
+	})
+
+	if !strings.Contains(output, "Budget exhausted") {
+		t.Errorf("over-100%% gauge should say 'Budget exhausted', got: %s", output)
+	}
+	if strings.Contains(output, "Finish the current increment and pause") {
+		t.Errorf("over-100%% gauge should replace the 90%% tier message, got: %s", output)
+	}
+}
+
 // gitCommit runs git commit in the current directory and fails the test on error.
 func gitCommit(t *testing.T, args ...string) {
 	t.Helper()

@@ -43,6 +43,10 @@ const (
 	// CauseUpstream marks a baseline rebase over commits the session did
 	// not make through its own commit flow (pull, rebase, merge).
 	CauseUpstream = "upstream"
+	// CauseSubagentStop marks a trip detected at a subagent's stop boundary
+	// rather than the parent session's Stop. Trip entries without a cause
+	// are parent-Stop trips.
+	CauseSubagentStop = "subagent-stop"
 )
 
 // Entry is one logged lifecycle event.

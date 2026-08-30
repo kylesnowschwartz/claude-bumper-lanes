@@ -27,6 +27,24 @@ sequenceDiagram
     Sess-->>PTU: 360/400 (90%)
     PTU-->>Claude: additionalContext: 40/400 pts remain (90% used) - finish and pause for review
 
+    Claude->>Claude: Write past.ts
+    PTU->>Sess: calculate score
+    Sess-->>PTU: 420/400 (105%)
+    PTU-->>Claude: additionalContext: 0/400 pts remain - budget exhausted, leave tree coherent, stop and summarize; breaker arms at next stop boundary
+
+    %% === SUBAGENT WRAP-UP BOUNDARY ===
+    %% Parent-configured hooks fire for subagent tool calls, so the gauge
+    %% above meters subagent writes too. A subagent finishing is a stop
+    %% boundary: SubagentStop runs the same threshold check as Stop.
+    participant SubStop as SubagentStop Hook
+    Claude->>SubStop: (subagent finishes its brief)
+    SubStop->>Sess: load session (payload session_id, else latest)
+    SubStop->>Sess: check score vs threshold
+    Sess-->>SubStop: 420/400 (105%)
+    SubStop->>Sess: set stop_triggered: true, stamp policy
+    SubStop-->>Claude: BLOCKED once - wrap up: summarize the changes for review, modify no more files
+    Note over SubStop,Sess: trip event logged with cause=subagent-stop.<br/>PreToolUse now denies further Write/Edit in any agent<br/>until review; the parent's next Stop shows the full trip packet.
+
     %% === THRESHOLD EXCEEDED ===
     Claude->>Stop: (tries to finish turn)
     Stop->>Sess: check score vs threshold

@@ -7,7 +7,7 @@
 Defense-in-depth hook system with three layers:
 
 1. **Fuel Gauge** (PostToolUse): Escalating warnings after each Write/Edit - reaches Claude via `hookSpecificOutput.additionalContext`
-2. **Enforcement** (Stop): Block Claude from finishing turn when threshold exceeded
+2. **Enforcement** (Stop + SubagentStop): Block Claude from finishing turn when threshold exceeded; a subagent finishing over threshold is blocked once with a wrap-up instruction and arms the breaker for the parent
 3. **Manual Reset** (UserPromptSubmit): Intercept `/claude-bumper-lanes:bumper-reset` command to restore budget after review
 
 ## Technology Stack
@@ -15,7 +15,7 @@ Defense-in-depth hook system with three layers:
 - **Go 1.21+**: Hook handler (`bumper-lanes`)
 - **[diff-viz](https://github.com/kylesnowschwartz/diff-viz)**: Library dependency for diff calculation and visualization (via go.mod)
 - **Git 2.x+**: Working tree snapshots via `git write-tree`, diff calculation via `git diff-tree`
-- **Claude Code Hooks**: SessionStart, PostToolUse, Stop, UserPromptSubmit events
+- **Claude Code Hooks**: SessionStart, PreToolUse, PostToolUse, Stop, SubagentStop, UserPromptSubmit, SessionEnd events
 
 ## Design Principles
 
@@ -30,7 +30,8 @@ Defense-in-depth hook system with three layers:
 - Mechanical churn is free: renames report only edited lines (diff-viz `-M`), and generated files (lockfiles like `go.sum`/`*.lock`, `*.pb.go`, `*_generated.go`, minified assets, `vendor/`, `node_modules/`) score zero and skip scatter (`scoring.isGenerated`)
 - Session state persisted in `{git-dir}/bumper-checkpoints/session-{session_id}` (worktree-aware)
 - Baseline reset captures current `git write-tree` SHA as new reference point
-- PostToolUse fuel gauge tiers: 70% and 90%, delivered as `additionalContext` JSON
+- PostToolUse fuel gauge tiers: 70%, 90%, and 100% (budget exhausted — wrap up, breaker arms at the next stop boundary), delivered as `additionalContext` JSON; parent-configured hooks fire for subagent tool calls, so the gauge meters and steers subagents too
+- SubagentStop runs the same threshold check as Stop (`internal/hooks/subagent_stop.go`): a subagent finishing over threshold sets `StopTriggered` (arming the PreToolUse write-deny for every agent), logs a `trip` event with cause `subagent-stop`, and blocks the subagent's stop once with a summarize-for-review instruction; the payload's `session_id` may be the subagent's own, so lookup falls back to the latest session
 - Stop hook exit code 2 blocks Claude from finishing when threshold exceeded
 - The trip message is an architecture-altitude packet (`internal/enforce/trippacket.go`): weighted points by module (`scoring.ByModule`), tripwires first, new-file decision list, a scripted account for the model ("what changed at module level, does the shape match the request, what was verified"), and a file appendix in diff-viz `plain` mode; a fresh trip also emits an OSC 9 desktop notification via the hook `terminalSequence` field
 - Budget survives context compaction and resume: SessionStart with `source` `compact`/`resume` preserves existing session state and injects a budget recap into Claude's context instead of re-baselining

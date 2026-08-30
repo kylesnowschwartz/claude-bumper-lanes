@@ -206,9 +206,13 @@ func handleWriteEdit(input *hookio.Input) int {
 		messages = append(messages, fmt.Sprintf("bumper-lanes TRIPWIRE: %s - high-risk change class. Point this out to the user for review regardless of budget.", strings.Join(freshTripwires, ", ")))
 	}
 
-	// Fuel gauge tiers (70%, 90%) reach Claude via additionalContext
+	// Fuel gauge tiers (70%, 90%, over-budget) reach Claude via
+	// additionalContext. The top tier requires score > limit, matching the
+	// trip condition: at exactly the limit the breaker does not arm.
 	pct := (freshScore * 100) / sess.ThresholdLimit
-	if pct >= 90 {
+	if freshScore > sess.ThresholdLimit {
+		messages = append(messages, fmt.Sprintf("bumper-lanes: %s. Budget exhausted - finish only what leaves the tree coherent, then stop and summarize for review. Do not start new work; the breaker arms at the next stop boundary.", budgetLine(freshScore, sess.ThresholdLimit)))
+	} else if pct >= 90 {
 		messages = append(messages, fmt.Sprintf("bumper-lanes: %s. Finish the current increment and pause for review; do not start new work.", budgetLine(freshScore, sess.ThresholdLimit)))
 	} else if pct >= 70 {
 		messages = append(messages, fmt.Sprintf("bumper-lanes: %s. Fit the rest of this increment in the remaining budget; defer anything new.", budgetLine(freshScore, sess.ThresholdLimit)))

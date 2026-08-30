@@ -23,6 +23,7 @@ Hook Commands (called by hooks.json):
   pre-tool-use        Block Write/Edit when threshold exceeded
   post-tool-use       Fuel gauge warnings after Write/Edit
   stop                Threshold enforcement check
+  subagent-stop       Threshold check when a subagent finishes
   session-end         Cleanup session state
 
 User Commands (called via bash in command files):
@@ -64,6 +65,8 @@ func main() {
 		exitCode = cmdPostToolUse()
 	case "stop":
 		err = cmdStop()
+	case "subagent-stop":
+		err = cmdSubagentStop()
 	case "session-end":
 		err = cmdSessionEnd()
 	case "reset":
@@ -132,6 +135,14 @@ func cmdStop() error {
 		return nil // Fail open
 	}
 	return hooks.Stop(input)
+}
+
+func cmdSubagentStop() error {
+	input, err := hookio.Read()
+	if err != nil {
+		return nil // Fail open
+	}
+	return hooks.SubagentStop(input)
 }
 
 func cmdSessionEnd() error {
