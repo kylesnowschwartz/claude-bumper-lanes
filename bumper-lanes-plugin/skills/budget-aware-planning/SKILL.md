@@ -36,8 +36,13 @@ remainder, including tests.
 2. When a plan will not fit the remaining budget, say so and ask the user
    whether to pause for review now or split the plan — do not spend the
    budget and let the trip decide.
-3. Deletions are free. Prefer removing code over adding it.
-4. Do not work around the meter: committing solely to reset the budget, or
+3. When the budget is close to tripping (roughly 85% used, or fewer points
+   remain than the next step needs), run a review before doing more work:
+   review the increment so far (the repo's review command, `/code-review`
+   by default), stop at the reviewable boundary, and let the user reset —
+   rather than spending the last points and hitting the breaker mid-change.
+4. Deletions are free. Prefer removing code over adding it.
+5. Do not work around the meter: committing solely to reset the budget, or
    batching edits into fewer, larger writes, defeats the review contract.
 
 ## When the meter trips

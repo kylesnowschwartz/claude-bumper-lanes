@@ -5,6 +5,12 @@ All notable changes to claude-bumper-lanes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.1] - 2026-08-30
+
+### Changed
+
+- **budget-aware-planning skill**: when the budget is close to tripping (~85% used, or less than the next step needs), the skill now instructs the agent to review the increment so far and stop at a reviewable boundary instead of spending the last points and tripping mid-change.
+
 ## [5.0.0] - 2026-08-16
 
 ### Changed (breaking)
